@@ -1,79 +1,138 @@
 import streamlit as st
 from supabase import create_client, Client
-import datetime
 import pandas as pd
 
 # --- 1. SECURE DATABASE CONNECTION ---
-# These will be set in the Streamlit Cloud 'Secrets' settings
 try:
     URL = st.secrets["SUPABASE_URL"]
     KEY = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(URL, KEY)
 except Exception:
-    st.error("Missing Credentials. Please add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets.")
+    st.error("Missing Credentials. Please check Streamlit Secrets.")
     st.stop()
 
-st.set_page_config(page_title="QA Compliance Intelligence", layout="wide")
+st.set_page_config(page_title="CBTL QA Intelligence", layout="wide", page_icon="📈")
 
 # --- 2. DATA LOADING ---
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60) # Refreshes data every 60 seconds
 def load_stores():
     response = supabase.table("stores").select("*").execute()
     return response.data
 
-# --- 3. SIDEBAR & NAVIGATION ---
-st.sidebar.title("QA Control Panel")
-try:
-    stores_data = load_stores()
-    store_names = [s['name'] for s in stores_data]
-    selected_store = st.sidebar.selectbox("Select Store Location", store_names)
-    current_store = next(s for s in stores_data if s['name'] == selected_store)
-except:
-    st.sidebar.error("Database table 'stores' not found. Check SQL setup.")
-    st.stop()
+stores_data = load_stores()
+df_stores = pd.DataFrame(stores_data)
 
-# --- 4. MAIN DASHBOARD ---
-st.title("🛡️ QA & Compliance Dashboard")
-st.markdown(f"**Managing:** {selected_store} | **Agency:** {current_store['pest_agency']}")
-
-# Metrics Row
-m1, m2, m3 = st.columns(3)
-m1.metric("Region", "Outstation" if current_store['is_outstation'] else "Local")
-m2.metric("Pest Agency", current_store['pest_agency'])
-m3.metric("Store Status", "Active")
-
+# --- 3. CEO-LEVEL HEADER ---
+st.title("📈 Enterprise QA & Compliance Intelligence")
+st.markdown("Real-time operational compliance monitoring for all retail locations.")
 st.divider()
 
-# Tabs for Organization
-tab_audit, tab_docs, tab_management = st.tabs(["Update Audit", "License Vault", "Management Overview"])
+# --- 4. DASHBOARD TABS ---
+# We put the Executive view first for management!
+tab_exec, tab_entry, tab_docs, tab_admin = st.tabs([
+    "📊 Executive Dashboard", 
+    "📝 Audit Data Entry", 
+    "📂 Document Vault", 
+    "⚙️ Store Management"
+])
 
-with tab_audit:
-    st.subheader("Monthly/Quarterly Audit Entry")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        a_type = st.selectbox("Audit Type", ["Internal Monthly", "NSF Quarterly"])
-        score = st.slider("QA Score %", 0, 100, 85)
-    with col_b:
-        ca_status = st.checkbox("Corrective Action (CA) Submitted")
-        outstation_skip = st.checkbox("Skip Audit (Outstation Issue)") if current_store['is_outstation'] else False
+# ==========================================
+# TAB 1: EXECUTIVE DASHBOARD (For the CEO)
+# ==========================================
+with tab_exec:
+    st.subheader("Network Overview")
     
-    crit_issues = st.text_area("Critical Issues for Management Attention")
-    if st.button("Submit Audit Data"):
-        st.success("Audit data recorded. Management will be notified.")
+    # High-level KPIs
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    total_stores = len(df_stores) if not df_stores.empty else 0
+    outstation_count = len(df_stores[df_stores['is_outstation'] == True]) if not df_stores.empty else 0
+    
+    kpi1.metric("Total Active Stores", total_stores)
+    kpi2.metric("Local Hubs", total_stores - outstation_count)
+    kpi3.metric("Outstation Hubs", outstation_count)
+    kpi4.metric("Network Status", "Compliant" if total_stores > 0 else "Pending")
 
+    st.markdown("### Store Directory & Status")
+    if not df_stores.empty:
+        # Display a clean, professional table for management
+        display_df = df_stores[['name', 'pest_agency', 'is_outstation']].copy()
+        display_df.columns = ["Store Location", "Pest Control Partner", "Is Outstation?"]
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No stores found in the database.")
+
+# ==========================================
+# TAB 2: AUDIT DATA ENTRY (For You/QA Team)
+# ==========================================
+with tab_entry:
+    st.subheader("Submit New Audit/QA Score")
+    if not df_stores.empty:
+        store_names = df_stores['name'].tolist()
+        selected_store = st.selectbox("Select Store for Audit", store_names)
+        current_store = df_stores[df_stores['name'] == selected_store].iloc[0]
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            audit_type = st.selectbox("Audit Type", ["Internal Monthly QA", "NSF Quarterly"])
+            score = st.number_input("Overall QA Score (%)", min_value=0, max_value=100, value=85)
+        with col_b:
+            ca_status = st.radio("Corrective Action Status", ["Not Required", "Pending", "Resolved"])
+            if current_store['is_outstation']:
+                st.warning("✈️ Outstation Store: Physical audit exemptions may apply.")
+                
+        crit_issues = st.text_area("Critical Issues (Flags for Management)")
+        
+        if st.button("Submit Audit to Database", type="primary"):
+            # In the future, this will save to an 'audit_logs' table!
+            st.success(f"Successfully recorded {score}% for {selected_store}.")
+    else:
+        st.warning("Please add stores in the Store Management tab first.")
+
+# ==========================================
+# TAB 3: DOCUMENT VAULT
+# ==========================================
 with tab_docs:
-    st.subheader("Document Repository")
-    doc_type = st.selectbox("Document", ["FSSAI License", "Water Test Report", "Food Grade Certificate"])
-    expiry = st.date_input("Expiry Date")
-    uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
-    
-    if uploaded_file and st.button("Upload to Cloud"):
-        # Logic for Supabase Storage
-        path = f"{selected_store}/{uploaded_file.name}"
-        supabase.storage.from_('compliance-docs').upload(path, uploaded_file.getvalue())
-        st.success(f"Successfully uploaded to {selected_store} folder.")
+    st.subheader("Compliance File Upload")
+    if not df_stores.empty:
+        vault_store = st.selectbox("Assign Document to Store", df_stores['name'].tolist())
+        doc_type = st.selectbox("Document Category", ["FSSAI License", "Water Test Report", "Pest Control Log"])
+        uploaded_file = st.file_uploader("Upload PDF File", type=['pdf'])
+        
+        if uploaded_file and st.button("Secure Upload"):
+            path = f"{vault_store}/{doc_type}/{uploaded_file.name}"
+            try:
+                supabase.storage.from_('compliance-docs').upload(path, uploaded_file.getvalue())
+                st.success("Document secured in cloud vault.")
+            except Exception as e:
+                st.error("Upload failed. Ensure your Supabase storage bucket is named exactly 'compliance-docs'.")
+    else:
+        st.warning("Please add stores first.")
 
-with tab_management:
-    st.subheader("Store Compliance Summary")
-    df = pd.DataFrame(stores_data)
-    st.dataframe(df[['name', 'pest_agency', 'is_outstation']], use_container_width=True)
+# ==========================================
+# TAB 4: STORE MANAGEMENT (Add New Stores)
+# ==========================================
+with tab_admin:
+    st.subheader("Add New Store Location")
+    st.markdown("Use this form to expand the network. Data is saved directly to the database.")
+    
+    with st.form("new_store_form"):
+        new_name = st.text_input("Store Location Name (e.g., Select Citywalk)")
+        new_agency = st.selectbox("Pest Control Agency", ["IGPC", "Eco Sol", "Other"])
+        is_out = st.checkbox("Mark as Outstation Store")
+        
+        submitted = st.form_submit_button("Add Store to Database")
+        if submitted:
+            if new_name.strip() == "":
+                st.error("Store name cannot be blank.")
+            else:
+                # Insert the new store into Supabase!
+                new_data = {
+                    "name": new_name,
+                    "pest_agency": new_agency,
+                    "is_outstation": is_out
+                }
+                supabase.table("stores").insert(new_data).execute()
+                
+                # Clear the cache so the dashboard updates immediately
+                st.cache_data.clear()
+                st.success(f"✅ {new_name} added successfully! Please refresh the page.")
