@@ -170,7 +170,7 @@ with tab_exec:
     col3.metric("Average NSF Score", f"{avg_nsf:.1f}%" if pd.notnull(avg_nsf) else "N/A") 
     
     stores_with_lic_issues = df_monthly_filtered['has_license_issue'].sum() if not df_monthly_filtered.empty else 0
-    col4.metric("Stores with License Flags", f"{stores_with_lic_issues}", delta=f"-{stores_with_lic_issues}" if stores_with_lic_issues > 0 else "All Clear", delta_inverse=True)
+    col4.metric("Stores with License Flags", f"{stores_with_lic_issues}", delta=f"-{stores_with_lic_issues}" if stores_with_lic_issues > 0 else "All Clear", delta_color="inverse")
 
     st.markdown("---")
     
