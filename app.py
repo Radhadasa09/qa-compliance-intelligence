@@ -59,6 +59,15 @@ stores_data = [
     {'name': 'CBTL Janakpuri, New Delhi', 'is_outstation': False},
     {'name': 'CBTL Greater Kailash (M-Block), New Delhi', 'is_outstation': False},
     {'name': 'CBTL Platina Tower, Gurugram', 'is_outstation': False},
+    {'name': 'CBTL Sector 50, Noida', 'is_outstation': False},
+    {'name': 'CBTL Seasons Mall, Pune', 'is_outstation': True},
+    {'name': 'CBTL Goldust City Centre, Patiala', 'is_outstation': True},
+    {'name': 'CBTL Elante Mall, Chandigarh', 'is_outstation': True},
+    {'name': 'CBTL Bandra West, Mumbai', 'is_outstation': True},
+    {'name': 'CBTL Koramangala, Bengaluru', 'is_outstation': True},
+    {'name': 'CBTL Jubilee Hills, Hyderabad', 'is_outstation': True},
+    {'name': 'CBTL Central Plaza, Kolkata', 'is_outstation': True},
+    {'name': 'CBTL VR Mall, Chennai', 'is_outstation': True},
     {'name': 'Creek Side, Ludhiana (New)', 'is_outstation': True}
 ]
 df_stores = pd.DataFrame(stores_data)
@@ -72,9 +81,8 @@ if 'monthly_db' not in st.session_state:
             "licenses": {
                 "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 5, 12)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 1, 10)},
-                "Fire NOC": {"applicable": False, "status": "Valid", "expiry": datetime.date(2026, 12, 31)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 15)},
-                "Pollution License": {"applicable": False, "status": "Valid", "expiry": datetime.date(2027, 1, 1)}
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 15)}
             }
         },
         ("CBTL Greater Kailash (M-Block), New Delhi", "July 2026"): {
@@ -84,8 +92,7 @@ if 'monthly_db' not in st.session_state:
                 "FSSAI License": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2026, 8, 15)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 2, 20)},
                 "Fire NOC": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 1, 1)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 4, 1)},
-                "Pollution License": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2026, 9, 30)}
+                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 4, 1)}
             }
         }
     }
@@ -103,9 +110,8 @@ def get_store_monthly(store_name, month):
             "licenses": {
                 "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 31)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 30)},
-                "Fire NOC": {"applicable": False, "status": "Valid", "expiry": datetime.date(2027, 1, 1)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 31)},
-                "Pollution License": {"applicable": False, "status": "Valid", "expiry": datetime.date(2027, 1, 1)}
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 31)}
             }
         }
 
@@ -138,7 +144,6 @@ for idx, row in df_stores.iterrows():
 df_monthly_filtered = pd.DataFrame(monthly_records)
 compliant_stores = df_monthly_filtered['is_compliant'].sum() if not df_monthly_filtered.empty else 0
 
-# --- STREAMING_CHUNK:Rendering executive command center tab... ---
 # --- 3. CEO-LEVEL HEADER ---
 st.title("🛡️ QA & Compliance Command Center")
 st.markdown(f"Real-time oversight of Retail Operations, Supply Chain, Licensing, and Regulatory Compliance for **{selected_month}**.")
@@ -170,7 +175,14 @@ with tab_exec:
     col3.metric("Average NSF Score", f"{avg_nsf:.1f}%" if pd.notnull(avg_nsf) else "N/A") 
     
     stores_with_lic_issues = df_monthly_filtered['has_license_issue'].sum() if not df_monthly_filtered.empty else 0
-    col4.metric("Stores with License Flags", f"{stores_with_lic_issues}", delta=f"-{stores_with_lic_issues}" if stores_with_lic_issues > 0 else "All Clear", delta_color="inverse")
+    
+    # FIXED: Using delta_color="inverse"
+    col4.metric(
+        "Stores with License Flags", 
+        f"{stores_with_lic_issues}", 
+        delta=f"-{stores_with_lic_issues}" if stores_with_lic_issues > 0 else "All Clear", 
+        delta_color="inverse"
+    )
 
     st.markdown("---")
     
@@ -186,10 +198,11 @@ with tab_exec:
             st.plotly_chart(fig_comp, use_container_width=True)
             
         with chart_col2:
-            st.markdown(f"### 📋 Store Directory & Remarks Highlights")
+            st.markdown(f"### 📋 Store Directory & Highlights")
             if not df_monthly_filtered.empty:
                 display_df = df_monthly_filtered[['name', 'fostac_pending', 'medical_pending', 'remarks']].copy()
-                display_df.columns = ["Store Name", "FoSTaC Pend.", "Medical Pend.", "Operational Remarks"]
+                # FIXED: Updated heading to just "Remark"
+                display_df.columns = ["Store Name", "FoSTaC Pend.", "Medical Pend.", "Remark"]
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 # ==========================================
@@ -200,7 +213,7 @@ with tab_ops:
     st.info(f"You are currently editing data linked to reporting period: **{selected_month}**")
     
     if not df_stores.empty:
-        selected_store = st.selectbox("Select Store to Update", df_stores['name'].tolist(), key="ops_store")
+        selected_store = st.selectbox("Select Store to Update", df_stores['name'].tolist(), key=f"ops_store_{selected_month}")
         store_row_data = get_store_monthly(selected_store, selected_month)
 
         col_a, col_b = st.columns(2)
@@ -217,25 +230,24 @@ with tab_ops:
                 
             nsf_score = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=int(store_row_data['nsf_score']), key=f"nsf_{selected_store}_{selected_month}")
             
-            self_audit = st.radio("Monthly Self Audit Done?", ["Yes", "No"], index=0 if store_row_data['self_audit_done'] == "Yes" else 1, key=f"audit_radio_{selected_store}_{selected_month}")
+            self_audit_options = ["Yes", "No"]
+            current_audit_val = store_row_data['self_audit_done'] if store_row_data['self_audit_done'] in self_audit_options else "No"
+            self_audit = st.radio("Monthly Self Audit Done?", self_audit_options, index=self_audit_options.index(current_audit_val), key=f"audit_radio_{selected_store}_{selected_month}")
             
-            # FIX: Safely convert self_audit_score to int, falling back to 0 if None
             prev_score = store_row_data['self_audit_score']
             safe_score = int(prev_score) if prev_score is not None else 0
             self_audit_score = st.number_input("Monthly Self Audit Score (%)", min_value=0, max_value=100, value=safe_score, key=f"audit_score_{selected_store}_{selected_month}") if self_audit == "Yes" else None
             
-            st.markdown("#### 💬 Operational Remarks")
+            # FIXED: Updated heading to just "Remark"
+            st.markdown("#### 💬 Remark")
             store_remarks = st.text_area("Mention specific flags (e.g., 'pending license due to software issue')", value=store_row_data['remarks'], key=f"rem_{selected_store}_{selected_month}")
 
         with col_b:
             st.markdown("#### 2. Dynamic License Compliance Management")
             st.caption("Toggle licenses applicable to this specific outlet. Skipped/non-applicable licenses are omitted from compliance penalties.")
             
-            # Default pool of standard licenses + custom additions
             current_lics = store_row_data['licenses']
             updated_licenses = {}
-            
-            # Let user configure existing standard or added licenses
             standard_lic_keys = list(current_lics.keys())
             
             for l_name in standard_lic_keys:
@@ -244,7 +256,6 @@ with tab_ops:
                 is_app = st.toggle(f"Applicable?", value=l_info['applicable'], key=f"app_{selected_store}_{selected_month}_{l_name}")
                 
                 if is_app:
-                    # FIX: Handle cases where status was previously 'N/A' to avoid ValueError
                     status_options = ["Valid", "Applied/Pending", "Expired"]
                     current_status = l_info['status'] if l_info['status'] in status_options else "Applied/Pending"
                     
@@ -255,17 +266,13 @@ with tab_ops:
                     updated_licenses[l_name] = {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
                 st.divider()
                 
-            # Option to add custom licenses (e.g. Signage, Pollution, Liquor, Factory License)
             st.markdown("##### ➕ Add Additional Outlet License")
-            new_lic_name = st.text_input("New License Type Name", placeholder="e.g., Signage License, Pollution License", key=f"new_lic_input_{selected_store}_{selected_month}")
+            new_lic_name = st.text_input("New License Type Name", placeholder="e.g., Pollution License", key=f"new_lic_input_{selected_store}_{selected_month}")
             if st.button("Add License Type", key=f"add_lic_btn_{selected_store}_{selected_month}"):
                 if new_lic_name and new_lic_name not in updated_licenses:
                     updated_licenses[new_lic_name] = {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date.today()}
                     store_row_data['licenses'] = updated_licenses
-                    
-                    # FIX: Save to session state before rerunning
                     st.session_state['monthly_db'][(selected_store, selected_month)] = store_row_data
-                    
                     st.success(f"Added {new_lic_name} successfully!")
                     st.rerun()
 
@@ -296,7 +303,7 @@ with tab_supply:
             
         with v_col2:
             audit_status = st.selectbox("Audit Status", ["Passed", "Passed with Conditions", "Failed"])
-            remarks = st.text_area("Remarks / CAPA", placeholder='e.g., "Temperature logs verified"')
+            remarks = st.text_area("Remarks / CAPA", placeholder='e.g., "CA pending for handwash"')
             
         if st.form_submit_button("Save Vendor Audit Record", type="primary"):
             if vendor_name:
@@ -312,7 +319,6 @@ with tab_lic_summary:
     st.markdown("Consolidated oversight tracking all statutory, municipal, safety, and operational licenses across all retail outlets. Non-applicable licenses are automatically skipped.")
     
     if not df_monthly_filtered.empty:
-        # Build matrix records
         matrix_rows = []
         for idx, row in df_monthly_filtered.iterrows():
             s_name = row['name']
@@ -342,7 +348,7 @@ with tab_lic_summary:
                         "License Type": l_key,
                         "Current Status": l_val['status'],
                         "Expiry Date": str(l_val['expiry']),
-                        "Outlet Remark": rem if rem else "No remarks specified"
+                        "Remark": rem if rem else "No remarks specified"
                     })
                     
         if flagged_records:
@@ -400,7 +406,6 @@ with tab_reports:
                             pdf.cell(200, 5, txt=f"   - {l_k}: {l_v['status']} (Exp: {l_v['expiry']})", ln=True)
                     pdf.ln(2)
                 
-                # FIX: Handle both fpdf and fpdf2 output format safely
                 try:
                     pdf_out = pdf.output(dest='S')
                     pdf_bytes = pdf_out.encode('latin-1') if isinstance(pdf_out, str) else bytes(pdf_out)
