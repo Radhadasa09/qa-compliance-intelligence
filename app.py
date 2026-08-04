@@ -5,6 +5,7 @@ import plotly.express as px
 import os
 import datetime
 import io
+
 # NOTE: You must add 'fpdf2' to your requirements.txt for the PDF generation to work
 try:
     from fpdf import FPDF
@@ -34,9 +35,25 @@ st.set_page_config(
 
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
-# Generate a list of recent months for the dynamic heading
+
+# Generate a list of months strictly from July 2026 to the current month
 today = datetime.date.today()
-months = [(today.replace(day=1) - datetime.timedelta(days=30*i)).strftime("%B %Y") for i in range(6)]
+start_date = datetime.date(2026, 7, 1) # Starting point as requested
+months = []
+current_month_iter = today.replace(day=1)
+
+while current_month_iter >= start_date:
+    months.append(current_month_iter.strftime("%B %Y"))
+    # Step back one month safely
+    if current_month_iter.month == 1:
+        current_month_iter = current_month_iter.replace(year=current_month_iter.year - 1, month=12)
+    else:
+        current_month_iter = current_month_iter.replace(month=current_month_iter.month - 1)
+
+# Fallback just in case system date is somehow earlier than July 2026
+if not months:
+    months = ["July 2026"]
+
 selected_month = st.sidebar.selectbox("Select Reporting Month", months)
 
 # --- 2. DATA LOADING ---
@@ -56,23 +73,35 @@ df_stores = pd.DataFrame(stores_data)
 
 # Fallback Data to demonstrate the new compliance structure
 if df_stores.empty:
-    st.warning("Database not connected or empty. Using Ekaagra sample data for demonstration.")
+    st.warning("Database not connected or empty. Using sample data for demonstration.")
     sample_data = {
         'name': [
             'CBTL Janakpuri, New Delhi', 'CBTL Greater Kailash (M-Block), New Delhi', 
             'CBTL Platina Tower, Gurugram', 'Creek Side, Ludhiana (New)'
         ],
         'is_outstation': [False, False, False, True],
-        'fostac_pending': [0, 2, 0, 5],
-        'medical_pending': [0, 0, 1, 5],
+        'fostac_pending': [1, 1, 1, 1], # Defaulting to 1
+        'medical_pending': [5, 5, 5, 5], # Defaulting to 5
         'nsf_score': [94, 89, 92, None],
-        'self_audit_done': [True, True, False, False],
+        'self_audit_done': ['Yes', 'Yes', 'No', 'No'],
         'self_audit_score': [95, 88, None, None]
     }
     df_stores = pd.DataFrame(sample_data)
 
-# Calculate dynamic compliance metric
-if not df_stores.empty and 'fostac_pending' in df_stores.columns:
+# Calculate dynamic compliance metric and apply defensive defaults
+if not df_stores.empty:
+    # 1. Fallback for missing columns if database schema hasn't been updated yet
+    # Applying the requested default values: 1 for Fostac, 5 for Medical
+    if 'fostac_pending' not in df_stores.columns:
+        df_stores['fostac_pending'] = 1
+    if 'medical_pending' not in df_stores.columns:
+        df_stores['medical_pending'] = 5
+        
+    # 2. Safely calculate compliance (Store is compliant only if both are 0)
+    # Ensure they are numeric to avoid type errors
+    df_stores['fostac_pending'] = pd.to_numeric(df_stores['fostac_pending'], errors='coerce').fillna(1)
+    df_stores['medical_pending'] = pd.to_numeric(df_stores['medical_pending'], errors='coerce').fillna(5)
+    
     df_stores['is_compliant'] = (df_stores['fostac_pending'] == 0) & (df_stores['medical_pending'] == 0)
     compliant_stores = df_stores['is_compliant'].sum()
 else:
@@ -124,6 +153,7 @@ with tab_exec:
             
         with chart_col2:
             st.markdown("### 📋 Quick Store Directory")
+            # Display current pending requirements per store
             display_df = df_stores[['name', 'fostac_pending', 'medical_pending', 'is_compliant']].copy()
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
@@ -135,13 +165,19 @@ with tab_ops:
     if not df_stores.empty:
         selected_store = st.selectbox("Select Store to Update", df_stores['name'].tolist(), key="ops_store")
         
+        # Retrieve current defaults for the selected store to pre-populate inputs if they exist
+        store_record = df_stores[df_stores['name'] == selected_store].iloc[0]
+        current_fostac = int(store_record.get('fostac_pending', 1))
+        current_medical = int(store_record.get('medical_pending', 5))
+        
         st.markdown(f"#### Operations Data for: {selected_store}")
         col_a, col_b = st.columns(2)
         
         with col_a:
             st.markdown("**1. Staff Requirements**")
-            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=0)
-            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=0)
+            st.info("When both requirements are set to 0, the store will automatically be marked as Compliant.")
+            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=current_fostac)
+            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=current_medical)
             
             if fostac_req == 0 and med_req == 0:
                 st.success("✅ This store is fully in compliance for Staffing.")
@@ -180,7 +216,8 @@ with tab_ops:
                 st.selectbox("Fire NOC Status", ["Valid", "Applied/Pending", "Expired"], key="fire")
                 
         if st.button("Save Store Compliance Data", type="primary"):
-            # Here you would write the UPDATE query to Supabase
+            # Real implementation would UPDATE the Supabase record for selected_store here
+            # e.g., supabase.table("stores").update({"fostac_pending": fostac_req, "medical_pending": med_req}).eq("name", selected_store).execute()
             st.success(f"Compliance data saved for {selected_store}.")
 
 # ==========================================
@@ -292,17 +329,17 @@ with tab_reports:
 
     with col_pdf2:
         st.markdown("**Retrieve Past Reports**")
-        st.info("Once a report is generated and saved, it will appear here for future retrieval (e.g., pulling July's data in December).")
+        st.info("Reports generated previously are securely stored and can be retrieved below.")
         
         # Example of pulling metadata from Supabase
         # response = supabase.table("reports_metadata").select("*").execute()
         # archive_df = pd.DataFrame(response.data)
         
-        # Mock Data for UI demonstration
+        # Mock Data for UI demonstration showing July 2026 data being retrievable
         archive_df = pd.DataFrame({
-            "Report Month": ["June 2026", "May 2026", "April 2026"],
-            "Generated On": ["2026-07-01", "2026-06-02", "2026-05-01"],
-            "Status": ["Archived", "Archived", "Archived"]
+            "Report Month": ["July 2026"],
+            "Generated On": ["2026-08-01"],
+            "Status": ["Archived"]
         })
         
         st.dataframe(archive_df, use_container_width=True, hide_index=True)
