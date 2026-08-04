@@ -5,6 +5,7 @@ import plotly.express as px
 import os
 import datetime
 import io
+import copy
 
 # NOTE: You must add 'fpdf2' to your requirements.txt for the PDF generation to work
 try:
@@ -93,7 +94,7 @@ if 'monthly_db' not in st.session_state:
 def get_store_monthly(store_name, month):
     key = (store_name, month)
     if key in st.session_state['monthly_db']:
-        return st.session_state['monthly_db'][key]
+        return copy.deepcopy(st.session_state['monthly_db'][key])
     else:
         # Defaults
         return {
@@ -206,21 +207,25 @@ with tab_ops:
         
         with col_a:
             st.markdown("#### 1. Staff Requirements & Audits")
-            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=int(store_row_data['fostac_pending']), key=f"fostac_{selected_store}")
-            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=int(store_row_data['medical_pending']), key=f"med_{selected_store}")
+            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=int(store_row_data['fostac_pending']), key=f"fostac_{selected_store}_{selected_month}")
+            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=int(store_row_data['medical_pending']), key=f"med_{selected_store}_{selected_month}")
             
             if fostac_req == 0 and med_req == 0:
                 st.success("✅ This store is fully in compliance for Staffing.")
             else:
                 st.warning("⚠️ Pending staff requirements exist.")
                 
-            nsf_score = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=int(store_row_data['nsf_score']), key=f"nsf_{selected_store}")
+            nsf_score = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=int(store_row_data['nsf_score']), key=f"nsf_{selected_store}_{selected_month}")
             
-            self_audit = st.radio("Monthly Self Audit Done?", ["Yes", "No"], index=0 if store_row_data['self_audit_done'] == "Yes" else 1, key=f"audit_radio_{selected_store}")
-            self_audit_score = st.number_input("Monthly Self Audit Score (%)", min_value=0, max_value=100, value=int(store_row_data['self_audit_score']), key=f"audit_score_{selected_store}") if self_audit == "Yes" else None
+            self_audit = st.radio("Monthly Self Audit Done?", ["Yes", "No"], index=0 if store_row_data['self_audit_done'] == "Yes" else 1, key=f"audit_radio_{selected_store}_{selected_month}")
+            
+            # FIX: Safely convert self_audit_score to int, falling back to 0 if None
+            prev_score = store_row_data['self_audit_score']
+            safe_score = int(prev_score) if prev_score is not None else 0
+            self_audit_score = st.number_input("Monthly Self Audit Score (%)", min_value=0, max_value=100, value=safe_score, key=f"audit_score_{selected_store}_{selected_month}") if self_audit == "Yes" else None
             
             st.markdown("#### 💬 Operational Remarks")
-            store_remarks = st.text_area("Mention specific flags (e.g., 'pending license due to software issue')", value=store_row_data['remarks'], key=f"rem_{selected_store}")
+            store_remarks = st.text_area("Mention specific flags (e.g., 'pending license due to software issue')", value=store_row_data['remarks'], key=f"rem_{selected_store}_{selected_month}")
 
         with col_b:
             st.markdown("#### 2. Dynamic License Compliance Management")
@@ -236,11 +241,15 @@ with tab_ops:
             for l_name in standard_lic_keys:
                 l_info = current_lics[l_name]
                 st.markdown(f"**{l_name}**")
-                is_app = st.toggle(f"Applicable?", value=l_info['applicable'], key=f"app_{selected_store}_{l_name}")
+                is_app = st.toggle(f"Applicable?", value=l_info['applicable'], key=f"app_{selected_store}_{selected_month}_{l_name}")
                 
                 if is_app:
-                    l_status = st.selectbox(f"Status", ["Valid", "Applied/Pending", "Expired"], index=["Valid", "Applied/Pending", "Expired"].index(l_info['status']), key=f"stat_{selected_store}_{l_name}")
-                    l_expiry = st.date_input(f"Expiry Date", value=l_info['expiry'], key=f"exp_{selected_store}_{l_name}")
+                    # FIX: Handle cases where status was previously 'N/A' to avoid ValueError
+                    status_options = ["Valid", "Applied/Pending", "Expired"]
+                    current_status = l_info['status'] if l_info['status'] in status_options else "Applied/Pending"
+                    
+                    l_status = st.selectbox(f"Status", status_options, index=status_options.index(current_status), key=f"stat_{selected_store}_{selected_month}_{l_name}")
+                    l_expiry = st.date_input(f"Expiry Date", value=l_info['expiry'], key=f"exp_{selected_store}_{selected_month}_{l_name}")
                     updated_licenses[l_name] = {"applicable": True, "status": l_status, "expiry": l_expiry}
                 else:
                     updated_licenses[l_name] = {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
@@ -248,15 +257,19 @@ with tab_ops:
                 
             # Option to add custom licenses (e.g. Signage, Pollution, Liquor, Factory License)
             st.markdown("##### ➕ Add Additional Outlet License")
-            new_lic_name = st.text_input("New License Type Name", placeholder="e.g., Signage License, Pollution License", key=f"new_lic_input_{selected_store}")
-            if st.button("Add License Type", key=f"add_lic_btn_{selected_store}"):
+            new_lic_name = st.text_input("New License Type Name", placeholder="e.g., Signage License, Pollution License", key=f"new_lic_input_{selected_store}_{selected_month}")
+            if st.button("Add License Type", key=f"add_lic_btn_{selected_store}_{selected_month}"):
                 if new_lic_name and new_lic_name not in updated_licenses:
                     updated_licenses[new_lic_name] = {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date.today()}
                     store_row_data['licenses'] = updated_licenses
+                    
+                    # FIX: Save to session state before rerunning
+                    st.session_state['monthly_db'][(selected_store, selected_month)] = store_row_data
+                    
                     st.success(f"Added {new_lic_name} successfully!")
                     st.rerun()
 
-        if st.button(f"Save Compliance & License Data for {selected_month}", type="primary"):
+        if st.button(f"Save Compliance & License Data for {selected_month}", type="primary", key=f"save_btn_{selected_store}_{selected_month}"):
             store_row_data['fostac_pending'] = fostac_req
             store_row_data['medical_pending'] = med_req
             store_row_data['nsf_score'] = nsf_score
@@ -387,7 +400,13 @@ with tab_reports:
                             pdf.cell(200, 5, txt=f"   - {l_k}: {l_v['status']} (Exp: {l_v['expiry']})", ln=True)
                     pdf.ln(2)
                 
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                # FIX: Handle both fpdf and fpdf2 output format safely
+                try:
+                    pdf_out = pdf.output(dest='S')
+                    pdf_bytes = pdf_out.encode('latin-1') if isinstance(pdf_out, str) else bytes(pdf_out)
+                except Exception:
+                    pdf_bytes = bytes(pdf.output())
+                    
                 st.success(f"PDF Report successfully generated for {selected_month}!")
                 st.download_button(
                     label=f"Download {selected_month} Comprehensive PDF",
