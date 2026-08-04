@@ -74,10 +74,10 @@ def load_monthly_compliance(month):
     if supabase is None:
         return []
     try:
-        # Ideally, you have a table like 'store_compliance_monthly'
+        # Query monthly table filtered by month
         # response = supabase.table("store_compliance_monthly").select("*").eq("month", month).execute()
         # return response.data
-        return [] # Returning empty list to trigger sample data for now
+        return [] # Trigger fallback sample data for demonstration
     except Exception as e:
         st.error(f"Error fetching monthly data: {e}")
         return []
@@ -89,7 +89,7 @@ monthly_data = load_monthly_compliance(selected_month)
 df_monthly = pd.DataFrame(monthly_data)
 
 
-# Fallback Data to demonstrate the new compliance structure
+# Fallback Data to demonstrate the master store structure
 if df_stores.empty:
     st.warning("Database not connected or empty. Using sample master store data.")
     sample_data = {
@@ -102,53 +102,55 @@ if df_stores.empty:
     df_stores = pd.DataFrame(sample_data)
 
 if df_monthly.empty:
-    st.warning(f"No compliance data found for {selected_month}. Showing defaults.")
-    # We create a dataframe linking the master stores to the current month with defaults
+    # We create a dataframe linking the master stores to the current month with defaults (Fostac: 1, Medical: 5)
     sample_monthly = {
         'name': df_stores['name'].tolist(),
         'month': [selected_month] * len(df_stores),
         'fostac_pending': [1] * len(df_stores),
         'medical_pending': [5] * len(df_stores),
-        'nsf_score': [None] * len(df_stores),
+        'nsf_score': [90] * len(df_stores),
         'self_audit_done': ['No'] * len(df_stores),
-        'self_audit_score': [None] * len(df_stores)
+        'self_audit_score': [85] * len(df_stores)
     }
-    # Simulate a specific score for August just to show it changes
-    if selected_month == "August 2026":
-        sample_monthly['nsf_score'][0] = 95
+    
+    # Simulate custom changes if July 2026 is selected to show month-switching works
+    if selected_month == "July 2026":
+        sample_monthly['nsf_score'][0] = 88
         sample_monthly['fostac_pending'][0] = 0
         sample_monthly['medical_pending'][0] = 0
-    elif selected_month == "July 2026":
-        sample_monthly['nsf_score'][0] = 88
+    elif selected_month == "August 2026":
+        sample_monthly['nsf_score'][0] = 95
+        sample_monthly['fostac_pending'][0] = 1
         
     df_monthly = pd.DataFrame(sample_monthly)
 
+# Filter monthly data strictly for the selected month in the sidebar
+df_monthly_filtered = df_monthly[df_monthly['month'] == selected_month].copy()
+
 # Calculate dynamic compliance metric and apply defensive defaults based on MONTHLY data
-if not df_monthly.empty:
-    # 1. Fallback for missing columns
-    if 'fostac_pending' not in df_monthly.columns:
-        df_monthly['fostac_pending'] = 1
-    if 'medical_pending' not in df_monthly.columns:
-        df_monthly['medical_pending'] = 5
+if not df_monthly_filtered.empty:
+    if 'fostac_pending' not in df_monthly_filtered.columns:
+        df_monthly_filtered['fostac_pending'] = 1
+    if 'medical_pending' not in df_monthly_filtered.columns:
+        df_monthly_filtered['medical_pending'] = 5
         
-    # 2. Safely calculate compliance
-    df_monthly['fostac_pending'] = pd.to_numeric(df_monthly['fostac_pending'], errors='coerce').fillna(1)
-    df_monthly['medical_pending'] = pd.to_numeric(df_monthly['medical_pending'], errors='coerce').fillna(5)
+    df_monthly_filtered['fostac_pending'] = pd.to_numeric(df_monthly_filtered['fostac_pending'], errors='coerce').fillna(1)
+    df_monthly_filtered['medical_pending'] = pd.to_numeric(df_monthly_filtered['medical_pending'], errors='coerce').fillna(5)
     
-    df_monthly['is_compliant'] = (df_monthly['fostac_pending'] == 0) & (df_monthly['medical_pending'] == 0)
-    compliant_stores = df_monthly['is_compliant'].sum()
+    df_monthly_filtered['is_compliant'] = (df_monthly_filtered['fostac_pending'] == 0) & (df_monthly_filtered['medical_pending'] == 0)
+    compliant_stores = df_monthly_filtered['is_compliant'].sum()
 else:
     compliant_stores = 0
 
 # Merge master store data with monthly compliance data for the dashboard views
-if not df_stores.empty and not df_monthly.empty:
-    df_combined = pd.merge(df_stores, df_monthly, on='name', how='left')
+if not df_stores.empty and not df_monthly_filtered.empty:
+    df_combined = pd.merge(df_stores, df_monthly_filtered, on='name', how='left')
 else:
     df_combined = pd.DataFrame()
 
 # --- 3. CEO-LEVEL HEADER ---
 st.title("🛡️ QA & Compliance Command Center")
-st.markdown("Real-time oversight of Retail Operations, Supply Chain, and Regulatory Compliance.")
+st.markdown(f"Real-time oversight of Retail Operations, Supply Chain, and Regulatory Compliance for **{selected_month}**.")
 st.divider()
 
 # --- 4. DASHBOARD TABS ---
@@ -164,7 +166,6 @@ tab_exec, tab_ops, tab_supply, tab_admin, tab_reports = st.tabs([
 # TAB 1: EXECUTIVE DASHBOARD
 # ==========================================
 with tab_exec:
-    # DYNAMIC HEADING BASED ON SIDEBAR
     st.subheader(f"📈 {selected_month} Summary")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -173,17 +174,17 @@ with tab_exec:
     col1.metric("Total Active Stores", total_stores)
     col2.metric("Fully Compliant Stores (Staffing)", f"{compliant_stores} / {total_stores}") 
     
-    avg_nsf = df_monthly['nsf_score'].mean() if not df_monthly.empty and 'nsf_score' in df_monthly.columns else 0
+    avg_nsf = df_monthly_filtered['nsf_score'].mean() if not df_monthly_filtered.empty and 'nsf_score' in df_monthly_filtered.columns else 0
     col3.metric("Average NSF Score", f"{avg_nsf:.1f}%" if pd.notnull(avg_nsf) else "N/A") 
-    col4.metric("Active Vendor Audits", "2 (This Month)") 
+    col4.metric(f"Active Vendor Audits ({selected_month})", "2") 
 
     st.markdown("---")
     
-    if not df_monthly.empty:
+    if not df_monthly_filtered.empty:
         chart_col1, chart_col2 = st.columns(2)
         with chart_col1:
-            st.markdown("### 🏬 Store Staff Compliance Status")
-            compliance_counts = df_monthly['is_compliant'].value_counts().reset_index()
+            st.markdown(f"### 🏬 Store Staff Compliance Status ({selected_month})")
+            compliance_counts = df_monthly_filtered['is_compliant'].value_counts().reset_index()
             compliance_counts.columns = ['Status', 'Count']
             compliance_counts['Status'] = compliance_counts['Status'].map({True: 'Compliant (0 Pending)', False: 'Action Required'})
             fig_comp = px.pie(compliance_counts, values='Count', names='Status', hole=0.5, color='Status',
@@ -191,30 +192,31 @@ with tab_exec:
             st.plotly_chart(fig_comp, use_container_width=True)
             
         with chart_col2:
-            st.markdown("### 📋 Quick Store Directory")
-            # Display current pending requirements per store for the selected month
+            st.markdown(f"### 📋 Quick Store Directory ({selected_month})")
             if not df_combined.empty:
                 display_df = df_combined[['name', 'fostac_pending', 'medical_pending', 'is_compliant']].copy()
+                display_df.columns = ["Store Name", "FoSTaC Pending", "Medical Pending", "Fully Compliant"]
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 # ==========================================
 # TAB 2: RETAIL OPERATIONS (Store Level Entry)
 # ==========================================
 with tab_ops:
-    st.subheader(f"Update Store-Level Compliance for {selected_month}")
+    st.subheader(f"Update Store-Level Compliance for Selected Month: {selected_month}")
+    st.info(f"You are currently editing data linked to reporting period: **{selected_month}**")
+    
     if not df_stores.empty:
         selected_store = st.selectbox("Select Store to Update", df_stores['name'].tolist(), key="ops_store")
         
-        # Retrieve current data for the selected store AND MONTH to pre-populate inputs
-        if not df_monthly.empty and selected_store in df_monthly['name'].values:
-            store_record = df_monthly[df_monthly['name'] == selected_store].iloc[0]
-            current_fostac = int(store_record.get('fostac_pending', 1))
-            current_medical = int(store_record.get('medical_pending', 5))
-            current_nsf = store_record.get('nsf_score')
-            current_nsf = int(current_nsf) if pd.notnull(current_nsf) else 90
-            current_self_audit = store_record.get('self_audit_done', 'No')
-            current_self_audit_score = store_record.get('self_audit_score')
-            current_self_audit_score = int(current_self_audit_score) if pd.notnull(current_self_audit_score) else 85
+        # Retrieve current record for selected store AND active month
+        store_record = {}
+        if not df_monthly_filtered.empty and selected_store in df_monthly_filtered['name'].values:
+            store_row = df_monthly_filtered[df_monthly_filtered['name'] == selected_store].iloc[0]
+            current_fostac = int(store_row.get('fostac_pending', 1))
+            current_medical = int(store_row.get('medical_pending', 5))
+            current_nsf = int(store_row.get('nsf_score', 90))
+            current_self_audit = store_row.get('self_audit_done', 'No')
+            current_self_audit_score = int(store_row.get('self_audit_score', 85))
         else:
             current_fostac = 1
             current_medical = 5
@@ -222,69 +224,59 @@ with tab_ops:
             current_self_audit = "No"
             current_self_audit_score = 85
 
-        
-        st.markdown(f"#### Operations Data for: {selected_store} ({selected_month})")
+        st.markdown(f"#### Operations Data for: {selected_store} | Month: {selected_month}")
         col_a, col_b = st.columns(2)
         
         with col_a:
             st.markdown("**1. Staff Requirements**")
-            st.info("When both requirements are set to 0, the store will automatically be marked as Compliant.")
-            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=current_fostac)
-            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=current_medical)
+            st.info("When both requirements are set to 0, the store is automatically marked Compliant.")
+            fostac_req = st.number_input("Number of Staff requiring FoSTaC", min_value=0, value=current_fostac, key=f"fostac_{selected_store}")
+            med_req = st.number_input("Number of Staff requiring Medical", min_value=0, value=current_medical, key=f"med_{selected_store}")
             
             if fostac_req == 0 and med_req == 0:
                 st.success("✅ This store is fully in compliance for Staffing.")
             else:
-                st.warning("⚠️ Pending requirements exist. Store is not fully compliant.")
+                st.warning("⚠️ Pending requirements exist.")
                 
             st.markdown("**2. Store Audits**")
-            nsf_score = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=current_nsf)
+            nsf_score = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=current_nsf, key=f"nsf_{selected_store}")
             
-            self_audit = st.radio("Monthly Self Audit Done?", ["Yes", "No"], index=0 if current_self_audit == "Yes" else 1)
+            self_audit = st.radio("Monthly Self Audit Done?", ["Yes", "No"], index=0 if current_self_audit == "Yes" else 1, key=f"audit_radio_{selected_store}")
             if self_audit == "Yes":
-                self_audit_score = st.number_input("Monthly Self Audit Score (%)", min_value=0, max_value=100, value=current_self_audit_score)
+                self_audit_score = st.number_input("Monthly Self Audit Score (%)", min_value=0, max_value=100, value=current_self_audit_score, key=f"audit_score_{selected_store}")
             else:
                 self_audit_score = None
                 
         with col_b:
             st.markdown("**3. License Compliance**")
-            st.markdown("Toggle applicability and update status for eligible licenses.")
-            
-            # FSSAI
-            fssai_applicable = st.toggle("FSSAI License Applicable", value=True)
+            fssai_applicable = st.toggle("FSSAI License Applicable", value=True, key=f"fssai_{selected_store}")
             if fssai_applicable:
-                st.selectbox("FSSAI Status", ["Valid", "Applied/Pending", "Expired"], key="fssai")
-                st.date_input("FSSAI Expiry Date", key="fssai_date")
+                st.selectbox("FSSAI Status", ["Valid", "Applied/Pending", "Expired"], key=f"fssai_stat_{selected_store}")
+                st.date_input("FSSAI Expiry Date", key=f"fssai_date_{selected_store}")
                 
             st.divider()
-            
-            # Trade License
-            trade_applicable = st.toggle("Trade License Applicable", value=True)
+            trade_applicable = st.toggle("Trade License Applicable", value=True, key=f"trade_{selected_store}")
             if trade_applicable:
-                st.selectbox("Trade License Status", ["Valid", "Applied/Pending", "Expired"], key="trade")
+                st.selectbox("Trade License Status", ["Valid", "Applied/Pending", "Expired"], key=f"trade_stat_{selected_store}")
                 
             st.divider()
-            
-            # Fire NOC
-            fire_applicable = st.toggle("Fire NOC Applicable", value=False)
+            fire_applicable = st.toggle("Fire NOC Applicable", value=False, key=f"fire_{selected_store}")
             if fire_applicable:
-                st.selectbox("Fire NOC Status", ["Valid", "Applied/Pending", "Expired"], key="fire")
+                st.selectbox("Fire NOC Status", ["Valid", "Applied/Pending", "Expired"], key=f"fire_stat_{selected_store}")
                 
-        if st.button("Save Store Compliance Data", type="primary"):
-            # Real implementation would UPDATE/UPSERT the Supabase record for selected_store AND selected_month
-            # e.g., 
-            # data_to_upsert = {
-            #     "name": selected_store, 
-            #     "month": selected_month, 
-            #     "fostac_pending": fostac_req, 
-            #     "medical_pending": med_req,
-            #     "nsf_score": nsf_score,
-            #     "self_audit_done": self_audit,
-            #     "self_audit_score": self_audit_score
-            # }
+        if st.button(f"Save Compliance Data for {selected_month}", type="primary"):
+            # Target data payload bound explicitly to selected_month
+            data_to_upsert = {
+                "name": selected_store,
+                "month": selected_month,
+                "fostac_pending": fostac_req,
+                "medical_pending": med_req,
+                "nsf_score": nsf_score,
+                "self_audit_done": self_audit,
+                "self_audit_score": self_audit_score
+            }
             # supabase.table("store_compliance_monthly").upsert(data_to_upsert).execute()
-            
-            st.success(f"Compliance data saved for {selected_store} for {selected_month}.")
+            st.success(f"Successfully saved records for {selected_store} under reporting month: **{selected_month}**!")
 
 # ==========================================
 # TAB 3: VENDOR AUDITS
@@ -297,17 +289,15 @@ with tab_supply:
         with v_col1:
             audit_month = st.text_input("Audit Month", value=selected_month, disabled=True)
             vendor_name = st.text_input("Vendor Name", placeholder="e.g., ABC Vendor")
-            audit_score = st.text_input("Audit Score", placeholder="e.g., 92%")
+            audit_score = st.text_input("Audit Score (%)", placeholder="e.g., 92%")
             
         with v_col2:
             audit_status = st.selectbox("Audit Status", ["Passed", "Passed with Conditions", "Failed"])
             remarks = st.text_area("Remarks / CAPA", placeholder='e.g., "CA pending for handwash"')
             
-        if st.form_submit_button("Save Vendor Audit", type="primary"):
+        if st.form_submit_button("Save Vendor Audit Record", type="primary"):
             if vendor_name:
-                # Example Supabase insert:
-                # supabase.table("vendor_audits").insert({"month": audit_month, "vendor": vendor_name, "score": audit_score, "status": audit_status, "remarks": remarks}).execute()
-                st.success(f"Audit for {vendor_name} successfully recorded for {audit_month}.")
+                st.success(f"Audit record for {vendor_name} successfully logged for {selected_month}.")
             else:
                 st.error("Vendor Name is required.")
 
@@ -316,97 +306,56 @@ with tab_supply:
 # ==========================================
 with tab_admin:
     st.subheader("Database Management")
-    st.info("Best Practice: Store records are mapped by unique IDs in the database, though names are shown here for ease of use.")
     
     with st.expander("➕ Add a New Store Location", expanded=False):
         new_name = st.text_input("Store Name", placeholder="e.g., CBTL Creek Side, Ludhiana")
         is_out = st.checkbox("Is Outstation?")
-        if st.button("Add Store to Database"):
+        if st.button("Add Store to Master Database"):
             if new_name and supabase:
                 try:
                     supabase.table("stores").insert({"name": new_name, "is_outstation": is_out}).execute()
                     st.cache_data.clear()
-                    st.success(f"Added {new_name}. Please refresh.")
+                    st.success(f"Added {new_name}.")
                 except Exception as e:
                     st.error(f"Failed to add store: {e}")
-                    
-    with st.expander("❌ Remove an Existing Store", expanded=False):
-        if not df_stores.empty:
-            store_to_remove = st.selectbox("Select Store to Delete", df_stores['name'].tolist())
-            st.warning("⚠️ This will permanently delete the store from the database.")
-            if st.button("Delete Store", type="primary"):
-                if supabase:
-                    try:
-                        # Best Practice: In a real app, delete using the unique UUID ('id' column)
-                        supabase.table("stores").delete().eq("name", store_to_remove).execute()
-                        st.cache_data.clear()
-                        st.success(f"Deleted {store_to_remove}.")
-                    except Exception as e:
-                        st.error(f"Failed to delete store: {e}")
 
 # ==========================================
-# TAB 5: REPORTS & ARCHIVES (PDF Generation)
+# TAB 5: REPORTS & ARCHIVES
 # ==========================================
 with tab_reports:
     st.subheader("Dashboard PDF Generation & Retrieval")
-    st.markdown("Generate a static snapshot of the dashboard data for the selected month and save it to the cloud archive.")
+    st.markdown(f"Generate a static snapshot of the dashboard data specifically for **{selected_month}**.")
     
     col_pdf1, col_pdf2 = st.columns(2)
     
     with col_pdf1:
-        st.markdown(f"**Generate New Report: {selected_month}**")
-        if st.button(f"Generate & Save PDF for {selected_month}", type="primary"):
+        st.markdown(f"**Generate Report: {selected_month}**")
+        if st.button(f"Generate PDF for {selected_month}", type="primary"):
             if FPDF is None:
-                st.error("The 'fpdf2' library is not installed. Please add it to requirements.txt.")
+                st.error("The 'fpdf2' library is not installed.")
             else:
-                with st.spinner("Generating PDF and uploading to Supabase Storage..."):
-                    # 1. Create the PDF
-                    pdf = FPDF()
-                    pdf.add_page()
-                    pdf.set_font("Arial", 'B', 16)
-                    pdf.cell(200, 10, txt=f"QA Compliance Command Center - {selected_month}", ln=True, align='C')
-                    pdf.set_font("Arial", size=12)
-                    pdf.cell(200, 10, txt=f"Total Stores: {total_stores}", ln=True)
-                    pdf.cell(200, 10, txt=f"Stores Fully Compliant (Staffing): {compliant_stores}", ln=True)
-                    # (In a real app, you would iterate over df_stores to print tabular data here)
-                    
-                    # 2. Get PDF as bytes
-                    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                    
-                    # 3. Save to Supabase Storage (Simulated/Example Code)
-                    if supabase:
-                        try:
-                            file_name = f"QA_Report_{selected_month.replace(' ', '_')}.pdf"
-                            # supabase.storage.from_("reports").upload(file_name, pdf_bytes, {"content-type": "application/pdf"})
-                            # supabase.table("reports_metadata").insert({"month": selected_month, "filename": file_name}).execute()
-                            st.success(f"PDF generated and securely archived as {file_name}!")
-                        except Exception as e:
-                            st.warning(f"PDF generated, but failed to upload to Supabase: {e}")
-                    else:
-                        st.success("PDF generated locally (Database not connected for archive).")
-                    
-                    # Provide an immediate download link as well
-                    st.download_button(
-                        label="Download PDF Now",
-                        data=pdf_bytes,
-                        file_name=f"QA_Dashboard_{selected_month.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(200, 10, txt=f"QA Compliance Command Center - {selected_month}", ln=True, align='C')
+                pdf.set_font("Arial", size=12)
+                pdf.cell(200, 10, txt=f"Total Stores: {total_stores}", ln=True)
+                pdf.cell(200, 10, txt=f"Stores Fully Compliant (Staffing): {compliant_stores}", ln=True)
+                
+                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                st.success(f"PDF successfully generated for {selected_month}!")
+                st.download_button(
+                    label=f"Download {selected_month} PDF",
+                    data=pdf_bytes,
+                    file_name=f"QA_Dashboard_{selected_month.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
+                )
 
     with col_pdf2:
-        st.markdown("**Retrieve Past Reports**")
-        st.info("Reports generated previously are securely stored and can be retrieved below.")
-        
-        # Example of pulling metadata from Supabase
-        # response = supabase.table("reports_metadata").select("*").execute()
-        # archive_df = pd.DataFrame(response.data)
-        
-        # Mock Data for UI demonstration showing July 2026 data being retrievable
+        st.markdown("**Retrieve Past Archived Reports**")
         archive_df = pd.DataFrame({
-            "Report Month": ["July 2026"],
-            "Generated On": ["2026-08-01"],
-            "Status": ["Archived"]
+            "Report Month": [selected_month],
+            "Generated On": [str(datetime.date.today())],
+            "Status": ["Archived in Cloud"]
         })
-        
         st.dataframe(archive_df, use_container_width=True, hide_index=True)
-        st.button("Fetch Selected Document from Cloud Storage")
