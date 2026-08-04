@@ -55,22 +55,23 @@ if not months:
 selected_month = st.sidebar.selectbox("Select Reporting Month", months)
 
 # --- 2. DATA LOADING & SAMPLE INITIALIZATION ---
-stores_data = [
-    {'name': 'CBTL Janakpuri, New Delhi', 'is_outstation': False},
-    {'name': 'CBTL Greater Kailash (M-Block), New Delhi', 'is_outstation': False},
-    {'name': 'CBTL Platina Tower, Gurugram', 'is_outstation': False},
-    {'name': 'CBTL Sector 50, Noida', 'is_outstation': False},
-    {'name': 'CBTL Seasons Mall, Pune', 'is_outstation': True},
-    {'name': 'CBTL Goldust City Centre, Patiala', 'is_outstation': True},
-    {'name': 'CBTL Elante Mall, Chandigarh', 'is_outstation': True},
-    {'name': 'CBTL Bandra West, Mumbai', 'is_outstation': True},
-    {'name': 'CBTL Koramangala, Bengaluru', 'is_outstation': True},
-    {'name': 'CBTL Jubilee Hills, Hyderabad', 'is_outstation': True},
-    {'name': 'CBTL Central Plaza, Kolkata', 'is_outstation': True},
-    {'name': 'CBTL VR Mall, Chennai', 'is_outstation': True},
-    {'name': 'Creek Side, Ludhiana (New)', 'is_outstation': True}
-]
-df_stores = pd.DataFrame(stores_data)
+if 'master_stores' not in st.session_state:
+    st.session_state['master_stores'] = [
+        {'name': 'CBTL Janakpuri, New Delhi', 'is_outstation': False},
+        {'name': 'CBTL Greater Kailash (M-Block), New Delhi', 'is_outstation': False},
+        {'name': 'CBTL Platina Tower, Gurugram', 'is_outstation': False},
+        {'name': 'CBTL Sector 50, Noida', 'is_outstation': False},
+        {'name': 'CBTL Seasons Mall, Pune', 'is_outstation': True},
+        {'name': 'CBTL Goldust City Centre, Patiala', 'is_outstation': True},
+        {'name': 'CBTL Elante Mall, Chandigarh', 'is_outstation': True},
+        {'name': 'CBTL Bandra West, Mumbai', 'is_outstation': True},
+        {'name': 'CBTL Koramangala, Bengaluru', 'is_outstation': True},
+        {'name': 'CBTL Jubilee Hills, Hyderabad', 'is_outstation': True},
+        {'name': 'CBTL Central Plaza, Kolkata', 'is_outstation': True},
+        {'name': 'CBTL VR Mall, Chennai', 'is_outstation': True},
+        {'name': 'Creek Side, Ludhiana (New)', 'is_outstation': True}
+    ]
+df_stores = pd.DataFrame(st.session_state['master_stores'])
 
 # Fallback/Session State Simulation for Monthly Operations & License tracking
 if 'monthly_db' not in st.session_state:
@@ -252,7 +253,19 @@ with tab_ops:
             
             for l_name in standard_lic_keys:
                 l_info = current_lics[l_name]
-                st.markdown(f"**{l_name}**")
+                
+                col_l1, col_l2 = st.columns([0.85, 0.15])
+                with col_l1:
+                    st.markdown(f"**{l_name}**")
+                with col_l2:
+                    if st.button("🗑️", key=f"del_lic_{selected_store}_{selected_month}_{l_name}", help="Delete this license"):
+                        del store_row_data['licenses'][l_name]
+                        st.session_state['monthly_db'][(selected_store, selected_month)] = store_row_data
+                        st.rerun()
+                
+                if l_name not in store_row_data['licenses']:
+                    continue
+                    
                 is_app = st.toggle(f"Applicable?", value=l_info['applicable'], key=f"app_{selected_store}_{selected_month}_{l_name}")
                 
                 if is_app:
@@ -361,14 +374,53 @@ with tab_lic_summary:
 # TAB 5: SYSTEM ADMINISTRATION
 # ==========================================
 with tab_admin:
-    st.subheader("Database Management")
+    st.subheader("⚙️ Database & Store Management")
     
     with st.expander("➕ Add a New Store Location", expanded=False):
         new_name = st.text_input("Store Name", placeholder="e.g., CBTL Cyber Hub, Gurugram")
-        is_out = st.checkbox("Is Outstation?")
+        is_out = st.checkbox("Is Outstation?", key="add_new_out")
         if st.button("Add Store to Master Database"):
-            if new_name:
+            if new_name and new_name not in [s['name'] for s in st.session_state['master_stores']]:
+                st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
                 st.success(f"Added {new_name} to master register.")
+                st.rerun()
+            elif new_name:
+                st.error("Store already exists!")
+
+    with st.expander("✏️ Edit Existing Store Details", expanded=False):
+        if not df_stores.empty:
+            store_to_edit = st.selectbox("Select Store to Edit", df_stores['name'].tolist(), key="edit_store_sel")
+            current_is_out = df_stores[df_stores['name'] == store_to_edit]['is_outstation'].iloc[0]
+            
+            new_edit_name = st.text_input("Update Store Name", value=store_to_edit, key="edit_store_name")
+            new_edit_out = st.checkbox("Is Outstation?", value=bool(current_is_out), key="edit_is_out")
+            
+            if st.button("Update Store Details"):
+                if new_edit_name:
+                    # Update master list
+                    for s in st.session_state['master_stores']:
+                        if s['name'] == store_to_edit:
+                            s['name'] = new_edit_name
+                            s['is_outstation'] = new_edit_out
+                    
+                    # Update historical records migrating to new name
+                    if new_edit_name != store_to_edit:
+                        keys_to_change = [k for k in st.session_state['monthly_db'].keys() if k[0] == store_to_edit]
+                        for k in keys_to_change:
+                            month = k[1]
+                            st.session_state['monthly_db'][(new_edit_name, month)] = st.session_state['monthly_db'].pop(k)
+                    
+                    st.success(f"Updated store details for {new_edit_name}!")
+                    st.rerun()
+
+    with st.expander("❌ Remove a Store Location", expanded=False):
+        if not df_stores.empty:
+            store_to_remove = st.selectbox("Select Store to Delete", df_stores['name'].tolist(), key="del_store_sel")
+            st.warning("⚠️ This will remove the store from the dashboard and master list.")
+            if st.button("Delete Store"):
+                st.session_state['master_stores'] = [s for s in st.session_state['master_stores'] if s['name'] != store_to_remove]
+                st.success(f"Removed {store_to_remove} from master register.")
+                st.rerun()
 
 # ==========================================
 # TAB 6: REPORTS & ARCHIVES
