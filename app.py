@@ -7,13 +7,14 @@ import datetime
 import io
 import copy
 
-# NOTE: You must add 'fpdf2' to your requirements.txt for the PDF generation to work
+# NOTE: You must install fpdf2 for PDF generation to work (pip install fpdf2)
 try:
     from fpdf import FPDF
 except ImportError:
     FPDF = None
+    st.warning("Please run 'pip install fpdf2' in your terminal to enable PDF generation.")
 
-# --- 1. SECURE DATABASE CONNECTION (Best Practice) ---
+# --- 1. SECURE DATABASE CONNECTION ---
 try:
     URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
     KEY = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
@@ -54,7 +55,8 @@ if not months:
 
 selected_month = st.sidebar.selectbox("Select Reporting Month", months)
 
-# --- 2. DATA LOADING & SAMPLE INITIALIZATION ---
+# --- 2. DATA LOADING & INITIALIZATION ---
+# Master Store List
 if 'master_stores' not in st.session_state:
     st.session_state['master_stores'] = [
         {'name': 'CBTL Janakpuri, New Delhi', 'is_outstation': False},
@@ -73,12 +75,12 @@ if 'master_stores' not in st.session_state:
     ]
 df_stores = pd.DataFrame(st.session_state['master_stores'])
 
-# Fallback/Session State Simulation for Monthly Operations & License tracking
+# Monthly Operations & License tracking
 if 'monthly_db' not in st.session_state:
     st.session_state['monthly_db'] = {
         ("CBTL Janakpuri, New Delhi", "July 2026"): {
             "fostac_pending": 0, "medical_pending": 0, "nsf_score": 92,
-            "self_audit_done": "Yes", "self_audit_score": 90, "remarks": "All clean.",
+            "self_audit_done": "Yes", "self_audit_score": 90, "remark": "All clean.",
             "licenses": {
                 "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 5, 12)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 1, 10)},
@@ -88,7 +90,7 @@ if 'monthly_db' not in st.session_state:
         },
         ("CBTL Greater Kailash (M-Block), New Delhi", "July 2026"): {
             "fostac_pending": 1, "medical_pending": 2, "nsf_score": 85,
-            "self_audit_done": "Yes", "self_audit_score": 88, "remarks": "Pending license due to software portal issue",
+            "self_audit_done": "Yes", "self_audit_score": 88, "remark": "Pending license due to software portal issue",
             "licenses": {
                 "FSSAI License": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2026, 8, 15)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 2, 20)},
@@ -98,16 +100,28 @@ if 'monthly_db' not in st.session_state:
         }
     }
 
-# Helper to grab store monthly info
+# Vendor Tracking
+if 'vendor_db' not in st.session_state:
+    st.session_state['vendor_db'] = {
+        "July 2026": [
+            {"vendor": "ABC Pest Control", "category": "Pest Control", "score": "95%", "status": "Passed", "remark": "All guidelines met"},
+            {"vendor": "FreshFoods Logistics", "category": "Supply Chain", "score": "88%", "status": "Conditionally Approved", "remark": "CA pending for handwash procedures"}
+        ]
+    }
+
+# PDF Archive
+if 'pdf_archive' not in st.session_state:
+    st.session_state['pdf_archive'] = {}
+
+# Helper to grab store monthly info or apply default values
 def get_store_monthly(store_name, month):
     key = (store_name, month)
     if key in st.session_state['monthly_db']:
         return copy.deepcopy(st.session_state['monthly_db'][key])
     else:
-        # Defaults requested: fostac_pending = 1, medical_pending = 5
         return {
             "fostac_pending": 1, "medical_pending": 5, "nsf_score": 90,
-            "self_audit_done": "No", "self_audit_score": 85, "remarks": "",
+            "self_audit_done": "No", "self_audit_score": 85, "remark": "",
             "licenses": {
                 "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 31)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 30)},
@@ -121,6 +135,8 @@ monthly_records = []
 for idx, row in df_stores.iterrows():
     s_name = row['name']
     m_data = get_store_monthly(s_name, selected_month)
+    
+    # Store is fully compliant if both pending counts are 0
     is_comp = (m_data['fostac_pending'] == 0) and (m_data['medical_pending'] == 0)
     
     # Check license compliance overall
@@ -132,3 +148,358 @@ for idx, row in df_stores.iterrows():
         'is_outstation': row['is_outstation'],
         'month': selected_month,
         'fostac_pending': m_data['fostac_pending'],
+        'medical_pending': m_data['medical_pending'],
+        'is_compliant': is_comp,
+        'nsf_score': m_data['nsf_score'],
+        'self_audit_done': m_data['self_audit_done'],
+        'self_audit_score': m_data['self_audit_score'],
+        'remark': m_data['remark'],
+        'has_license_issue': any_lic_issue,
+        'licenses': lics
+    })
+
+df_monthly_filtered = pd.DataFrame(monthly_records)
+
+# --- CEO-LEVEL HEADER ---
+st.title(f"🛡️ Enterprise QA & Compliance Command Center — {selected_month}")
+st.markdown("Real-time oversight of Retail Operations, Licensing, Supply Chain, and Regulatory Compliance.")
+st.divider()
+
+# --- DASHBOARD TABS ---
+tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_reports, tab_admin = st.tabs([
+    "📊 Executive Dashboard", 
+    "🏬 Retail Operations", 
+    "🚚 Vendor & Supply Chain", 
+    "📜 License Summary",
+    "📑 Reports & Archive",
+    "⚙️ System Administration"
+])
+
+# ==========================================
+# TAB 1: EXECUTIVE DASHBOARD
+# ==========================================
+with tab_exec:
+    st.subheader(f"📈 {selected_month} Summary")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    total_stores = len(df_stores)
+    compliant_stores = int(df_monthly_filtered['is_compliant'].sum()) if not df_monthly_filtered.empty else 0
+    avg_nsf = df_monthly_filtered['nsf_score'].mean() if not df_monthly_filtered.empty else 0
+    stores_with_lic_issues = int(df_monthly_filtered['has_license_issue'].sum()) if not df_monthly_filtered.empty else 0
+    
+    col1.metric("Total Active Stores", total_stores)
+    # Using delta_color="inverse" so negative differences (non-compliant) show in red
+    col2.metric("Fully Compliant Stores (Staffing)", f"{compliant_stores}/{total_stores}", delta=f"{compliant_stores-total_stores} Non-compliant", delta_color="inverse")
+    col3.metric("Average NSF Score", f"{avg_nsf:.1f}%" if pd.notnull(avg_nsf) else "N/A")
+    col4.metric("Stores with License Flags", f"{stores_with_lic_issues}", delta=f"{stores_with_lic_issues} Flags", delta_color="inverse")
+
+    st.markdown("---")
+
+    if not df_monthly_filtered.empty:
+        chart_col1, chart_col2 = st.columns(2)
+        
+        with chart_col1:
+            comp_counts = df_monthly_filtered['is_compliant'].value_counts().reset_index()
+            comp_counts['is_compliant'] = comp_counts['is_compliant'].map({True: 'Compliant (FoSTaC & Medical = 0)', False: 'Pending Requirements'})
+            comp_counts.columns = ['Status', 'Count']
+            fig_comp = px.pie(
+                comp_counts, values='Count', names='Status', hole=0.6, 
+                title=f"Staff Compliance Status ({selected_month})",
+                color_discrete_sequence=['#10B981', '#EF4444']
+            )
+            fig_comp.update_traces(textposition='inside', textinfo='percent+label')
+            fig_comp.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+        with chart_col2:
+            fig_nsf = px.bar(
+                df_monthly_filtered, x='name', y='nsf_score', text='nsf_score',
+                title=f"NSF Audit Scores by Store ({selected_month})",
+                color='nsf_score', color_continuous_scale='Blues'
+            )
+            fig_nsf.update_traces(textposition='outside')
+            fig_nsf.update_layout(xaxis_tickangle=-35, showlegend=False, margin=dict(t=40, b=40, l=0, r=0))
+            st.plotly_chart(fig_nsf, use_container_width=True)
+
+    st.markdown("### 📋 Store-by-Store Compliance Status")
+    if not df_monthly_filtered.empty:
+        table_view = df_monthly_filtered[['name', 'fostac_pending', 'medical_pending', 'is_compliant', 'nsf_score', 'self_audit_done', 'self_audit_score', 'remark']].copy()
+        table_view.columns = ["Store Name", "FoSTaC Pending", "Medical Pending", "Fully Compliant?", "NSF Score", "Self Audit Done?", "Self Audit Score", "Remark"]
+        st.dataframe(table_view, use_container_width=True, hide_index=True)
+
+# ==========================================
+# TAB 2: RETAIL OPERATIONS (Data Entry & Licenses)
+# ==========================================
+with tab_ops:
+    st.subheader("Update Store-Level Compliance & Licenses")
+    if not df_stores.empty:
+        store_names = df_stores['name'].tolist()
+        selected_store = st.selectbox("Select Store", store_names, key=f"ops_store_{selected_month}")
+        
+        current_data = get_store_monthly(selected_store, selected_month)
+        
+        st.markdown(f"**Managing Data For:** `{selected_store}` | **Period:** `{selected_month}`")
+        
+        with st.form(f"form_{selected_store}_{selected_month}"):
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                st.markdown("#### 👥 Staff Compliance & Pending Counts")
+                fostac_val = st.number_input("FoSTaC Pending Count", min_value=0, value=int(current_data['fostac_pending']), key=f"fos_{selected_store}_{selected_month}")
+                medical_val = st.number_input("Medical Pending Count", min_value=0, value=int(current_data['medical_pending']), key=f"med_{selected_store}_{selected_month}")
+                
+                st.markdown("#### 📋 Self-Audit & NSF Scores")
+                nsf_val = st.number_input("NSF Score (%)", min_value=0, max_value=100, value=int(current_data['nsf_score']), key=f"nsf_{selected_store}_{selected_month}")
+                
+                audit_options = ["No", "Yes"]
+                default_audit_idx = 1 if current_data['self_audit_done'] == "Yes" else 0
+                self_audit_choice = st.selectbox("Monthly Self Audit Done?", audit_options, index=default_audit_idx, key=f"sa_done_{selected_store}_{selected_month}")
+                
+                self_score_val = st.number_input("Self Audit Score (%)", min_value=0, max_value=100, value=int(current_data['self_audit_score']), key=f"sa_score_{selected_store}_{selected_month}")
+            
+            with col_b:
+                st.markdown("#### 📑 License Compliance Tracking")
+                st.caption("Toggle off if a license is not applicable to this specific outlet. Check the delete box to remove entirely.")
+                
+                updated_licenses = {}
+                licenses_dict = current_data['licenses']
+                
+                for lic_name, lic_info in licenses_dict.items():
+                    with st.expander(f"License: {lic_name}", expanded=True):
+                        col_l1, col_l2 = st.columns([3, 1])
+                        is_app = col_l1.checkbox("Applicable?", value=bool(lic_info['applicable']), key=f"app_{selected_store}_{lic_name}_{selected_month}")
+                        delete_lic = col_l2.checkbox("🗑️ Delete", key=f"del_{selected_store}_{lic_name}_{selected_month}")
+                        
+                        if not delete_lic:
+                            if is_app:
+                                status_opts = ["Valid", "Applied/Pending", "Expired"]
+                                curr_stat = lic_info['status'] if lic_info['status'] in status_opts else "Valid"
+                                stat_val = st.selectbox("Status", status_opts, index=status_opts.index(curr_stat), key=f"stat_{selected_store}_{lic_name}_{selected_month}")
+                                
+                                try:
+                                    default_exp = lic_info['expiry'] if isinstance(lic_info['expiry'], datetime.date) else datetime.date.today()
+                                except:
+                                    default_exp = datetime.date.today()
+                                    
+                                exp_val = st.date_input("Expiry Date", value=default_exp, key=f"exp_{selected_store}_{lic_name}_{selected_month}")
+                            else:
+                                stat_val = "N/A"
+                                exp_val = datetime.date(2027, 1, 1)
+                                
+                            updated_licenses[lic_name] = {"applicable": is_app, "status": stat_val, "expiry": exp_val}
+                
+                st.markdown("---")
+                st.markdown("#### ➕ Add Custom License")
+                new_lic_name = st.text_input("New License Name (e.g. Signage, Pollution)", key=f"new_lic_{selected_store}_{selected_month}")
+                add_lic_clicked = st.form_submit_button("Add License to Outlet")
+                if add_lic_clicked and new_lic_name:
+                    if new_lic_name not in updated_licenses:
+                        updated_licenses[new_lic_name] = {"applicable": True, "status": "Valid", "expiry": datetime.date.today()}
+                        # Temporarily write to session state so it persists immediately
+                        st.session_state['monthly_db'][(selected_store, selected_month)] = current_data
+                        st.session_state['monthly_db'][(selected_store, selected_month)]['licenses'] = updated_licenses
+                        st.success(f"Added {new_lic_name}! Please click 'Save' below to finalize.")
+                        st.rerun()
+
+            st.markdown("---")
+            remark_val = st.text_area("Remark (e.g., pending license due to software portal issue)", value=str(current_data['remark']), key=f"rem_{selected_store}_{selected_month}")
+            
+            save_button = st.form_submit_button(f"Save Store Data for {selected_month}", type="primary")
+            
+            if save_button:
+                st.session_state['monthly_db'][(selected_store, selected_month)] = {
+                    "fostac_pending": fostac_val,
+                    "medical_pending": medical_val,
+                    "nsf_score": nsf_val,
+                    "self_audit_done": self_audit_choice,
+                    "self_audit_score": self_score_val,
+                    "remark": remark_val,
+                    "licenses": updated_licenses
+                }
+                st.success(f"Successfully recorded operations data for {selected_store} in {selected_month}!")
+                st.rerun()
+
+# ==========================================
+# TAB 3: VENDOR & SUPPLY CHAIN
+# ==========================================
+with tab_supply:
+    st.subheader(f"Vendor Audit Performance — {selected_month}")
+    st.markdown("Record audits performed for specific vendors during the selected month.")
+    
+    if selected_month not in st.session_state['vendor_db']:
+        st.session_state['vendor_db'][selected_month] = []
+        
+    current_vendors = st.session_state['vendor_db'][selected_month]
+    
+    with st.form(f"vendor_form_{selected_month}"):
+        col_v1, col_v2, col_v3 = st.columns(3)
+        with col_v1:
+            v_name = st.text_input("Vendor Name (e.g., ABC Pest Control)")
+        with col_v2:
+            v_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"])
+            v_score = st.text_input("Audit Score / Percentage", placeholder="e.g. 95%")
+        with col_v3:
+            v_status = st.selectbox("Audit Status", ["Passed", "Conditionally Approved", "Failed"])
+            
+        v_remark = st.text_input("Remark (e.g., CA pending for handwash)")
+        
+        add_vendor_btn = st.form_submit_button("Add Vendor Audit Record")
+        if add_vendor_btn and v_name:
+            st.session_state['vendor_db'][selected_month].append({
+                "vendor": v_name, "category": v_cat, "score": v_score, "status": v_status, "remark": v_remark
+            })
+            st.success(f"Added audit record for {v_name}!")
+            st.rerun()
+            
+    st.markdown("### Recorded Vendor Audits for this Month")
+    if current_vendors:
+        df_v = pd.DataFrame(current_vendors)
+        df_v.columns = ["Vendor Name", "Category", "Score", "Status", "Remark"]
+        st.dataframe(df_v, use_container_width=True, hide_index=True)
+    else:
+        st.info("No vendor audits recorded for this month yet.")
+
+# ==========================================
+# TAB 4: LICENSE SUMMARY
+# ==========================================
+with tab_lic_summary:
+    st.subheader(f"📜 Consolidated License Compliance Summary — {selected_month}")
+    st.markdown("Overview of all active licenses across all outlets for the selected reporting month.")
+    
+    lic_summary_rows = []
+    for idx, row in df_stores.iterrows():
+        s_name = row['name']
+        m_data = get_store_monthly(s_name, selected_month)
+        for l_name, l_info in m_data['licenses'].items():
+            if l_info['applicable']:
+                lic_summary_rows.append({
+                    "Store Name": s_name,
+                    "License Name": l_name,
+                    "Status": l_info['status'],
+                    "Expiry Date": str(l_info['expiry'])
+                })
+            
+    if lic_summary_rows:
+        df_lic_summary = pd.DataFrame(lic_summary_rows)
+        
+        f_status = st.selectbox("Filter by Status", ["All"] + list(df_lic_summary['Status'].unique()))
+        if f_status != "All":
+            df_lic_summary = df_lic_summary[df_lic_summary['Status'] == f_status]
+            
+        st.dataframe(df_lic_summary, use_container_width=True, hide_index=True)
+    else:
+        st.info("No active licenses tracked yet.")
+
+# ==========================================
+# TAB 5: REPORTS & ARCHIVE
+# ==========================================
+with tab_reports:
+    st.subheader(f"📑 PDF Report Generation & Historical Archive ({selected_month})")
+    st.markdown("Generate and archive an official PDF report of the network compliance for the selected month. Past reports can be retrieved from the archive below.")
+    
+    def generate_pdf(month_str, records, vendors):
+        if FPDF is None:
+            return None
+            
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=14, style='B')
+        pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=True, align='C')
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 8, txt=f"Generated on: {datetime.date.today().strftime('%Y-%m-%d')}", ln=True, align='C')
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 8, txt="Executive Summary & Store Compliance:", ln=True)
+        pdf.set_font("Arial", size=9)
+        
+        for r in records:
+            comp_txt = "Fully Compliant" if r['is_compliant'] else f"Pending (FoSTaC: {r['fostac_pending']}, Med: {r['medical_pending']})"
+            pdf.cell(200, 6, txt=f"- {r['name']}: {comp_txt} | NSF: {r['nsf_score']}%", ln=True)
+            if str(r['remark']).strip():
+                pdf.cell(200, 6, txt=f"  Remark: {r['remark']}", ln=True)
+            
+        pdf.ln(5)
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 8, txt="Vendor Audit Summary:", ln=True)
+        pdf.set_font("Arial", size=9)
+        if vendors:
+            for v in vendors:
+                pdf.cell(200, 6, txt=f"- {v['vendor']} ({v['category']}): Score {v['score']} - Status: {v['status']} [{v['remark']}]", ln=True)
+        else:
+            pdf.cell(200, 6, txt="No vendor audits recorded.", ln=True)
+            
+        # Return safely based on fpdf version
+        try:
+            return pdf.output(dest='S').encode('latin-1')
+        except:
+            return bytes(pdf.output())
+
+    if st.button("Generate & Archive PDF Report", type="primary"):
+        pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []))
+        if pdf_bytes:
+            st.session_state['pdf_archive'][selected_month] = pdf_bytes
+            st.success(f"PDF successfully generated and archived for {selected_month}!")
+        else:
+            st.error("Cannot generate PDF. Ensure 'fpdf2' is installed.")
+            
+    if selected_month in st.session_state['pdf_archive']:
+        st.download_button(
+            label=f"📥 Download Archived PDF Report ({selected_month})",
+            data=st.session_state['pdf_archive'][selected_month],
+            file_name=f"QA_Compliance_Report_{selected_month.replace(' ', '_')}.pdf",
+            mime="application/pdf"
+        )
+    else:
+        st.info("No archived PDF found for this month yet. Click the button above to generate one.")
+
+# ==========================================
+# TAB 6: SYSTEM ADMINISTRATION
+# ==========================================
+with tab_admin:
+    st.subheader("⚙️ Store Portfolio & System Administration")
+    st.markdown("Add, edit, or delete store locations in your master network.")
+    
+    with st.expander("➕ Add a New Store Location", expanded=False):
+        with st.form("new_store_form"):
+            new_name = st.text_input("Store Name", placeholder="e.g., CBTL Creek Side, Ludhiana")
+            is_out = st.checkbox("Is Outstation?")
+            if st.form_submit_button("Add Store to Database"):
+                if new_name:
+                    st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
+                    st.success(f"Added {new_name} successfully!")
+                    st.rerun()
+                    
+    with st.expander("✏️ Edit or Remove an Existing Store", expanded=False):
+        if st.session_state['master_stores']:
+            store_names_list = [s['name'] for s in st.session_state['master_stores']]
+            store_to_edit = st.selectbox("Select Store to Edit/Delete", store_names_list)
+            
+            store_obj = next((s for s in st.session_state['master_stores'] if s['name'] == store_to_edit), None)
+            
+            if store_obj:
+                with st.form("edit_store_form"):
+                    updated_name = st.text_input("Update Store Name", value=store_obj['name'])
+                    updated_outstation = st.checkbox("Is Outstation?", value=store_obj['is_outstation'])
+                    
+                    col_e1, col_e2 = st.columns(2)
+                    update_submitted = col_e1.form_submit_button("Save Changes", type="primary")
+                    delete_submitted = col_e2.form_submit_button("Delete Store")
+                    
+                    if update_submitted and updated_name:
+                        # Migrate monthly records to the new name
+                        old_name = store_obj['name']
+                        if old_name != updated_name:
+                            keys_to_update = [k for k in st.session_state['monthly_db'].keys() if k[0] == old_name]
+                            for k in keys_to_update:
+                                st.session_state['monthly_db'][(updated_name, k[1])] = st.session_state['monthly_db'].pop(k)
+                        
+                        store_obj['name'] = updated_name
+                        store_obj['is_outstation'] = updated_outstation
+                        st.success("Store updated successfully!")
+                        st.rerun()
+                        
+                    if delete_submitted:
+                        st.session_state['master_stores'] = [s for s in st.session_state['master_stores'] if s['name'] != store_to_edit]
+                        st.warning(f"Deleted {store_to_edit} from database.")
+                        st.rerun()
