@@ -48,7 +48,7 @@ st.write(df.head())
 if st.button("Upload to Supabase"):
 
 records = df.to_dict(orient="records")
- 
+
 supabase.table("nsf_audits").insert(records).execute()
  
 st.success(
