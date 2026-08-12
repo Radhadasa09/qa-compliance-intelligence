@@ -43,6 +43,11 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
+st.subheader("NSF Audit Test")
+
+nsf_df = load_nsf_audits()
+
+st.dataframe(nsf_df)
 st.subheader("NSF Audit Upload")
 
 uploaded_file = st.file_uploader(
