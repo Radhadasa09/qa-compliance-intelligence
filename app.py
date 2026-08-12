@@ -74,7 +74,7 @@ if 'master_stores' not in st.session_state:
     ]
 df_stores = pd.DataFrame(st.session_state['master_stores'])
 
-# July 2026 Database pre-populated with exact license tracker data from the uploaded image
+# July 2026 Database pre-populated with exact license tracker data
 if 'monthly_db' not in st.session_state:
     st.session_state['monthly_db'] = {
         ("Janakpuri, Delhi", "July 2026"): {
@@ -322,12 +322,13 @@ st.markdown("Real-time oversight of Retail Operations, Licensing, Supply Chain, 
 st.divider()
 
 # --- DASHBOARD TABS ---
-tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_calendar, tab_reports, tab_admin = st.tabs([
+tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_calendar, tab_subfranchise, tab_reports, tab_admin = st.tabs([
     "📊 Executive Dashboard", 
     "🏬 Retail Operations", 
     "🚚 Vendor & Supply Chain", 
     "📜 License Summary",
     "📅 QA Calendar",
+    "🤝 Sub Franchise",
     "📑 Reports & Archive",
     "⚙️ System Administration"
 ])
@@ -451,7 +452,7 @@ with tab_ops:
                         st.success(f"Added {new_lic_name}!")
 
             st.markdown("---")
-            remark_val = st.text_area("Remark / Notes (e.g., pending license due to software portal issue)", value=str(current_data['remark']), key=f"rem_{selected_store}_{selected_month}")
+            remark_val = st.text_area("Remark / Notes", value=str(current_data['remark']), key=f"rem_{selected_store}_{selected_month}")
             
             save_button = st.form_submit_button(f"Save Store Data for {selected_month}", type="primary")
             
@@ -482,14 +483,14 @@ with tab_supply:
     with st.form(f"vendor_form_{selected_month}"):
         col_v1, col_v2, col_v3 = st.columns(3)
         with col_v1:
-            v_name = st.text_input("Vendor Name (e.g., ABC Pest Control)")
+            v_name = st.text_input("Vendor Name")
         with col_v2:
             v_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"])
-            v_score = st.text_input("Audit Score / Percentage", placeholder="e.g. 95%")
+            v_score = st.text_input("Audit Score / Percentage")
         with col_v3:
             v_status = st.selectbox("Audit Status", ["Passed", "Conditionally Approved", "Failed"])
             
-        v_remark = st.text_input("Remark (e.g., CA pending for handwash)")
+        v_remark = st.text_input("Remark")
         
         add_vendor_btn = st.form_submit_button("Add Vendor Audit Record")
         if add_vendor_btn and v_name:
@@ -555,7 +556,7 @@ with tab_calendar:
             with c2:
                 cal_day = st.selectbox("Day", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
             with c3:
-                cal_activity = st.text_input("Activity / Location (e.g. Store Audit, WFH)")
+                cal_activity = st.text_input("Activity / Location")
                 
             submitted_cal = st.form_submit_button("Add to Calendar")
             if submitted_cal and cal_date and cal_activity:
@@ -573,7 +574,49 @@ with tab_calendar:
         st.info("No schedule entries found for this month.")
 
 # ==========================================
-# TAB 6: REPORTS & ARCHIVE
+# TAB 6: SUB FRANCHISE
+# ==========================================
+with tab_subfranchise:
+    st.subheader(f"🤝 Sub Franchise (189-Series) Audit Summary")
+    st.markdown("Overview and details of NSF audits for Sub Franchise outlets.")
+    
+    if 'sub_franchise_audits' not in st.session_state:
+        st.session_state['sub_franchise_audits'] = [
+            {"Store Name": "C-Block, Janakpuri, DL", "Site Code": "18910001", "Score": 90.43, "Result": "PASS", "Audit Date": "2026-07-28"},
+            {"Store Name": "Downtown Market, Ludhiana", "Site Code": "18910010", "Score": 87.39, "Result": "PASS", "Audit Date": "2026-07-16"},
+            {"Store Name": "Downtown Market, Ludhiana", "Site Code": "18910010", "Score": 83.78, "Result": "FAIL", "Audit Date": "2026-06-23"},
+            {"Store Name": "Seasons Mall, Pune", "Site Code": "18910009", "Score": 90.52, "Result": "PASS", "Audit Date": "2026-07-31"},
+            {"Store Name": "DLF Mid Town Plaza, Moti Nagar", "Site Code": "18910012", "Score": 85.84, "Result": "PASS", "Audit Date": "2026-07-24"}
+        ]
+    
+    sf_df = pd.DataFrame(st.session_state['sub_franchise_audits'])
+    
+    col_sf1, col_sf2, col_sf3, col_sf4 = st.columns(4)
+    total_sf_audits = len(sf_df)
+    avg_sf_score = sf_df['Score'].mean()
+    pass_count = len(sf_df[sf_df['Result'] == 'PASS'])
+    pass_rate = (pass_count / total_sf_audits) * 100 if total_sf_audits > 0 else 0
+    
+    col_sf1.metric("Total SF Audits", total_sf_audits)
+    col_sf2.metric("Average SF Score", f"{avg_sf_score:.2f}%")
+    col_sf3.metric("Passed Audits", pass_count)
+    col_sf4.metric("Pass Rate", f"{pass_rate:.1f}%")
+
+    # Interactive Bar Chart for SF Audits
+    fig_sf = px.bar(
+        sf_df, x='Store Name', y='Score', text='Score', color='Result',
+        color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
+        title=f"Sub Franchise NSF Scores"
+    )
+    fig_sf.update_traces(textposition='outside')
+    fig_sf.update_layout(xaxis_tickangle=-15, margin=dict(t=40, b=40, l=0, r=0))
+    st.plotly_chart(fig_sf, use_container_width=True)
+    
+    st.markdown("### 📋 NSF Audit Details")
+    st.dataframe(sf_df, use_container_width=True, hide_index=True)
+
+# ==========================================
+# TAB 7: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
     st.subheader(f"📑 PDF Report Generation & Historical Archive ({selected_month})")
@@ -633,7 +676,7 @@ with tab_reports:
         st.info("No archived PDF found for this month yet. Click the button above to generate one.")
 
 # ==========================================
-# TAB 7: SYSTEM ADMINISTRATION
+# TAB 8: SYSTEM ADMINISTRATION
 # ==========================================
 with tab_admin:
     st.subheader("⚙️ Store Portfolio & System Administration")
