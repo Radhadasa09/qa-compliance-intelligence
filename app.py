@@ -7,7 +7,6 @@ import datetime
 import io
 import copy
 
-# NOTE: You must add 'fpdf2' to your requirements.txt for the PDF generation to work
 try:
     from fpdf import FPDF
 except ImportError:
@@ -22,7 +21,7 @@ try:
         raise ValueError("Missing Supabase credentials")
         
     supabase: Client = create_client(URL, KEY)
-    st.write("SUPABASE URL:", URL)
+
 except Exception as e:
     supabase = None
 
@@ -44,58 +43,8 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-st.subheader("Supabase Diagnostic")
 
-stores_response = (
-    supabase
-    .table("stores")
-    .select("*")
-    .execute()
-)
 
-st.write("Stores Table")
-st.write(stores_response.data)
-
-try:
-
-    nsf_response = (
-        supabase
-        .table("nsf_audits")
-        .select("*")
-        .execute()
-    )
-
-    st.write("NSF RAW RESPONSE")
-    st.write(nsf_response)
-
-    st.write("NSF DATA")
-    st.write(nsf_response.data)
-
-except Exception as e:
-
-    st.error(str(e))
-st.subheader("NSF Audit Upload")
-
-uploaded_file = st.file_uploader(
-"Upload NSF Audit CSV",
-type=["csv"]
-)
-
-if uploaded_file:
-
- df = pd.read_csv(uploaded_file)
-
- st.write(df.head())
-
- if st.button("Upload to Supabase"):
-
-   records = df.to_dict(orient="records")
-
-   supabase.table("nsf_audits").insert(records).execute()
-
-   st.success(
-     f"{len(records)} records uploaded successfully"
-)
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
 
