@@ -11,7 +11,12 @@ try:
     from fpdf import FPDF
 except ImportError:
     FPDF = None
-
+st.set_page_config(
+    page_title="QA Intelligence Command Center", 
+    layout="wide", 
+    page_icon="🛡️",
+    initial_sidebar_state="expanded"
+)
 # --- 1. SECURE DATABASE CONNECTION (Best Practice) ---
 try:
     URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
@@ -28,21 +33,22 @@ except Exception as e:
 @st.cache_data(ttl=60)
 def load_nsf_audits():
 
-    response = (
-        supabase
-        .table("nsf_audits")
-        .select("*")
-        .execute()
-    )
+    try:
 
-    return pd.DataFrame(response.data)
+        response = (
+            supabase
+            .table("nsf_audits")
+            .select("*")
+            .execute()
+        )
+
+        return pd.DataFrame(response.data)
+
+    except Exception:
+
+        return pd.DataFrame()
 # --- PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="QA Intelligence Command Center", 
-    layout="wide", 
-    page_icon="🛡️",
-    initial_sidebar_state="expanded"
-)
+
 
 
 # --- SIDEBAR: GLOBAL CONTROLS ---
