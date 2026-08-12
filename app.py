@@ -56,15 +56,24 @@ stores_response = (
 st.write("Stores Table")
 st.write(stores_response.data)
 
-nsf_response = (
-    supabase
-    .table("nsf_audits")
-    .select("*")
-    .execute()
-)
+try:
 
-st.write("NSF Table")
-st.write(nsf_response.data)
+    nsf_response = (
+        supabase
+        .table("nsf_audits")
+        .select("*")
+        .execute()
+    )
+
+    st.write("NSF RAW RESPONSE")
+    st.write(nsf_response)
+
+    st.write("NSF DATA")
+    st.write(nsf_response.data)
+
+except Exception as e:
+
+    st.error(str(e))
 st.subheader("NSF Audit Upload")
 
 uploaded_file = st.file_uploader(
