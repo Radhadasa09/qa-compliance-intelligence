@@ -54,46 +54,181 @@ if not months:
 
 selected_month = st.sidebar.selectbox("Select Reporting Month", months)
 
-# --- 2. DATA LOADING & SAMPLE INITIALIZATION ---
+# --- 2. DATA LOADING & SAMPLE INITIALIZATION (14 Outlets from Image) ---
 if 'master_stores' not in st.session_state:
     st.session_state['master_stores'] = [
-        {'name': 'CBTL Janakpuri, New Delhi', 'is_outstation': False},
-        {'name': 'CBTL Greater Kailash (M-Block), New Delhi', 'is_outstation': False},
-        {'name': 'CBTL Platina Tower, Gurugram', 'is_outstation': False},
-        {'name': 'CBTL Sector 50, Noida', 'is_outstation': False},
-        {'name': 'CBTL Seasons Mall, Pune', 'is_outstation': True},
-        {'name': 'CBTL Goldust City Centre, Patiala', 'is_outstation': True},
-        {'name': 'CBTL Elante Mall, Chandigarh', 'is_outstation': True},
-        {'name': 'CBTL Bandra West, Mumbai', 'is_outstation': True},
-        {'name': 'CBTL Koramangala, Bengaluru', 'is_outstation': True},
-        {'name': 'CBTL Jubilee Hills, Hyderabad', 'is_outstation': True},
-        {'name': 'CBTL Central Plaza, Kolkata', 'is_outstation': True},
-        {'name': 'CBTL VR Mall, Chennai', 'is_outstation': True},
-        {'name': 'Creek Side, Ludhiana (New)', 'is_outstation': True}
+        {'name': 'Janakpuri, Delhi', 'is_outstation': False},
+        {'name': 'GK1, Delhi', 'is_outstation': False},
+        {'name': 'Oberoi SkyCity, Mumbai', 'is_outstation': True},
+        {'name': 'M3M Atrium, Gurgoan', 'is_outstation': True},
+        {'name': 'Secor 50 Noida, Noida', 'is_outstation': False},
+        {'name': 'Malcha, Delhi', 'is_outstation': False},
+        {'name': 'Platina, Gurgoan', 'is_outstation': True},
+        {'name': 'Season Mall Pune, Pune', 'is_outstation': True},
+        {'name': 'BRS Nagar Ludhiana, Ludhiana', 'is_outstation': True},
+        {'name': 'DLF Moti Nagar, Delhi', 'is_outstation': False},
+        {'name': 'Goldust Patiala, Patiala', 'is_outstation': True},
+        {'name': 'Warehouse, Delhi', 'is_outstation': False},
+        {'name': 'Creek Side, Ludhiana', 'is_outstation': True},
+        {'name': 'Chembur, Mumbai', 'is_outstation': True}
     ]
 df_stores = pd.DataFrame(st.session_state['master_stores'])
 
-# Fallback/Session State Simulation for Monthly Operations & License tracking
+# July 2026 Database pre-populated with exact license tracker data from the uploaded image
 if 'monthly_db' not in st.session_state:
     st.session_state['monthly_db'] = {
-        ("CBTL Janakpuri, New Delhi", "July 2026"): {
-            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 92,
-            "self_audit_done": "Yes", "self_audit_score": 90, "remark": "All clean.",
+        ("Janakpuri, Delhi", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 94,
+            "self_audit_done": "Yes", "self_audit_score": 92, "remark": "All licenses valid.",
             "licenses": {
-                "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 5, 12)},
-                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 1, 10)},
-                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 15)}
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 2, 5)},
+                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 3, 31)},
+                "Fire NOC": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 7, 24)},
+                "Pollution CTO": {"applicable": True, "status": "Valid", "expiry": datetime.date(2035, 4, 22)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
             }
         },
-        ("CBTL Greater Kailash (M-Block), New Delhi", "July 2026"): {
-            "fostac_pending": 1, "medical_pending": 2, "nsf_score": 85,
-            "self_audit_done": "Yes", "self_audit_score": 88, "remark": "Pending license due to software portal issue",
+        ("GK1, Delhi", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 92,
+            "self_audit_done": "Yes", "self_audit_score": 90, "remark": "Clean audit.",
             "licenses": {
-                "FSSAI License": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2026, 8, 15)},
-                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 2, 20)},
-                "Fire NOC": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 1, 1)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 4, 1)}
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 3, 11)},
+                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 3, 31)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": True, "status": "Valid", "expiry": datetime.date(2035, 4, 14)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Oberoi SkyCity, Mumbai", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 95,
+            "self_audit_done": "Yes", "self_audit_score": 94, "remark": "All operational.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 21)},
+                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 20)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 7, 13)}
+            }
+        },
+        ("M3M Atrium, Gurgoan", "July 2026"): {
+            "fostac_pending": 1, "medical_pending": 0, "nsf_score": 89,
+            "self_audit_done": "Yes", "self_audit_score": 88, "remark": "Trade/Fire/Pollution/Signage NA.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 8, 24)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Secor 50 Noida, Noida", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 91,
+            "self_audit_done": "Yes", "self_audit_score": 90, "remark": "FSSAI valid up to 2030.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2030, 7, 20)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Malcha, Delhi", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 1, "nsf_score": 88,
+            "self_audit_done": "Yes", "self_audit_score": 87, "remark": "Trade License Under Process; Fire part of Trade.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 7, 29)},
+                "Trade License": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 28)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Platina, Gurgoan", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 93,
+            "self_audit_done": "Yes", "self_audit_score": 91, "remark": "FSSAI valid.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 9, 3)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Season Mall Pune, Pune", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 90,
+            "self_audit_done": "Yes", "self_audit_score": 89, "remark": "Trade license valid.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 3)},
+                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2026, 12, 3)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("BRS Nagar Ludhiana, Ludhiana", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 92,
+            "self_audit_done": "Yes", "self_audit_score": 90, "remark": "FSSAI valid to 2031.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2031, 1, 2)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("DLF Moti Nagar, Delhi", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 94,
+            "self_audit_done": "Yes", "self_audit_score": 92, "remark": "FSSAI and Trade valid.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 12, 3)},
+                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2028, 3, 31)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Goldust Patiala, Patiala", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 96,
+            "self_audit_done": "Yes", "self_audit_score": 95, "remark": "FSSAI valid to 2031.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2031, 3, 1)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Warehouse, Delhi", "July 2026"): {
+            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 95,
+            "self_audit_done": "Yes", "self_audit_score": 95, "remark": "FSSAI valid.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2026, 7, 8)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Creek Side, Ludhiana", "July 2026"): {
+            "fostac_pending": 1, "medical_pending": 1, "nsf_score": 85,
+            "self_audit_done": "No", "self_audit_score": 80, "remark": "New Store Opening - FSSAI Applied.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2027, 1, 1)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
+            }
+        },
+        ("Chembur, Mumbai", "July 2026"): {
+            "fostac_pending": 2, "medical_pending": 3, "nsf_score": 82,
+            "self_audit_done": "No", "self_audit_score": 75, "remark": "New Store Opening - FSSAI Not Started.",
+            "licenses": {
+                "FSSAI": {"applicable": True, "status": "Applied/Pending", "expiry": datetime.date(2027, 1, 1)},
+                "Trade License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
             }
         }
     }
@@ -146,10 +281,11 @@ def get_store_monthly(store_name, month):
             "fostac_pending": 1, "medical_pending": 5, "nsf_score": 90,
             "self_audit_done": "No", "self_audit_score": 85, "remark": "",
             "licenses": {
-                "FSSAI License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 31)},
+                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 31)},
                 "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 30)},
                 "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
-                "Signage License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 3, 31)}
+                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
+                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
             }
         }
 
@@ -375,7 +511,7 @@ with tab_supply:
 # ==========================================
 with tab_lic_summary:
     st.subheader(f"📜 Consolidated License Compliance Summary — {selected_month}")
-    st.markdown("Overview of all active licenses across all outlets for the selected reporting month.")
+    st.markdown("Overview of all active licenses across all 14 outlets for the selected reporting month.")
     
     lic_summary_rows = []
     for idx, row in df_stores.iterrows():
@@ -505,7 +641,7 @@ with tab_admin:
     
     with st.expander("➕ Add a New Store Location", expanded=False):
         with st.form("new_store_form"):
-            new_name = st.text_input("Store Name", placeholder="e.g., CBTL Creek Side, Ludhiana")
+            new_name = st.text_input("Store Name", placeholder="e.g., New Outlet Name")
             is_out = st.checkbox("Is Outstation?")
             if st.form_submit_button("Add Store to Database"):
                 if new_name:
