@@ -41,18 +41,18 @@ type=["csv"]
 
 if uploaded_file:
 
-df = pd.read_csv(uploaded_file)
+ df = pd.read_csv(uploaded_file)
 
-st.write(df.head())
+ st.write(df.head())
 
-if st.button("Upload to Supabase"):
+ if st.button("Upload to Supabase"):
 
-records = df.to_dict(orient="records")
+   records = df.to_dict(orient="records")
 
-supabase.table("nsf_audits").insert(records).execute()
+   supabase.table("nsf_audits").insert(records).execute()
 
-st.success(
-f"{len(records)} records uploaded successfully"
+   st.success(
+     f"{len(records)} records uploaded successfully"
 )
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
