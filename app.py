@@ -25,6 +25,17 @@ try:
 except Exception as e:
     supabase = None
 
+@st.cache_data(ttl=60)
+def load_nsf_audits():
+
+    response = (
+        supabase
+        .table("nsf_audits")
+        .select("*")
+        .execute()
+    )
+
+    return pd.DataFrame(response.data)
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
     page_title="QA Intelligence Command Center", 
