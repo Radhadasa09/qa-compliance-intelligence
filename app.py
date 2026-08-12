@@ -42,7 +42,7 @@ type=["csv"]
 if uploaded_file:
 
 df = pd.read_csv(uploaded_file)
- 
+
 st.write(df.head())
  
 if st.button("Upload to Supabase"):
