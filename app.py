@@ -33,7 +33,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 st.subheader("NSF Audit Upload")
- 
+
 uploaded_file = st.file_uploader(
 "Upload NSF Audit CSV",
 type=["csv"]
