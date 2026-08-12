@@ -45,9 +45,15 @@ st.set_page_config(
 )
 st.subheader("NSF Audit Test")
 
-nsf_df = load_nsf_audits()
+response = (
+    supabase
+    .table("nsf_audits")
+    .select("*")
+    .execute()
+)
 
-st.dataframe(nsf_df)
+st.write(response)
+st.write(response.data)
 st.subheader("NSF Audit Upload")
 
 uploaded_file = st.file_uploader(
