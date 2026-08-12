@@ -32,7 +32,28 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-
+st.subheader("NSF Audit Upload")
+ 
+uploaded_file = st.file_uploader(
+"Upload NSF Audit CSV",
+type=["csv"]
+)
+ 
+if uploaded_file:
+ 
+df = pd.read_csv(uploaded_file)
+ 
+st.write(df.head())
+ 
+if st.button("Upload to Supabase"):
+ 
+records = df.to_dict(orient="records")
+ 
+supabase.table("nsf_audits").insert(records).execute()
+ 
+st.success(
+f"{len(records)} records uploaded successfully"
+)
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
 
