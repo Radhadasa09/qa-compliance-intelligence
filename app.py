@@ -50,7 +50,7 @@ if st.button("Upload to Supabase"):
 records = df.to_dict(orient="records")
 
 supabase.table("nsf_audits").insert(records).execute()
- 
+
 st.success(
 f"{len(records)} records uploaded successfully"
 )
