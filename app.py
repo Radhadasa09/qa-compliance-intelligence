@@ -22,6 +22,7 @@ try:
         raise ValueError("Missing Supabase credentials")
         
     supabase: Client = create_client(URL, KEY)
+    st.write("SUPABASE URL:", URL)
 except Exception as e:
     supabase = None
 
