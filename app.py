@@ -43,17 +43,27 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-st.subheader("NSF Audit Test")
+st.subheader("Supabase Diagnostic")
 
-response = (
+stores_response = (
+    supabase
+    .table("stores")
+    .select("*")
+    .execute()
+)
+
+st.write("Stores Table")
+st.write(stores_response.data)
+
+nsf_response = (
     supabase
     .table("nsf_audits")
     .select("*")
     .execute()
 )
 
-st.write(response)
-st.write(response.data)
+st.write("NSF Table")
+st.write(nsf_response.data)
 st.subheader("NSF Audit Upload")
 
 uploaded_file = st.file_uploader(
