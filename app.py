@@ -41,47 +41,69 @@ def load_nsf_audits():
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
-# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Fixed Header Mapping) ---
-st.subheader("☁️ NSF Audit Cloud Uploader")
-with st.expander("Upload New Audit Data (CSV) to Supabase", expanded=False):
-    uploaded_file = st.file_uploader("Upload NSF Audit CSV", type=["csv"])
+# --- 3. NSF AUDIT CLOUD UPLOADER (Direct PDF Reader) ---
+st.subheader("☁️ NSF Audit Cloud Uploader (Direct PDF)")
+with st.expander("Upload Official NSF Audit PDF", expanded=False):
+    uploaded_pdf = st.file_uploader("Upload Official NSF Audit PDF", type=["pdf"])
     
-    if uploaded_file:
+    if uploaded_pdf:
         try:
-            # 1. Skip the 2 broken header rows from the PDF converter and read raw data
-            df_upload = pd.read_csv(uploaded_file, comment='#', skiprows=2, header=None, on_bad_lines='skip')
+            import pdfplumber
+            extracted_rows = []
             
-            # 2. Assign clean, flat standard column names matching Supabase schema
-            standard_columns = [
-                "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
-                "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
-                "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
-                "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
-            ]
+            # Open and parse the PDF tables page-by-page
+            with pdfplumber.open(uploaded_pdf) as pdf:
+                for page in pdf.pages:
+                    tables = page.extract_tables()
+                    for table in tables:
+                        for row in table:
+                            extracted_rows.append(row)
             
-            # Apply columns safely depending on column count
-            if len(df_upload.columns) >= len(standard_columns):
-                df_upload = df_upload.iloc[:, :len(standard_columns)]
-                df_upload.columns = standard_columns
-            else:
-                df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
-            
-            st.dataframe(df_upload.head(3))
-            
-            if st.button("Push to Database", type="primary"):
-                if supabase is None:
-                    st.error("❌ Database connection is inactive. Check credentials.")
+            if extracted_rows:
+                standard_columns = [
+                    "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
+                    "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
+                    "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
+                    "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
+                ]
+                
+                # Filter out repeated table headers or empty rows extracted from page breaks
+                clean_data = []
+                for row in row_item := extracted_rows:
+                    row_text = "".join([str(cell) for cell in row_item if cell])
+                    # Skip rows that contain duplicate PDF header fragments or are empty
+                    if not row_text.strip() or "Audit Code" in row_text or "Site Name" in row_text or "Postal" in row_text:
+                        continue
+                    clean_data.append(row)
+                
+                df_upload = pd.DataFrame(clean_data)
+                
+                # Map columns precisely to match database schema length
+                if len(df_upload.columns) >= len(standard_columns):
+                    df_upload = df_upload.iloc[:, :len(standard_columns)]
+                    df_upload.columns = standard_columns
                 else:
-                    try:
-                        records = df_upload.to_dict(orient="records")
-                        supabase.table("nsf_audits").insert(records).execute()
-                        st.success(f"✅ {len(records)} records uploaded successfully from CSV!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Upload failed: {e}")
+                    df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
+                
+                st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
+                st.dataframe(df_upload.head(3))
+                
+                if st.button("Push PDF Data to Database", type="primary"):
+                    if supabase is None:
+                        st.error("❌ Database connection is inactive. Check credentials.")
+                    else:
+                        try:
+                            records = df_upload.to_dict(orient="records")
+                            supabase.table("nsf_audits").insert(records).execute()
+                            st.success(f"✅ {len(records)} records uploaded successfully from PDF!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Upload failed: {e}")
+            else:
+                st.warning("⚠️ No structured tables were detected in this PDF layout.")
         except Exception as e:
-            st.error(f"❌ Error reading CSV file: {e}")
+            st.error(f"❌ Error parsing PDF: {e}")
 
 # Fetch live data from Supabase
 df_db = load_nsf_audits()
