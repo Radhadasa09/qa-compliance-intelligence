@@ -94,7 +94,7 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                 st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
                 st.dataframe(df_upload.head(3))
                 
-                if st.button("Push PDF Data to Database", type="primary"):
+               if st.button("Push PDF Data to Database", type="primary"):
                     if supabase is None:
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
@@ -102,8 +102,12 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             # Convert dataframe columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
                             
-                            # Drop columns that do not exist in your Supabase table schema
-                            cols_to_drop = ['address_line', 'postal_code', 'level_1', 'level_2', 'level_3', 'level_4', 'level_5', 'level_6']
+                            # Drop all extra PDF columns that do not exist in your Supabase table schema
+                            cols_to_drop = [
+                                'address_line', 'postal_code', 'audit_status', 'audit_time', 
+                                'time_zone', 'customer_name', 'level_1', 'level_2', 
+                                'level_3', 'level_4', 'level_5', 'level_6'
+                            ]
                             df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
                             
                             records = df_upload.to_dict(orient="records")
