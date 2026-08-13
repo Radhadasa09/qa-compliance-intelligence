@@ -41,19 +41,30 @@ def load_nsf_audits():
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
-# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Fixed with Comment Filter) ---
+# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Fixed Header Mapping) ---
 st.subheader("☁️ NSF Audit Cloud Uploader")
 with st.expander("Upload New Audit Data (CSV) to Supabase", expanded=False):
     uploaded_file = st.file_uploader("Upload NSF Audit CSV", type=["csv"])
     
     if uploaded_file:
         try:
-            # comment='#' automatically skips metadata/watermark lines starting with #
-            # on_bad_lines='skip' bypasses any stray formatting issues
-            df_upload = pd.read_csv(uploaded_file, comment='#', on_bad_lines='skip')
+            # 1. Skip the 2 broken header rows from the PDF converter and read raw data
+            df_upload = pd.read_csv(uploaded_file, comment='#', skiprows=2, header=None, on_bad_lines='skip')
             
-            # Clean column names (strip whitespace/newlines)
-            df_upload.columns = [str(c).strip().replace("\n", " ") for c in df_upload.columns]
+            # 2. Assign clean, flat standard column names matching Supabase schema
+            standard_columns = [
+                "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
+                "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
+                "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
+                "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
+            ]
+            
+            # Apply columns safely depending on column count
+            if len(df_upload.columns) >= len(standard_columns):
+                df_upload = df_upload.iloc[:, :len(standard_columns)]
+                df_upload.columns = standard_columns
+            else:
+                df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
             
             st.dataframe(df_upload.head(3))
             
