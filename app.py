@@ -99,8 +99,12 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
                         try:
-                            # Convert dataframe columns to snake_case (e.g., "Address Line" -> "address_line")
+                            # Convert dataframe columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
+                            
+                            # Drop columns that do not exist in your Supabase table schema
+                            cols_to_drop = ['address_line', 'postal_code', 'level_1', 'level_2', 'level_3', 'level_4', 'level_5', 'level_6']
+                            df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
                             
                             records = df_upload.to_dict(orient="records")
                             supabase.table("nsf_audits").insert(records).execute()
