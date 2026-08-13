@@ -94,7 +94,7 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                 st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
                 st.dataframe(df_upload.head(3))
                 
-               if st.button("Push PDF Data to Database", type="primary"):
+                if st.button("Push PDF Data to Database", type="primary"):
                     if supabase is None:
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
@@ -121,7 +121,6 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                 st.warning("⚠️ No structured tables were detected in this PDF layout.")
         except Exception as e:
             st.error(f"❌ Error parsing PDF: {e}")
-
 # Fetch live data from Supabase
 df_db = load_nsf_audits()
 
