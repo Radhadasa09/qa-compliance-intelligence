@@ -41,32 +41,44 @@ def load_nsf_audits():
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
-
-# --- 3. CSV UPLOAD BLOCK ---
+# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Robust Parser) ---
 st.subheader("☁️ NSF Audit Cloud Uploader")
-with st.expander("Upload New Audit Data to Supabase", expanded=False):
+with st.expander("Upload New Audit Data (CSV) to Supabase", expanded=False):
     uploaded_file = st.file_uploader("Upload NSF Audit CSV", type=["csv"])
     
     if uploaded_file:
-        df_upload = pd.read_csv(uploaded_file)
-        st.dataframe(df_upload.head(3))
-        
-        if st.button("Push to Database", type="primary"):
-            if supabase is None:
-                st.error("❌ Database connection is inactive. Check credentials.")
-            else:
-                try:
-                    records = df_upload.to_dict(orient="records")
-                    supabase.table("nsf_audits").insert(records).execute()
-                    st.success(f"✅ {len(records)} records uploaded successfully!")
-                    st.cache_data.clear() # Clear cache to fetch new data immediately
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Upload failed: {e}")
+        try:
+            # on_bad_lines='skip' ensures malformed rows are bypassed safely
+            df_upload = pd.read_csv(uploaded_file, on_bad_lines='skip')
+            st.dataframe(df_upload.head(3))
+            
+            if st.button("Push to Database", type="primary"):
+                if supabase is None:
+                    st.error("❌ Database connection is inactive. Check credentials.")
+                else:
+                    try:
+                        records = df_upload.to_dict(orient="records")
+                        supabase.table("nsf_audits").insert(records).execute()
+                        st.success(f"✅ {len(records)} records uploaded successfully from CSV!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Upload failed: {e}")
+        except Exception as e:
+            st.error(f"❌ Error reading CSV file: {e}")
 
-# Fetch the live data
+# Fetch live data from Supabase
 df_db = load_nsf_audits()
 
+# Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
+if not df_db.empty and 'Site Code' in df_db.columns:
+    df_db['Site Code'] = df_db['Site Code'].astype(str)
+    df_db['Type'] = df_db['Site Code'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") else "Sub Franchise")
+    ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
+    subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
+else:
+    ekaagra_df = pd.DataFrame()
+    subfranchise_df = pd.DataFrame()
 # Process dynamic categorizations if data exists
 if not df_db.empty and 'Site Code' in df_db.columns:
     # Ensure Site Code is treated as string for the 189 check
