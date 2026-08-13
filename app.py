@@ -67,13 +67,19 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                     "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
                 ]
                 
-                # Filter out repeated table headers or empty rows extracted from page breaks
+                # Filter out repeated table headers, metadata fragments, or empty rows
                 clean_data = []
                 for row in extracted_rows:
                     row_text = "".join([str(cell) for cell in row if cell])
-                    # Skip rows that contain duplicate PDF header fragments or are empty
-                    if not row_text.strip() or "Audit Code" in row_text or "Site Name" in row_text or "Postal" in row_text:
+                    
+                    # Skip empty rows or rows containing PDF header fragments
+                    if not row_text.strip() or "Postal" in row_text or "Addre" in row_text:
                         continue
+                    
+                    # Skip the exact native table header row
+                    if row and str(row[0]).strip() in ["Audit Code", "PostaI Code", "Postal Code"]:
+                        continue
+                        
                     clean_data.append(row)
                 
                 df_upload = pd.DataFrame(clean_data)
