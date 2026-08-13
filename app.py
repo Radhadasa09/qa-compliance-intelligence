@@ -84,14 +84,6 @@ if not df_db.empty and 'Site Code' in df_db.columns:
 else:
     ekaagra_df = pd.DataFrame()
     subfranchise_df = pd.DataFrame()
-    # Split into our two operational wings
-    ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
-    subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
-else:
-    # Fallback empty dataframes if DB is empty or missing columns
-    ekaagra_df = pd.DataFrame()
-    subfranchise_df = pd.DataFrame()
-
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
 st.sidebar.markdown("**Head of QA & Compliance:** Girish Kumar")
