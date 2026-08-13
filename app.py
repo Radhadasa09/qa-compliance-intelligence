@@ -120,7 +120,7 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
             else:
                 st.warning("⚠️ No structured tables were detected in this PDF layout.")
         except Exception as e:
-            st.error(f"❌ Error parsing PDF: {e}")
+            st.error(f"❌ Error parsing PDF: {e}")        
 # Fetch live data from Supabase
 df_db = load_nsf_audits()
 
