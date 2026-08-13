@@ -108,7 +108,7 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as e:
-                            st.error(f>f"❌ Upload failed: {e}")
+                            st.error(f"❌ Upload failed: {e}")
             else:
                 st.warning("⚠️ No structured tables were detected in this PDF layout.")
         except Exception as e:
@@ -128,7 +128,7 @@ else:
     subfranchise_df = pd.DataFrame()
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
-st.sidebar.markdown("**Head of QA & Compliance:** Girish Kumar")
+st.sidebar.markdown("**QA & Compliance:** Girish Kumar")
 
 today = datetime.date.today()
 start_date = datetime.date(2026, 7, 1)
