@@ -41,15 +41,20 @@ def load_nsf_audits():
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
-# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Robust Parser) ---
+# --- 3. NSF AUDIT CLOUD UPLOADER (CSV Only - Fixed with Comment Filter) ---
 st.subheader("☁️ NSF Audit Cloud Uploader")
 with st.expander("Upload New Audit Data (CSV) to Supabase", expanded=False):
     uploaded_file = st.file_uploader("Upload NSF Audit CSV", type=["csv"])
     
     if uploaded_file:
         try:
-            # on_bad_lines='skip' ensures malformed rows are bypassed safely
-            df_upload = pd.read_csv(uploaded_file, on_bad_lines='skip')
+            # comment='#' automatically skips metadata/watermark lines starting with #
+            # on_bad_lines='skip' bypasses any stray formatting issues
+            df_upload = pd.read_csv(uploaded_file, comment='#', on_bad_lines='skip')
+            
+            # Clean column names (strip whitespace/newlines)
+            df_upload.columns = [str(c).strip().replace("\n", " ") for c in df_upload.columns]
+            
             st.dataframe(df_upload.head(3))
             
             if st.button("Push to Database", type="primary"):
@@ -79,12 +84,6 @@ if not df_db.empty and 'Site Code' in df_db.columns:
 else:
     ekaagra_df = pd.DataFrame()
     subfranchise_df = pd.DataFrame()
-# Process dynamic categorizations if data exists
-if not df_db.empty and 'Site Code' in df_db.columns:
-    # Ensure Site Code is treated as string for the 189 check
-    df_db['Site Code'] = df_db['Site Code'].astype(str)
-    df_db['Type'] = df_db['Site Code'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") else "Sub Franchise")
-    
     # Split into our two operational wings
     ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
     subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
