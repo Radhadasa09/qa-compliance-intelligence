@@ -99,13 +99,16 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
                         try:
+                            # Convert dataframe columns to snake_case (e.g., "Address Line" -> "address_line")
+                            df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
+                            
                             records = df_upload.to_dict(orient="records")
                             supabase.table("nsf_audits").insert(records).execute()
                             st.success(f"✅ {len(records)} records uploaded successfully from PDF!")
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as e:
-                            st.error(f"❌ Upload failed: {e}")
+                            st.error(f>f"❌ Upload failed: {e}")
             else:
                 st.warning("⚠️ No structured tables were detected in this PDF layout.")
         except Exception as e:
