@@ -498,6 +498,8 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
                         try:
+                            import numpy as np
+
                             # 1. Convert columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
                             
@@ -518,12 +520,15 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             for col in df_upload.columns:
                                 df_upload[col] = df_upload[col].astype(str).str.replace('\n', '').str.strip()
                             
-                            # 5. Sanitize numeric columns for PostgreSQL syntax
+                            # 5. Sanitize numeric columns
                             if 'audit_code' in df_upload.columns:
                                 df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].str.replace(r'\D', '', regex=True), errors='coerce')
                                 
                             if 'score' in df_upload.columns:
                                 df_upload['score'] = pd.to_numeric(df_upload['score'], errors='coerce')
+                            
+                            # 6. Replace all NaN/NaT values with None for JSON compliance
+                            df_upload = df_upload.replace({np.nan: None})
                             
                             st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
                             
