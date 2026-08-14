@@ -41,98 +41,20 @@ def load_nsf_audits():
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
-# --- 3. NSF AUDIT CLOUD UPLOADER (Direct PDF Reader) ---
-st.subheader("☁️ NSF Audit Cloud Uploader (Direct PDF)")
-with st.expander("Upload Official NSF Audit PDF", expanded=False):
-    uploaded_pdf = st.file_uploader("Upload Official NSF Audit PDF", type=["pdf"])
-    
-    if uploaded_pdf:
-        try:
-            import pdfplumber
-            extracted_rows = []
-            
-            # Open and parse the PDF tables page-by-page
-            with pdfplumber.open(uploaded_pdf) as pdf:
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            extracted_rows.append(row)
-            
-            if extracted_rows:
-                standard_columns = [
-                    "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
-                    "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
-                    "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
-                    "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
-                ]
-                
-                # Filter out repeated table headers, metadata fragments, or empty rows
-                clean_data = []
-                for row in extracted_rows:
-                    row_text = "".join([str(cell) for cell in row if cell])
-                    
-                    # Skip empty rows or rows containing PDF header fragments
-                    if not row_text.strip() or "Postal" in row_text or "Addre" in row_text:
-                        continue
-                    
-                    # Skip the exact native table header row
-                    if row and str(row[0]).strip() in ["Audit Code", "PostaI Code", "Postal Code"]:
-                        continue
-                        
-                    clean_data.append(row)
-                
-                df_upload = pd.DataFrame(clean_data)
-                
-                # Map columns precisely to match database schema length
-                if len(df_upload.columns) >= len(standard_columns):
-                    df_upload = df_upload.iloc[:, :len(standard_columns)]
-                    df_upload.columns = standard_columns
-                else:
-                    df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
-                
-                st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
-                st.dataframe(df_upload.head(3))
-                
-                if st.button("Push PDF Data to Database", type="primary"):
-                    if supabase is None:
-                        st.error("❌ Database connection is inactive. Check credentials.")
-                    else:
-                        try:
-                            # Convert dataframe columns to snake_case
-                            df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
-                            
-                            # Drop all extra PDF columns that do not exist in your Supabase table schema
-                            cols_to_drop = [
-                                'address_line', 'postal_code', 'audit_status', 'audit_time', 
-                                'time_zone', 'customer_name', 'car_status', 'level_1', 'level_2', 
-                                'level_3', 'level_4', 'level_5', 'level_6'
-                            ]
-                            df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
-                            
-                            records = df_upload.to_dict(orient="records")
-                            supabase.table("nsf_audits").insert(records).execute()
-                            st.success(f"✅ {len(records)} records uploaded successfully from PDF!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Upload failed: {e}")
-            else:
-                st.warning("⚠️ No structured tables were detected in this PDF layout.")
-        except Exception as e:
-            st.error(f"❌ Error parsing PDF: {e}")        
+
 # Fetch live data from Supabase
 df_db = load_nsf_audits()
 
 # Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
-if not df_db.empty and 'Site Code' in df_db.columns:
-    df_db['Site Code'] = df_db['Site Code'].astype(str)
-    df_db['Type'] = df_db['Site Code'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") else "Sub Franchise")
+if not df_db.empty and 'site_code' in df_db.columns:
+    df_db['site_code'] = df_db['site_code'].astype(str)
+    df_db['Type'] = df_db['site_code'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") else "Sub Franchise")
     ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
     subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
 else:
     ekaagra_df = pd.DataFrame()
     subfranchise_df = pd.DataFrame()
+
 # --- SIDEBAR: GLOBAL CONTROLS ---
 st.sidebar.title("⚙️ Dashboard Controls")
 st.sidebar.markdown("**QA & Compliance:** Girish Kumar")
@@ -262,7 +184,7 @@ tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_calendar, tab_subfranchise, 
     "🚚 Vendor & Supply Chain", 
     "📜 License Summary",
     "📅 QA Calendar",
-    "🤝 Sub Franchise",
+    "📈 NSF Audit Intelligence",
     "📑 Reports & Archive",
     "⚙️ System Administration"
 ])
@@ -275,8 +197,8 @@ with tab_exec:
     
     col1, col2, col3, col4 = st.columns(4)
     total_db_audits = len(df_db) if not df_db.empty else 0
-    ekaagra_avg = ekaagra_df['Score'].mean() if not ekaagra_df.empty and 'Score' in ekaagra_df else 0
-    sub_avg = subfranchise_df['Score'].mean() if not subfranchise_df.empty and 'Score' in subfranchise_df else 0
+    ekaagra_avg = ekaagra_df['score'].mean() if not ekaagra_df.empty and 'score' in ekaagra_df else 0
+    sub_avg = subfranchise_df['score'].mean() if not subfranchise_df.empty and 'score' in subfranchise_df else 0
     
     col1.metric("Total Network Audits (Cloud)", total_db_audits)
     col2.metric("Ekaagra Direct Avg Score", f"{ekaagra_avg:.1f}%" if ekaagra_avg > 0 else "N/A")
@@ -287,12 +209,12 @@ with tab_exec:
 
     st.markdown("---")
 
-    if not ekaagra_df.empty and 'Score' in ekaagra_df.columns and 'Store Name' in ekaagra_df.columns:
+    if not ekaagra_df.empty and 'score' in ekaagra_df.columns and 'store_name' in ekaagra_df.columns:
         st.markdown("### 🏬 Ekaagra Direct Operations (189 Series)")
         fig_nsf = px.bar(
-            ekaagra_df, x='Store Name', y='Score', text='Score',
+            ekaagra_df, x='store_name', y='score', text='score',
             title=f"Ekaagra Direct Outlets NSF Scores",
-            color='Result' if 'Result' in ekaagra_df.columns else 'Score', 
+            color='result' if 'result' in ekaagra_df.columns else 'score', 
             color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
         )
         fig_nsf.update_traces(textposition='outside')
@@ -445,34 +367,34 @@ with tab_calendar:
         st.dataframe(pd.DataFrame(current_cal), use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 6: SUB FRANCHISE
+# TAB 6: NSF AUDIT INTELLIGENCE
 # ==========================================
 with tab_subfranchise:
-    st.subheader(f"🤝 Sub Franchise Audit Summary (Cloud Database)")
+    st.subheader(f"📈 NSF Audit Intelligence (Cloud Database)")
     st.markdown("Real-time live NSF audits for Sub Franchise outlets pulled from Supabase.")
     
-    if not subfranchise_df.empty and 'Score' in subfranchise_df.columns:
+    if not subfranchise_df.empty and 'score' in subfranchise_df.columns:
         col_sf1, col_sf2, col_sf3, col_sf4 = st.columns(4)
         total_sf_audits = len(subfranchise_df)
-        avg_sf_score = subfranchise_df['Score'].mean()
+        avg_sf_score = subfranchise_df['score'].mean()
         
-        # Check if 'Result' column exists to calculate pass rate dynamically
-        if 'Result' in subfranchise_df.columns:
-            pass_count = len(subfranchise_df[subfranchise_df['Result'] == 'PASS'])
+        # Check if 'result' column exists to calculate pass rate dynamically
+        if 'result' in subfranchise_df.columns:
+            pass_count = len(subfranchise_df[subfranchise_df['result'] == 'PASS'])
             pass_rate = (pass_count / total_sf_audits) * 100 if total_sf_audits > 0 else 0
         else:
             pass_count, pass_rate = 0, 0
         
         col_sf1.metric("Total SF Audits", total_sf_audits)
         col_sf2.metric("Average SF Score", f"{avg_sf_score:.2f}%")
-        col_sf3.metric("Passed Audits", pass_count if 'Result' in subfranchise_df.columns else "N/A")
-        col_sf4.metric("Pass Rate", f"{pass_rate:.1f}%" if 'Result' in subfranchise_df.columns else "N/A")
+        col_sf3.metric("Passed Audits", pass_count if 'result' in subfranchise_df.columns else "N/A")
+        col_sf4.metric("Pass Rate", f"{pass_rate:.1f}%" if 'result' in subfranchise_df.columns else "N/A")
 
-        if 'Store Name' in subfranchise_df.columns:
+        if 'store_name' in subfranchise_df.columns:
             fig_sf = px.bar(
-                subfranchise_df, x='Store Name', y='Score', text='Score', 
-                color='Result' if 'Result' in subfranchise_df.columns else 'Score',
-                color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'} if 'Result' in subfranchise_df.columns else None,
+                subfranchise_df, x='store_name', y='score', text='score', 
+                color='result' if 'result' in subfranchise_df.columns else 'score',
+                color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'} if 'result' in subfranchise_df.columns else None,
                 title=f"Sub Franchise NSF Scores"
             )
             fig_sf.update_traces(textposition='outside')
@@ -482,7 +404,7 @@ with tab_subfranchise:
         st.markdown("### 📋 NSF Audit Details")
         st.dataframe(subfranchise_df, use_container_width=True, hide_index=True)
     else:
-        st.info("No Sub Franchise data available. Please upload a CSV using the uploader tool above.")
+        st.info("No Sub Franchise data available. Please upload a PDF using the uploader tool below.")
 
 # ==========================================
 # TAB 7: REPORTS & ARCHIVE
@@ -522,3 +444,85 @@ with tab_admin:
                 st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
                 st.success("Added!")
                 st.rerun()
+
+# ---------------------------------------------------------
+# NSF AUDIT CLOUD UPLOADER (Direct PDF)
+# ---------------------------------------------------------
+st.divider()
+st.subheader("☁️ NSF Audit Cloud Uploader (Direct PDF)")
+with st.expander("Upload Official NSF Audit PDF", expanded=False):
+    uploaded_pdf = st.file_uploader("Upload Official NSF Audit PDF", type=["pdf"])
+    
+    if uploaded_pdf:
+        try:
+            import pdfplumber
+            extracted_rows = []
+            
+            with pdfplumber.open(uploaded_pdf) as pdf:
+                for page in pdf.pages:
+                    tables = page.extract_tables()
+                    for table in tables:
+                        for row in table:
+                            extracted_rows.append(row)
+            
+            if extracted_rows:
+                standard_columns = [
+                    "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
+                    "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
+                    "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
+                    "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
+                ]
+                
+                clean_data = []
+                for row in extracted_rows:
+                    row_text = "".join([str(cell) for cell in row if cell])
+                    if not row_text.strip() or "Postal" in row_text or "Addre" in row_text:
+                        continue
+                    if row and str(row[0]).strip() in ["Audit Code", "PostaI Code", "Postal Code"]:
+                        continue
+                    clean_data.append(row)
+                
+                df_upload = pd.DataFrame(clean_data)
+                
+                if len(df_upload.columns) >= len(standard_columns):
+                    df_upload = df_upload.iloc[:, :len(standard_columns)]
+                    df_upload.columns = standard_columns
+                else:
+                    df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
+                
+                st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
+                st.dataframe(df_upload.head(3))
+                
+                if st.button("Push PDF Data to Database", type="primary"):
+                    if supabase is None:
+                        st.error("❌ Database connection is inactive. Check credentials.")
+                    else:
+                        try:
+                            # Convert columns to snake_case
+                            df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
+                            
+                            # Drop unneeded PDF columns
+                            cols_to_drop = [
+                                'city', 'address_line', 'postal_code', 'audit_status', 'audit_time', 
+                                'time_zone', 'customer_name', 'car_status', 'level_1', 'level_2', 
+                                'level_3', 'level_4', 'level_5', 'level_6'
+                            ]
+                            df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
+                            
+                            # Rename to match Supabase schema
+                            if "site_name" in df_upload.columns:
+                                df_upload = df_upload.rename(columns={"site_name": "store_name"})
+                            
+                            st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
+                            
+                            records = df_upload.to_dict(orient="records")
+                            supabase.table("nsf_audits").insert(records).execute()
+                            st.success(f"✅ {len(records)} records uploaded successfully from PDF!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Upload failed: {e}")
+            else:
+                st.warning("⚠️ No structured tables were detected in this PDF layout.")
+        except Exception as e:
+            st.error(f"❌ Error parsing PDF: {e}")
