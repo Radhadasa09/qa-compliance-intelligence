@@ -519,16 +519,22 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             # 4. Clean text and resolve newline (\n) issues across all string columns
                             for col in df_upload.columns:
                                 df_upload[col] = df_upload[col].astype(str).str.replace('\n', '').str.strip()
+                                # Turn empty strings and stringified nulls back into actual None objects
+                                df_upload[col] = df_upload[col].replace({'': None, 'nan': None, 'None': None})
                             
-                            # 5. Sanitize numeric columns
+                            # 5. Sanitize numeric and date columns
                             if 'audit_code' in df_upload.columns:
-                                df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].str.replace(r'\D', '', regex=True), errors='coerce')
+                                df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce')
                                 
                             if 'score' in df_upload.columns:
                                 df_upload['score'] = pd.to_numeric(df_upload['score'], errors='coerce')
+                                
+                            if 'audit_date' in df_upload.columns:
+                                # Standardize date format to YYYY-MM-DD so PostgreSQL accepts it natively
+                                df_upload['audit_date'] = pd.to_datetime(df_upload['audit_date'], errors='coerce').dt.strftime('%Y-%m-%d')
                             
                             # 6. Replace all NaN/NaT values with None for JSON compliance
-                            df_upload = df_upload.replace({np.nan: None})
+                            df_upload = df_upload.replace({np.nan: None, pd.NaT: None, 'NaT': None})
                             
                             st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
                             
