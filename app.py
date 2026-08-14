@@ -501,11 +501,12 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             # Convert columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
                             
-                            # Drop unneeded PDF columns
+                            # Drop all extra PDF columns that do not exist in your Supabase table schema
                             cols_to_drop = [
                                 'city', 'address_line', 'postal_code', 'audit_status', 'audit_time', 
-                                'time_zone', 'customer_name', 'car_status', 'level_1', 'level_2', 
-                                'level_3', 'level_4', 'level_5', 'level_6'
+                                'time_zone', 'customer_name', 'car_status', 'grade', 'audit_type', 
+                                'audit_category', 'level_1', 'level_2', 'level_3', 'level_4', 
+                                'level_5', 'level_6'
                             ]
                             df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
                             
