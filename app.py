@@ -498,10 +498,10 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                         st.error("❌ Database connection is inactive. Check credentials.")
                     else:
                         try:
-                            # Convert columns to snake_case
+                            # 1. Convert columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
                             
-                            # Drop all extra PDF columns that do not exist in your Supabase table schema
+                            # 2. Drop unneeded PDF columns
                             cols_to_drop = [
                                 'city', 'address_line', 'postal_code', 'audit_status', 'audit_time', 
                                 'time_zone', 'customer_name', 'car_status', 'grade', 'audit_type', 
@@ -510,9 +510,20 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             ]
                             df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
                             
-                            # Rename to match Supabase schema
+                            # 3. Rename site_name to store_name
                             if "site_name" in df_upload.columns:
                                 df_upload = df_upload.rename(columns={"site_name": "store_name"})
+                            
+                            # 4. Clean text and resolve newline (\n) issues across all string columns
+                            for col in df_upload.columns:
+                                df_upload[col] = df_upload[col].astype(str).str.replace('\n', '').str.strip()
+                            
+                            # 5. Sanitize numeric columns for PostgreSQL syntax
+                            if 'audit_code' in df_upload.columns:
+                                df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].str.replace(r'\D', '', regex=True), errors='coerce')
+                                
+                            if 'score' in df_upload.columns:
+                                df_upload['score'] = pd.to_numeric(df_upload['score'], errors='coerce')
                             
                             st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
                             
