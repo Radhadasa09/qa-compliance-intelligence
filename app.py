@@ -55,27 +55,8 @@ else:
     ekaagra_df = pd.DataFrame()
     subfranchise_df = pd.DataFrame()
 
-# --- SIDEBAR: GLOBAL CONTROLS ---
-st.sidebar.title("⚙️ Dashboard Controls")
-st.sidebar.markdown("**QA & Compliance:** Girish Kumar")
-
-today = datetime.date.today()
-start_date = datetime.date(2026, 7, 1)
-months = []
-current_month_iter = today.replace(day=1)
-
-while current_month_iter >= start_date:
-    months.append(current_month_iter.strftime("%B %Y"))
-    if current_month_iter.month == 1:
-        current_month_iter = current_month_iter.replace(year=current_month_iter.year - 1, month=12)
-    else:
-        current_month_iter = current_month_iter.replace(month=current_month_iter.month - 1)
-
-if not months:
-    months = ["July 2026"]
-
-selected_month = st.sidebar.selectbox("Select Reporting Month", months)
-
+# Set statically to "Live Data" so the manual entry tabs continue to function silently
+selected_month = "Live Data"
 # --- 4. DATA LOADING (Local Session State for non-Supabase data) ---
 if 'master_stores' not in st.session_state:
     st.session_state['master_stores'] = [
@@ -173,10 +154,10 @@ for idx, row in df_stores.iterrows():
 df_monthly_filtered = pd.DataFrame(monthly_records)
 
 # --- CEO-LEVEL HEADER ---
-st.title(f"🛡️ QA & Compliance Leadership Briefing — {selected_month}")
+st.title("🛡️ QA & Compliance Leadership Briefing — Live Status")
+st.markdown("**Command Center Admin:** Girish Kumar")
 st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensing, Supply Chain, and Sub Franchise compliance.")
 st.divider()
-
 # --- DASHBOARD TABS ---
 tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_calendar, tab_subfranchise, tab_reports, tab_admin = st.tabs([
     "📊 Executive Dashboard", 
