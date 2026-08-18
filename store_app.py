@@ -14,26 +14,35 @@ if "store_id" not in st.session_state:
 def sync_to_supabase(table, data):
     st.success(f"✅ Data securely logged to central QA ({table}).")
 
-# --- LOGIN SCREEN ---
+# --- LOGIN SCREEN (SIMPLIFIED FOR STORE TEAM) ---
 def login_screen():
     st.title("☕ CBTL Store Login")
     st.caption("FSSAI & NSF Operational Compliance Portal")
     
     with st.form("login_form"):
-        store_email = st.text_input("Store Email ID", placeholder="store@cbtl.in")
-        manager_phone = st.text_input("Manager Phone Number (PIN)", type="password")
-        save_login = st.checkbox("Save login details for seamless next login")
+        # List all 12 stores
+        stores_list = [
+            "Store-1", "Store-2", "Store-3", "Store-4", 
+            "Store-5", "Store-6", "Store-7", "Store-8", 
+            "Store-9", "Store-10", "Store-11", "Store-12"
+        ]
+        selected_store = st.selectbox("Select Your Store", stores_list)
         
-        submitted = st.form_submit_button("Login to Outlet")
+        # Confirmation and Static PIN
+        confirm_store = st.checkbox(f"I confirm I am logging in for {selected_store}")
+        pin = st.text_input("Enter Store PIN", type="password", placeholder="Enter 4-digit PIN")
+        
+        submitted = st.form_submit_button("Proceed to Outlet")
         
         if submitted:
-            if store_email and manager_phone:
-                st.session_state["logged_in"] = True
-                st.session_state["store_id"] = store_email.split('@')[0].upper()
-                st.rerun()
+            if not confirm_store:
+                st.error("❌ Please check the confirmation box to verify your store location.")
+            elif pin != "0000":
+                st.error("❌ Incorrect PIN. Please enter the valid store PIN (0000).")
             else:
-                st.error("Please enter valid credentials.")
-
+                st.session_state["logged_in"] = True
+                st.session_state["store_id"] = selected_store
+                st.rerun()
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     st.header(f"Store: {st.session_state['store_id']}")
