@@ -25,7 +25,7 @@ with st.sidebar:
     if st.button("Test Cloud & DB Connections"):
         # Test Supabase
         try:
-            supabase.table("store_inventory").select("count", count="exact").execute()
+            supabase.table("store").select("count", count="exact").execute()
             st.success("✅ Supabase Database: Connected")
         except Exception as e:
             st.error(f"❌ Supabase Error: {e}")
