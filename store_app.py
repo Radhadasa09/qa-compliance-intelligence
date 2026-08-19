@@ -11,6 +11,13 @@ def init_supabase() -> Client:
     return create_client(url, key)
 
 supabase = init_supabase()
+    # --- CLEAN SUPABASE CONNECTION TEST ---
+try:
+    # Attempt a simple lightweight query to check connection
+    response = supabase.table("store_inventory").select("*", count="exact").limit(1).execute()
+    st.success("✅ Supabase Database: Connected Successfully!")
+except Exception as e:
+    st.error(f"❌ Supabase Connection Failed. Check URL and Key. Details: {e}")
 # --- QUICK CONNECTION DIAGNOSTIC ---
 with st.sidebar:
     st.markdown("### 🔍 System Diagnostics")
