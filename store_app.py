@@ -18,8 +18,7 @@ try:
     st.success("✅ Supabase Database: Connected Successfully!")
 except Exception as e:
     st.error(f"❌ Supabase Connection Failed. Details: {e}")
-except Exception as e:
-    st.error(f"❌ Supabase Connection Failed. Check URL and Key. Details: {e}")
+
 # --- QUICK CONNECTION DIAGNOSTIC ---
 with st.sidebar:
     st.markdown("### 🔍 System Diagnostics")
