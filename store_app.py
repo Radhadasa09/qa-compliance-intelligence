@@ -1,6 +1,28 @@
 import streamlit as st
 import datetime
 
+
+# --- QUICK CONNECTION DIAGNOSTIC ---
+with st.sidebar:
+    st.markdown("### 🔍 System Diagnostics")
+    if st.button("Test Cloud & DB Connections"):
+        # Test Supabase
+        try:
+            supabase.table("store_inventory").select("count", count="exact").execute()
+            st.success("✅ Supabase Database: Connected")
+        except Exception as e:
+            st.error(f"❌ Supabase Error: {e}")
+            
+        # Test Cloudinary
+        try:
+            import cloudinary.api
+            ping_res = cloudinary.api.ping()
+            if ping_res.get("status") == "ok":
+                st.success("✅ Cloudinary Storage: Connected")
+            else:
+                st.warning("⚠️ Cloudinary responded, check credentials.")
+        except Exception as e:
+            st.error(f"❌ Cloudinary Error: {e}")
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="CBTL Store Operations", layout="centered", initial_sidebar_state="collapsed")
 
