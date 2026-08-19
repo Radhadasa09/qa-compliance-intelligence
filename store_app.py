@@ -1,7 +1,16 @@
 import streamlit as st
 import datetime
 
+from supabase import create_client, Client
 
+# Initialize Supabase client
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 # --- QUICK CONNECTION DIAGNOSTIC ---
 with st.sidebar:
     st.markdown("### 🔍 System Diagnostics")
