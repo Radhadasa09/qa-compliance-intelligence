@@ -464,7 +464,6 @@ with tab_nsf:
         st.dataframe(subfranchise_df, use_container_width=True, hide_index=True)
     else:
         st.info("No Sub Franchise data available. Please upload a PDF using the uploader tool below.")
-
 # ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
@@ -475,9 +474,30 @@ with tab_reports:
         if FPDF is None: return None
         pdf = FPDF()
         pdf.add_page()
+        
+        # Document Title
         pdf.set_font("Arial", size=14, style='B')
         pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=True, align='C')
+        pdf.ln(5) # Add a line break
         
+        # Store Compliance Data Section
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 10, txt="Store Network Compliance Status", ln=True, align='L')
+        
+        pdf.set_font("Arial", size=10)
+        if records:
+            for record in records:
+                store_name = record.get('name', 'Unknown')
+                fostac = record.get('fostac_pending', 0)
+                med = record.get('medical_pending', 0)
+                is_comp = "Yes" if record.get('is_compliant') else "No"
+                
+                # Format the data row
+                row_text = f"Store: {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical Pending: {med}"
+                pdf.cell(200, 8, txt=row_text, ln=True, align='L')
+        else:
+            pdf.cell(200, 8, txt="No store data available.", ln=True, align='L')
+            
         try:
             # Modern fpdf2 approach (Streamlit Cloud default)
             return bytes(pdf.output())
@@ -486,10 +506,11 @@ with tab_reports:
             return pdf.output(dest='S').encode('latin-1')
 
     if st.button("Generate Basic PDF Report", type="primary"):
+        # Pass the monthly_records list into the generator
         pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []))
         if pdf_bytes:
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("PDF generated!")
+            st.success("PDF generated successfully!")
         else:
             st.error("FPDF library missing.")
             
@@ -497,6 +518,19 @@ with tab_reports:
         st.download_button(
             label=f"📥 Download PDF", 
             data=st.session_state['pdf_archive'][selected_month], 
-            file_name=f"QA_{selected_month}.pdf", 
+            file_name=f"QA_Compliance_Report_{selected_month}.pdf", 
             mime="application/pdf"
         )
+# ==========================================
+# TAB 7: SYSTEM ADMINISTRATION
+# ==========================================
+with tab_admin:
+    st.subheader("⚙️ Store Portfolio & System Administration")
+    with st.expander("➕ Add a New Store Location", expanded=False):
+        with st.form("new_store_form"):
+            new_name = st.text_input("Store Name")
+            is_out = st.checkbox("Is Outstation?")
+            if st.form_submit_button("Add Store") and new_name:
+                st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
+                st.success("Added!")
+                st.rerun()
