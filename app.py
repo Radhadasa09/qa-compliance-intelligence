@@ -396,29 +396,6 @@ with tab_lic_summary:
         st.dataframe(df_lic_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 5: QA CALENDAR
-# ==========================================
-with tab_calendar:
-    st.subheader(f"📅 QA Field Audit & Schedule — {selected_month}")
-    current_cal = st.session_state['qa_calendar_db'].get(selected_month, [])
-    
-    with st.expander("➕ Add New Schedule Entry", expanded=False):
-        with st.form("add_cal_form"):
-            c1, c2, c3 = st.columns(3)
-            with c1: cal_date = st.text_input("Date (e.g. 03)")
-            with c2: cal_day = st.selectbox("Day", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-            with c3: cal_activity = st.text_input("Activity / Location")
-                
-            if st.form_submit_button("Add to Calendar") and cal_date and cal_activity:
-                if selected_month not in st.session_state['qa_calendar_db']: st.session_state['qa_calendar_db'][selected_month] = []
-                st.session_state['qa_calendar_db'][selected_month].append({"date": cal_date, "day": cal_day, "activity": cal_activity})
-                st.success("Entry added!")
-                st.rerun()
-                
-    if current_cal:
-        st.dataframe(pd.DataFrame(current_cal), use_container_width=True, hide_index=True)
-
-# ==========================================
 # TAB 6: NSF AUDIT INTELLIGENCE
 # ==========================================
 with tab_subfranchise:
