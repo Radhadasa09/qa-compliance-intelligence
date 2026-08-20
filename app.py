@@ -499,10 +499,10 @@ with tab_reports:
                 fostac = record.get('fostac_pending', 0)
                 med = record.get('medical_pending', 0)
                 is_comp = "Yes" if record.get('is_compliant') else "No"
-                row_text = f" • {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
+                row_text = f" - {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
                 pdf.cell(200, 5, txt=row_text, ln=1, align='L')
         else:
-            pdf.cell(200, 5, txt=" • No store data available.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" - No store data available.", ln=1, align='L')
             
         pdf.ln(4)
         
@@ -512,22 +512,20 @@ with tab_reports:
         
         pdf.set_font("Arial", size=9)
         if not nsf_data.empty and 'store_name' in nsf_data.columns:
-            # Filter out rows with missing scores or nan results
             valid_nsf = nsf_data.dropna(subset=['score']).copy()
             valid_nsf = valid_nsf[valid_nsf['score'] > 0]
             
             if not valid_nsf.empty:
-                # Group by store and get the latest/average score to avoid clutter
-                for _, row in valid_nsf.head(15).iterrows(): # Limits to top 15 clean entries for readability
+                for _, row in valid_nsf.head(15).iterrows():
                     s_name = row.get('store_name', 'Unknown')
                     s_score = row.get('score', 0)
                     s_result = row.get('result', 'N/A')
-                    row_text = f" • {s_name} | Score: {s_score}% | Result: {s_result}"
+                    row_text = f" - {s_name} | Score: {s_score}% | Result: {s_result}"
                     pdf.cell(200, 5, txt=row_text, ln=1, align='L')
             else:
-                pdf.cell(200, 5, txt=" • No valid NSF scores available in the database.", ln=1, align='L')
+                pdf.cell(200, 5, txt=" - No valid NSF scores available in the database.", ln=1, align='L')
         else:
-            pdf.cell(200, 5, txt=" • No NSF audit records found.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" - No NSF audit records found.", ln=1, align='L')
             
         pdf.ln(4)
         
@@ -543,11 +541,11 @@ with tab_reports:
                 v_score = v.get('score', 'N/A')
                 v_status = v.get('status', 'N/A')
                 v_remark = v.get('remark', 'None')
-                v_text = f" • [{v_cat}] {v_name} | Status: {v_status} | Score: {v_score}"
+                v_text = f" - [{v_cat}] {v_name} | Status: {v_status} | Score: {v_score}"
                 pdf.cell(200, 5, txt=v_text, ln=1, align='L')
                 pdf.cell(200, 4, txt=f"   Remark: {v_remark}", ln=1, align='L')
         else:
-            pdf.cell(200, 5, txt=" • No vendor audits recorded for this period.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" - No vendor audits recorded for this period.", ln=1, align='L')
 
         pdf.ln(4)
 
@@ -559,9 +557,9 @@ with tab_reports:
         flagged_stores = [r for r in records if r.get('has_license_issue')]
         if flagged_stores:
             for store in flagged_stores:
-                pdf.cell(200, 5, txt=f" • {store['name']} has pending or expired statutory licenses.", ln=1, align='L')
+                pdf.cell(200, 5, txt=f" - {store['name']} has pending or expired statutory licenses.", ln=1, align='L')
         else:
-            pdf.cell(200, 5, txt=" • All store statutory licenses are currently valid and up to date.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" - All store statutory licenses are currently valid and up to date.", ln=1, align='L')
 
         try:
             return bytes(pdf.output())
