@@ -470,77 +470,96 @@ with tab_nsf:
 with tab_reports:
     st.subheader(f"📑 PDF Report Generation")
     
-    def generate_pdf(month_str, records, vendors):
+    def generate_pdf(month_str, records, vendors, nsf_data):
         if FPDF is None: return None
         pdf = FPDF()
         pdf.add_page()
         
-        # Document Title
-        pdf.set_font("Arial", size=14, style='B')
-        pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=1, align='C')
-        pdf.ln(5)
+        # Document Header
+        pdf.set_font("Arial", size=16, style='B')
+        pdf.cell(200, 10, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
+        pdf.set_font("Arial", size=10, style='I')
+        pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - QA & Compliance Vault", ln=1, align='C')
+        pdf.ln(3)
         
-        # 1. Store Compliance Section
         pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 10, txt="Store Network Compliance Status", ln=1, align='L')
+        pdf.cell(200, 8, txt=f"Executive Briefing Report | Period: {month_str}", ln=1, align='C')
+        pdf.set_font("Arial", size=9)
+        pdf.cell(200, 5, txt=f"Generated On: {datetime.date.today().strftime('%d-%b-%Y')} | Admin: Girish Kumar", ln=1, align='C')
+        pdf.ln(6)
         
-        pdf.set_font("Arial", size=10)
+        # 1. Store Network Compliance Section
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 7, txt="1. Store Network Compliance Status", ln=1, align='L')
+        
+        pdf.set_font("Arial", size=9)
         if records:
             for record in records:
                 store_name = record.get('name', 'Unknown')
                 fostac = record.get('fostac_pending', 0)
                 med = record.get('medical_pending', 0)
                 is_comp = "Yes" if record.get('is_compliant') else "No"
-                
-                row_text = f"- {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
-                pdf.cell(200, 8, txt=row_text, ln=1, align='L')
+                row_text = f" - {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
+                pdf.cell(200, 6, txt=row_text, ln=1, align='L')
         else:
-            pdf.cell(200, 8, txt="No store data available.", ln=1, align='L')
+            pdf.cell(200, 6, txt=" - No store data available.", ln=1, align='L')
             
-        pdf.ln(5)
+        pdf.ln(4)
         
-        # 2. Vendor Audits Section
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 10, txt="Vendor Operations & Supply Chain", ln=1, align='L')
+        # 2. NSF Audit Performance Section
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 7, txt="2. NSF Audit Intelligence (Cloud Records)", ln=1, align='L')
         
-        pdf.set_font("Arial", size=10)
+        pdf.set_font("Arial", size=9)
+        if not nsf_data.empty and 'store_name' in nsf_data.columns:
+            for _, row in nsf_data.iterrows():
+                s_name = row.get('store_name', 'Unknown')
+                s_score = row.get('score', 'N/A')
+                s_result = row.get('result', 'N/A')
+                row_text = f" - {s_name} | Score: {s_score}% | Result: {s_result}"
+                pdf.cell(200, 6, txt=row_text, ln=1, align='L')
+        else:
+            pdf.cell(200, 6, txt=" - No NSF audit records found in cloud database.", ln=1, align='L')
+            
+        pdf.ln(4)
+        
+        # 3. Vendor Audits Section
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 7, txt="3. Vendor Operations & Supply Chain", ln=1, align='L')
+        
+        pdf.set_font("Arial", size=9)
         if vendors:
             for v in vendors:
                 v_name = v.get('vendor', 'Unknown')
                 v_score = v.get('score', 'N/A')
                 v_status = v.get('status', 'N/A')
-                v_text = f"- {v_name} | Status: {v_status} | Score: {v_score}"
-                pdf.cell(200, 8, txt=v_text, ln=1, align='L')
+                v_text = f" - {v_name} | Status: {v_status} | Score: {v_score}"
+                pdf.cell(200, 6, txt=v_text, ln=1, align='L')
         else:
-            pdf.cell(200, 8, txt="- No vendor audits recorded for this period.", ln=1, align='L')
+            pdf.cell(200, 6, txt=" - No vendor audits recorded for this period.", ln=1, align='L')
 
         try:
-            # Modern fpdf2 approach (Streamlit Cloud default)
             return bytes(pdf.output())
         except TypeError:
-            # Legacy fpdf fallback
             return pdf.output(dest='S').encode('latin-1')
 
-    if st.button("Generate Basic PDF Report", type="primary"):
-        # Fetch vendor data dynamically for the report
+    if st.button("Generate Comprehensive PDF Report", type="primary"):
         vendor_data = st.session_state.get('vendor_db', {}).get(selected_month, [])
+        pdf_bytes = generate_pdf(selected_month, monthly_records, vendor_data, df_db)
         
-        pdf_bytes = generate_pdf(selected_month, monthly_records, vendor_data)
         if pdf_bytes:
-            # This overwrites the old blank PDF in memory
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("✅ New PDF generated successfully! You can now download it.")
+            st.success("✅ Comprehensive Executive PDF generated successfully!")
         else:
             st.error("FPDF library missing.")
             
     if selected_month in st.session_state['pdf_archive']:
         st.download_button(
-            label=f"📥 Download PDF", 
+            label=f"📥 Download Executive PDF Report", 
             data=st.session_state['pdf_archive'][selected_month], 
-            file_name=f"QA_Compliance_Report_{selected_month}.pdf", 
+            file_name=f"CBTL_QA_Executive_Report_{selected_month}.pdf", 
             mime="application/pdf"
         )
-
 # ==========================================
 # TAB 7: SYSTEM ADMINISTRATION
 # ==========================================
