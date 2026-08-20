@@ -55,7 +55,46 @@ def upload_photo(file_buffer, store_id, folder_name):
     except Exception as e:
         st.error(f"Upload failed: {e}")
         return None
+# --- LOGIN SCREEN (Pulls From Supabase Stores Table with Fallback) ---
+def login_screen():
+    st.title("☕ CBTL Store Login")
+    st.caption("FSSAI & NSF Operational Compliance Portal")
+    
+    try:
+        response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
+        
+        # If the stores table is empty or missing, provide a safe fallback list
+        if not response.data:
+            store_data = [
+                {"store_id": "189001", "store_name": "Janakpuri, Delhi", "secure_pin": "1234"},
+                {"store_id": "189002", "store_name": "GK1, Delhi", "secure_pin": "1234"},
+                {"store_id": "189003", "store_name": "Oberoi SkyCity, Mumbai", "secure_pin": "1234"}
+            ]
+        else:
+            store_data = response.data
 
+        store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in store_data}
+        
+        with st.form("login_form"):
+            selected_display = st.selectbox("Select Your Store", options=list(store_dict.keys()))
+            confirm_store = st.checkbox(f"I confirm I am logging in for {selected_display}")
+            entered_pin = st.text_input("Enter Store PIN", type="password", max_chars=4)
+            
+            if st.form_submit_button("Proceed to Outlet"):
+                correct_pin = str(store_dict[selected_display]['secure_pin'])
+                
+                if not confirm_store:
+                    st.error("❌ Please check the confirmation box.")
+                elif entered_pin != correct_pin:
+                    st.error("❌ Incorrect PIN. Access denied.")
+                else:
+                    st.session_state["logged_in"] = True
+                    st.session_state["store_id"] = store_dict[selected_display]['store_id']
+                    st.session_state["store_name"] = store_dict[selected_display]['store_name']
+                    st.rerun()
+                    
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
 # --- SESSION STATE ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
