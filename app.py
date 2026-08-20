@@ -315,7 +315,73 @@ with tab_ops:
                 }
                 st.success("Successfully recorded operations data!")
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (Multi-Photo & Auto-Scoring)
+# HELPER: ITEMIZED CHECKLIST PDF GENERATOR
+# ==========================================
+def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_responses, score_val, grade, remarks, photo_urls):
+    if FPDF is None: return None
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("Arial", size=14, style='B')
+    pdf.cell(200, 7, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
+    pdf.set_font("Arial", size=9, style='I')
+    pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - General Manufacturing Audit Report", ln=1, align='C')
+    pdf.ln(4)
+    
+    # Audit Metadata Box
+    pdf.set_font("Arial", size=10, style='B')
+    pdf.cell(200, 5, txt=f"Vendor / FBO Name: {vendor_name}", ln=1, align='L')
+    pdf.cell(200, 5, txt=f"FBO License No.: {lic_no} | Address: {address}", ln=1, align='L')
+    pdf.cell(200, 5, txt=f"Food Safety Officer / Auditor: {fso}", ln=1, align='L')
+    pdf.cell(200, 5, txt=f"Final Score: {score_val:.1f}% | Grade: {grade}", ln=1, align='L')
+    pdf.cell(200, 5, txt=f"Audit Date: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L')
+    pdf.ln(5)
+    
+    # Itemized Checklist Table Header
+    pdf.set_font("Arial", size=10, style='B')
+    pdf.cell(150, 6, txt="Audit Question / Checklist Parameter", border=1, align='L')
+    pdf.cell(40, 6, txt="Status (Pts)", border=1, align='C')
+    pdf.ln()
+    
+    # Itemized Checklist Body
+    pdf.set_font("Arial", size=8)
+    for q_text, data in audit_responses.items():
+        status_short = data["status"].split(" ")[0]
+        row_label = f"{q_text} ({data['points']} pts)"
+        
+        pdf.cell(150, 5, txt=row_label, border=1, align='L')
+        pdf.cell(40, 5, txt=status_short, border=1, align='C')
+        pdf.ln()
+        
+    pdf.ln(5)
+    
+    # Remarks & Corrective Actions
+    pdf.set_font("Arial", size=10, style='B')
+    pdf.cell(200, 5, txt="Overall Remarks & Corrective Actions:", ln=1, align='L')
+    pdf.set_font("Arial", size=9)
+    pdf.multi_cell(200, 5, txt=str(remarks if remarks else "None"))
+    pdf.ln(4)
+    
+    # Photo Proof Links
+    pdf.set_font("Arial", size=10, style='B')
+    pdf.cell(200, 5, txt="Attached Inspection Snap Evidence:", ln=1, align='L')
+    pdf.set_font("Arial", size=8)
+    if photo_urls:
+        urls = [u.strip() for u in photo_urls.split(",")]
+        for idx, u in enumerate(urls):
+            pdf.cell(200, 5, txt=f" - Photo Proof {idx+1}: {u}", ln=1, align='L')
+    else:
+        pdf.cell(200, 5, txt=" - No photo evidence attached.", ln=1, align='L')
+
+    try:
+        return bytes(pdf.output())
+    except TypeError:
+        return pdf.output(dest='S').encode('latin-1')
+
+
+# ==========================================
+# TAB 3: VENDOR & SUPPLY CHAIN
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
@@ -347,7 +413,7 @@ with tab_supply:
     
     # 2. INTERACTIVE GENERAL MANUFACTURING VENDOR AUDIT TOOL
     st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
-    st.caption("Evaluate vendors across the 40-point checklist, attach multiple photo proofs, and calculate final scores automatically[cite: 2].")
+    st.caption("Evaluate vendors across the 40-point checklist[cite: 2], attach multiple photo proofs, and calculate final scores automatically.")
     
     with st.form("manufacturing_audit_form"):
         col_v1, col_v2 = st.columns(2)
@@ -513,12 +579,34 @@ with tab_supply:
                     try:
                         if supabase is not None:
                             supabase.table("vendor_audits").insert(payload).execute()
-                        st.success(f"✅ Audit Completed! Score: {final_percentage:.1f}% | Grade: {grade}")
+                        
+                        # Generate itemized PDF report and store in session state for instant download
+                        pdf_report_bytes = generate_detailed_checklist_pdf(
+                            audit_vendor_name, audit_fso, audit_lic_no, audit_address, 
+                            audit_responses, final_percentage, grade, audit_remarks, final_proof_url
+                        )
+                        st.session_state['latest_generated_audit_pdf'] = {
+                            "name": audit_vendor_name,
+                            "data": pdf_report_bytes
+                        }
+                        
+                        st.success(f"✅ Audit Completed & Saved! Score: {final_percentage:.1f}% | Grade: {grade}")
                         st.balloons()
-                        st.cache_data.clear()
-                        st.rerun()
                     except Exception as e:
                         st.error(f"❌ Failed to save audit: {e}")
+
+    # --- INSTANT DOWNLOAD BUTTON FOR THE RECENTLY COMPLETED AUDIT ---
+    if 'latest_generated_audit_pdf' in st.session_state:
+        latest = st.session_state['latest_generated_audit_pdf']
+        st.markdown("---")
+        st.success(f"📄 Itemized audit report ready for **{latest['name']}**!")
+        st.download_button(
+            label=f"📥 Download Itemized PDF Report ({latest['name']})",
+            data=latest['data'],
+            file_name=f"General_Manufacturing_Audit_{latest['name'].replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
