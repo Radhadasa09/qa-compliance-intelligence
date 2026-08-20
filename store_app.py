@@ -1,3 +1,76 @@
+import streamlit as st
+import datetime
+from supabase import create_client, Client
+import cloudinary
+import cloudinary.uploader
+
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="CBTL Store Operations", layout="centered", initial_sidebar_state="collapsed")
+
+# --- INITIALIZATION (DB & CLOUD) ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
+
+cloudinary.config(
+    cloud_name=st.secrets["CLOUDINARY_CLOUD_NAME"],
+    api_key=st.secrets["CLOUDINARY_API_KEY"],
+    api_secret=st.secrets["CLOUDINARY_API_SECRET"],
+    secure=True
+)
+
+def upload_photo(file_buffer, store_id, folder_name):
+    """Uploads file to Cloudinary and returns the secure URL"""
+    try:
+        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{store_id}/{folder_name}")
+        return res.get("secure_url")
+    except Exception as e:
+        st.error(f"Upload failed: {e}")
+        return None
+
+# --- SESSION STATE ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "store_id" not in st.session_state:
+    st.session_state["store_id"] = ""
+if "store_name" not in st.session_state:
+    st.session_state["store_name"] = ""
+
+# --- LOGIN SCREEN ---
+def login_screen():
+    st.title("☕ CBTL Store Login")
+    st.caption("FSSAI & NSF Operational Compliance Portal")
+    
+    try:
+        # Fetch live stores and PINs from Supabase
+        response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
+        store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
+        
+        with st.form("login_form"):
+            selected_display = st.selectbox("Select Your Store", options=list(store_dict.keys()))
+            confirm_store = st.checkbox(f"I confirm I am logging in for {selected_display}")
+            entered_pin = st.text_input("Enter Store PIN", type="password", max_chars=4)
+            
+            if st.form_submit_button("Proceed to Outlet"):
+                correct_pin = store_dict[selected_display]['secure_pin']
+                
+                if not confirm_store:
+                    st.error("❌ Please check the confirmation box.")
+                elif entered_pin != correct_pin:
+                    st.error("❌ Incorrect PIN. Access denied.")
+                else:
+                    st.session_state["logged_in"] = True
+                    st.session_state["store_id"] = store_dict[selected_display]['store_id']
+                    st.session_state["store_name"] = store_dict[selected_display]['store_name']
+                    st.rerun()
+                    
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     st.header(f"{st.session_state['store_name']}")
@@ -103,3 +176,9 @@ def store_dashboard():
     with tab4:
         st.subheader("Register Wastage")
         st.info("Wastage DB connection pending. UI preserved.")
+
+# --- APP ROUTING (CRITICAL FOR RENDERING UI) ---
+if st.session_state["logged_in"]:
+    store_dashboard()
+else:
+    login_screen()
