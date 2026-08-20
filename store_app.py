@@ -30,6 +30,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # --- INITIALIZATION (DB & CLOUD) ---
 @st.cache_resource
 def init_supabase() -> Client:
@@ -62,13 +63,13 @@ if "store_id" not in st.session_state:
     st.session_state["store_id"] = ""
 if "store_name" not in st.session_state:
     st.session_state["store_name"] = ""
+
 # --- LOGIN SCREEN ---
 def login_screen():
     st.title("☕ CBTL Store Login")
     st.caption("FSSAI & NSF Operational Compliance Portal")
     
     try:
-        # Fetch live stores and PINs from Supabase
         response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
         
         if not response.data:
@@ -97,12 +98,12 @@ def login_screen():
                     
     except Exception as e:
         st.error(f"Database connection error: {e}")
+
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     st.header(f"{st.session_state['store_name']}")
     st.button("Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
     
-    # Reordered Tabs: Checklist is now Tab 1
     tab1, tab2, tab3, tab4 = st.tabs([
         "📋 Daily Checklist", 
         "📥 Receiving", 
@@ -164,14 +165,12 @@ def store_dashboard():
                     st.error("❌ Manager Name is required.")
                 else:
                     with st.spinner("Uploading photos and saving to Supabase..."):
-                        # Upload photos to Cloudinary
                         url_a = upload_photo(proof_a, st.session_state["store_id"], "admin") if proof_a else None
                         url_b = upload_photo(proof_b, st.session_state["store_id"], "hygiene") if proof_b else None
                         url_c = upload_photo(proof_c, st.session_state["store_id"], "sanitation") if proof_c else None
                         url_d = upload_photo(proof_d, st.session_state["store_id"], "product") if proof_d else None
                         url_e = upload_photo(proof_e, st.session_state["store_id"], "facility") if proof_e else None
                         
-                        # Save to Supabase
                         audit_data = {
                             "store_id": st.session_state["store_id"],
                             "manager_name": manager_name,
@@ -189,7 +188,6 @@ def store_dashboard():
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
-    # --- TAB 2 & 3 (Preserved UI - Pending DB wiring) ---
     with tab2:
         st.subheader("Receive Warehouse Delivery")
         st.info("Inventory DB connection pending. UI preserved.")
@@ -198,12 +196,11 @@ def store_dashboard():
         st.subheader("Freezer to FDU Chiller Transfer")
         st.info("Transfer DB connection pending. UI preserved.")
 
-    # --- TAB 4 (Preserved UI) ---
     with tab4:
         st.subheader("Register Wastage")
         st.info("Wastage DB connection pending. UI preserved.")
 
-# --- APP ROUTING (CRITICAL FOR RENDERING UI) ---
+# --- APP ROUTING ---
 if st.session_state["logged_in"]:
     store_dashboard()
 else:
