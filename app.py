@@ -477,7 +477,13 @@ with tab_reports:
         pdf.add_page()
         pdf.set_font("Arial", size=14, style='B')
         pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=True, align='C')
-        return pdf.output(dest='S').encode('latin-1')
+        
+        try:
+            # Modern fpdf2 approach (Streamlit Cloud default)
+            return bytes(pdf.output())
+        except TypeError:
+            # Legacy fpdf fallback
+            return pdf.output(dest='S').encode('latin-1')
 
     if st.button("Generate Basic PDF Report", type="primary"):
         pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []))
@@ -485,118 +491,12 @@ with tab_reports:
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
             st.success("PDF generated!")
         else:
-            st.error("fpdf2 missing.")
+            st.error("FPDF library missing.")
             
     if selected_month in st.session_state['pdf_archive']:
-        st.download_button(label=f"📥 Download PDF", data=st.session_state['pdf_archive'][selected_month], file_name=f"QA_{selected_month}.pdf", mime="application/pdf")
-
-# ==========================================
-# TAB 7: SYSTEM ADMINISTRATION
-# ==========================================
-with tab_admin:
-    st.subheader("⚙️ Store Portfolio & System Administration")
-    with st.expander("➕ Add a New Store Location", expanded=False):
-        with st.form("new_store_form"):
-            new_name = st.text_input("Store Name")
-            is_out = st.checkbox("Is Outstation?")
-            if st.form_submit_button("Add Store") and new_name:
-                st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
-                st.success("Added!")
-                st.rerun()
-
-# ---------------------------------------------------------
-# NSF AUDIT CLOUD UPLOADER (Direct PDF)
-# ---------------------------------------------------------
-st.divider()
-st.subheader("☁️ NSF Audit Cloud Uploader (Direct PDF)")
-with st.expander("Upload Official NSF Audit PDF", expanded=False):
-    uploaded_pdf = st.file_uploader("Upload Official NSF Audit PDF", type=["pdf"])
-    
-    if uploaded_pdf:
-        try:
-            import pdfplumber
-            extracted_rows = []
-            
-            with pdfplumber.open(uploaded_pdf) as pdf:
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            extracted_rows.append(row)
-            
-            if extracted_rows:
-                standard_columns = [
-                    "Audit Code", "Postal Code", "Address Line", "City", "Site Name", "Site Code", 
-                    "Score", "Result", "Grade", "CAR Status", "Audit Date", "Time Zone", 
-                    "Audit Type", "Audit Category", "Audit Time", "Audit Status", 
-                    "Customer Name", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"
-                ]
-                
-                clean_data = []
-                for row in extracted_rows:
-                    row_text = "".join([str(cell) for cell in row if cell])
-                    if not row_text.strip() or "Postal" in row_text or "Addre" in row_text:
-                        continue
-                    if row and str(row[0]).strip() in ["Audit Code", "PostaI Code", "Postal Code"]:
-                        continue
-                    clean_data.append(row)
-                
-                df_upload = pd.DataFrame(clean_data)
-                
-                if len(df_upload.columns) >= len(standard_columns):
-                    df_upload = df_upload.iloc[:, :len(standard_columns)]
-                    df_upload.columns = standard_columns
-                else:
-                    df_upload.columns = [f"Col_{i}" for i in range(len(df_upload.columns))]
-                
-                st.write(f"✅ Successfully extracted {len(df_upload)} clean audit records from PDF.")
-                st.dataframe(df_upload.head(3))
-                
-                if st.button("Push PDF Data to Database", type="primary"):
-                    if supabase is None:
-                        st.error("❌ Database connection is inactive. Check credentials.")
-                    else:
-                        try:
-                            import numpy as np
-
-                            df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
-                            
-                            cols_to_drop = [
-                                'city', 'address_line', 'postal_code', 'audit_status', 'audit_time', 
-                                'time_zone', 'customer_name', 'car_status', 'grade', 'audit_type', 
-                                'audit_category', 'level_1', 'level_2', 'level_3', 'level_4', 
-                                'level_5', 'level_6'
-                            ]
-                            df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
-                            
-                            if "site_name" in df_upload.columns:
-                                df_upload = df_upload.rename(columns={"site_name": "store_name"})
-                            
-                            for col in df_upload.columns:
-                                df_upload[col] = df_upload[col].astype(str).str.replace('\n', '').str.strip()
-                                df_upload[col] = df_upload[col].replace({'': None, 'nan': None, 'None': None})
-                            
-                            if 'audit_code' in df_upload.columns:
-                                df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce')
-                                
-                            if 'score' in df_upload.columns:
-                                df_upload['score'] = pd.to_numeric(df_upload['score'], errors='coerce')
-                                
-                            if 'audit_date' in df_upload.columns:
-                                df_upload['audit_date'] = pd.to_datetime(df_upload['audit_date'], errors='coerce').dt.strftime('%Y-%m-%d')
-                            
-                            df_upload = df_upload.replace({np.nan: None, pd.NaT: None, 'NaT': None})
-                            
-                            st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
-                            
-                            records = df_upload.to_dict(orient="records")
-                            supabase.table("nsf_audits").insert(records).execute()
-                            st.success(f"✅ {len(records)} records uploaded successfully from PDF!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Upload failed: {e}")
-            else:
-                st.warning("⚠️ No structured tables were detected in this PDF layout.")
-        except Exception as e:
-            st.error(f"❌ Error parsing PDF: {e}")
+        st.download_button(
+            label=f"📥 Download PDF", 
+            data=st.session_state['pdf_archive'][selected_month], 
+            file_name=f"QA_{selected_month}.pdf", 
+            mime="application/pdf"
+        )
