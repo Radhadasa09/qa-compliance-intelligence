@@ -318,85 +318,110 @@ import requests
 from io import BytesIO
 
 # ==========================================
-# HELPER: ITEMIZED CHECKLIST PDF GENERATOR (With Embedded Photos)
+# ENHANCED ITEMIZED CHECKLIST PDF GENERATOR
 # ==========================================
 def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_date, audit_responses, score_val, grade, remarks, photo_urls):
     if FPDF is None: return None
     pdf = FPDF()
     pdf.add_page()
     
-    # Header
-    pdf.set_font("Arial", size=14, style='B')
-    pdf.cell(200, 7, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
+    # --- HEADER ---
+    pdf.set_font("Arial", size=15, style='B')
+    pdf.cell(200, 8, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
     pdf.set_font("Arial", size=9, style='I')
     pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - General Manufacturing Audit Report", ln=1, align='C')
     pdf.ln(4)
     
-    # Audit Metadata Box
-    pdf.set_font("Arial", size=10, style='B')
-    pdf.cell(200, 5, txt=f"Vendor / FBO Name: {vendor_name}", ln=1, align='L')
-    pdf.cell(200, 5, txt=f"FBO License No.: {lic_no} | Address: {address}", ln=1, align='L')
-    pdf.cell(200, 5, txt=f"Food Safety Officer / Auditor: {fso}", ln=1, align='L')
-    pdf.cell(200, 5, txt=f"Final Score: {score_val:.1f}% | Grade: {grade}", ln=1, align='L')
-    pdf.cell(200, 5, txt=f"Audit Date: {audit_date.strftime('%d-%b-%Y')} | Generated On: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L')
-    pdf.ln(5)
+    # --- METADATA BOX ---
+    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font("Arial", size=9, style='B')
+    pdf.cell(200, 6, txt=f"  Vendor / FBO Name: {vendor_name}", ln=1, align='L', fill=True)
+    pdf.cell(200, 6, txt=f"  FBO License No.: {lic_no}  |  Address: {address}", ln=1, align='L', fill=True)
+    pdf.cell(200, 6, txt=f"  Auditor / FSO: {fso}", ln=1, align='L', fill=True)
+    pdf.cell(200, 6, txt=f"  Final Score: {score_val:.1f}%  |  Official Grade: {grade}", ln=1, align='L', fill=True)
+    pdf.cell(200, 6, txt=f"  Audit Date: {audit_date.strftime('%d-%b-%Y')}  |  Report Generated: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L', fill=True)
+    pdf.ln(6)
     
-    # Itemized Checklist Table Header
-    pdf.set_font("Arial", size=10, style='B')
-    pdf.cell(150, 6, txt="Audit Question / Checklist Parameter", border=1, align='L')
-    pdf.cell(40, 6, txt="Status (Pts)", border=1, align='C')
+    # --- TABLE HEADER ---
+    pdf.set_font("Arial", size=9, style='B')
+    pdf.set_fill_color(50, 50, 50)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(150, 7, txt="  Audit Question / Checklist Parameter", border=1, align='L', fill=True)
+    pdf.cell(40, 7, txt="Status (Pts)", border=1, align='C', fill=True)
+    pdf.set_text_color(0, 0, 0) # Reset text color
     pdf.ln()
     
-    # Itemized Checklist Body
+    # --- TABLE BODY ---
     pdf.set_font("Arial", size=8)
+    fill_row = False
     for q_text, data in audit_responses.items():
         status_short = data["status"].split(" ")[0]
-        row_label = f"{q_text} ({data['points']} pts)"
+        row_label = f"  {q_text} ({data['points']} pts)"
         
-        pdf.cell(150, 5, txt=row_label, border=1, align='L')
-        pdf.cell(40, 5, txt=status_short, border=1, align='C')
+        pdf.set_fill_color(245, 245, 245) if fill_row else pdf.set_fill_color(255, 255, 255)
+        pdf.cell(150, 5.5, txt=row_label, border=1, align='L', fill=True)
+        pdf.cell(40, 5.5, txt=status_short, border=1, align='C', fill=True)
         pdf.ln()
+        fill_row = not fill_row
         
-    pdf.ln(5)
+    pdf.ln(6)
     
-    # Remarks & Corrective Actions
+    # --- REMARKS SECTION ---
     pdf.set_font("Arial", size=10, style='B')
-    pdf.cell(200, 5, txt="Overall Remarks & Corrective Actions:", ln=1, align='L')
+    pdf.cell(200, 6, txt="Overall Remarks & Corrective Actions Required:", ln=1, align='L')
     pdf.set_font("Arial", size=9)
     pdf.multi_cell(200, 5, txt=str(remarks if remarks else "None"))
     pdf.ln(6)
     
-    # --- EMBEDDED PHOTO EVIDENCE SECTION ---
-    pdf.add_page() # Adds a clean dedicated page for inspection snaps
-    pdf.set_font("Arial", size=12, style='B')
-    pdf.cell(200, 7, txt="Attached Inspection Snap Evidence", ln=1, align='L')
-    pdf.ln(4)
-    
+    # --- EMBEDDED PHOTO EVIDENCE GALLERY ---
     if photo_urls:
+        pdf.add_page()
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 7, txt="Inspection Photographic Evidence", ln=1, align='L')
+        pdf.ln(4)
+        
         urls = [u.strip() for u in photo_urls.split(",")]
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        col_width = 85
+        col_gap = 10
+        current_col = 0
+        
         for idx, u in enumerate(urls):
             try:
                 response = requests.get(u)
                 if response.status_code == 200:
                     image_stream = BytesIO(response.content)
-                    pdf.set_font("Arial", size=9, style='B')
-                    pdf.cell(200, 5, txt=f"Photo Proof {idx+1}:", ln=1, align='L')
-                    # Embeds the actual image into the PDF layout with a width of 70mm
-                    pdf.image(image_stream, w=70)
-                    pdf.ln(6)
+                    
+                    # Calculate grid coordinates (2 photos per row)
+                    x_pos = 10 + current_col * (col_width + col_gap)
+                    y_pos = pdf.get_y()
+                    
+                    if current_col == 1 and idx > 0:
+                        # Move down if second column
+                        y_pos = y_start
+                    
+                    pdf.set_xy(x_pos, y_pos)
+                    pdf.set_font("Arial", size=8, style='B')
+                    pdf.cell(col_width, 5, txt=f"Proof Photo {idx+1}", ln=1, align='L')
+                    pdf.set_x(x_pos)
+                    
+                    # Embed image cleanly with a fixed width
+                    pdf.image(image_stream, x=x_pos, w=col_width)
+                    
+                    if current_col == 1:
+                        pdf.ln(55) # Spacing after row
+                        y_start = pdf.get_y()
+                        current_col = 0
+                    else:
+                        current_col = 1
             except Exception:
-                pdf.set_font("Arial", size=9)
-                pdf.cell(200, 5, txt=f" - Could not load image {idx+1} from cloud storage.", ln=1, align='L')
-    else:
-        pdf.set_font("Arial", size=9)
-        pdf.cell(200, 5, txt=" - No photo evidence attached.", ln=1, align='L')
+                pass
 
     try:
         return bytes(pdf.output())
     except TypeError:
         return pdf.output(dest='S').encode('latin-1')
-
-
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN
 # ==========================================
