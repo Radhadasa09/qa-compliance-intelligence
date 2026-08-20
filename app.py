@@ -286,13 +286,39 @@ with tab_ops:
                     "nsf_score": current_data['nsf_score'], "self_audit_done": self_audit_choice,
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
-                st.success("Successfully recorded operations data!")
+
+             st.success("Successfully recorded operations data!")
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Proofs)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
     
+    # 1. DISPLAY EXISTING RECORDED AUDITS AT THE TOP
+    if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
+        month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
+        if not month_vendors.empty:
+            st.markdown("### 📋 Recorded Vendor Audits")
+            for _, row in month_vendors.iterrows():
+                with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
+                    st.write(f"**Category:** {row.get('category', 'N/A')}")
+                    st.write(f"**Remark:** {row.get('remark', 'None')}")
+                    
+                    proof = row.get('proof_url')
+                    if proof:
+                        if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
+                            st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
+        else:
+            st.info(f"No vendor audits recorded for {selected_month} yet.")
+    else:
+        st.info("No vendor audit records found in the database.")
+
+    st.markdown("---")
+    
+    # 2. DATA ENTRY FORM BELOW THE SUMMARY
+    st.markdown("### ➕ Add New Vendor Audit")
     with st.form("vendor_form"):
         col_v1, col_v2, col_v3 = st.columns(3)
         with col_v1: 
@@ -344,28 +370,7 @@ with tab_supply:
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to save: {e}")
-            
-    # Filter and display vendor records from the live cloud dataframe
-    if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
-        month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
-        if not month_vendors.empty:
-            st.markdown("### 📋 Recorded Vendor Audits")
-            for _, row in month_vendors.iterrows():
-                with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
-                    st.write(f"**Category:** {row.get('category', 'N/A')}")
-                    st.write(f"**Remark:** {row.get('remark', 'None')}")
-                    
-                    proof = row.get('proof_url')
-                    if proof:
-                        if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
-                            st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
-        else:
-            st.info(f"No vendor audits recorded for {selected_month} yet.")
-    else:
-        st.info("No vendor audit records found in the database.")
+                    st.error(f"❌ Failed to save: {e}")            
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
