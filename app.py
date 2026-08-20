@@ -30,7 +30,18 @@ try:
     supabase: Client = create_client(URL, KEY)
 except Exception as e:
     supabase = None
+# Fetch daily operational shift checklists submitted by stores
+@st.cache_data(ttl=60)
+def load_daily_audits():
+    if supabase is None:
+        return pd.DataFrame()
+    try:
+        response = supabase.table("daily_audits").select("*").execute()
+        return pd.DataFrame(response.data)
+    except Exception:
+        return pd.DataFrame()
 
+df_daily_live = load_daily_audits()
 # --- 2. DATA FETCHING (From Cloud) ---
 @st.cache_data(ttl=60)
 def load_nsf_audits():
