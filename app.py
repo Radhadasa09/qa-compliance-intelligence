@@ -145,7 +145,7 @@ st.markdown("**Command Center Admin:** Girish Kumar")
 st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensing, Supply Chain, and Sub Franchise compliance.")
 st.divider()
 
-tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_subfranchise, tab_re = st.tabs([
+tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_admin = st.tabs([
     "📊 Executive Dashboard",
     "🏬 Retail Operations",
     "🚚 Vendor & Supply Chain",
