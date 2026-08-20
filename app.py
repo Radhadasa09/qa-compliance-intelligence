@@ -468,29 +468,29 @@ with tab_nsf:
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
-    st.subheader(f"📑 PDF Report Generation")
+    st.subheader("📑 Executive PDF Report Generation")
     
     def generate_pdf(month_str, records, vendors, nsf_data):
         if FPDF is None: return None
         pdf = FPDF()
         pdf.add_page()
         
-        # Document Header
-        pdf.set_font("Arial", size=16, style='B')
-        pdf.cell(200, 10, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
+        # --- Document Header ---
+        pdf.set_font("Arial", size=15, style='B')
+        pdf.cell(200, 8, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
         pdf.set_font("Arial", size=10, style='I')
         pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - QA & Compliance Vault", ln=1, align='C')
-        pdf.ln(3)
+        pdf.ln(2)
         
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 8, txt=f"Executive Briefing Report | Period: {month_str}", ln=1, align='C')
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 7, txt=f"Executive Briefing Report | Period: {month_str}", ln=1, align='C')
         pdf.set_font("Arial", size=9)
         pdf.cell(200, 5, txt=f"Generated On: {datetime.date.today().strftime('%d-%b-%Y')} | Admin: Girish Kumar", ln=1, align='C')
         pdf.ln(6)
         
-        # 1. Store Network Compliance Section
+        # --- 1. Store Network Compliance Section ---
         pdf.set_font("Arial", size=11, style='B')
-        pdf.cell(200, 7, txt="1. Store Network Compliance Status", ln=1, align='L')
+        pdf.cell(200, 6, txt="1. Store Network & Staff Compliance Status", ln=1, align='L')
         
         pdf.set_font("Arial", size=9)
         if records:
@@ -499,65 +499,90 @@ with tab_reports:
                 fostac = record.get('fostac_pending', 0)
                 med = record.get('medical_pending', 0)
                 is_comp = "Yes" if record.get('is_compliant') else "No"
-                row_text = f" - {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
-                pdf.cell(200, 6, txt=row_text, ln=1, align='L')
+                row_text = f" • {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
+                pdf.cell(200, 5, txt=row_text, ln=1, align='L')
         else:
-            pdf.cell(200, 6, txt=" - No store data available.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" • No store data available.", ln=1, align='L')
             
         pdf.ln(4)
         
-        # 2. NSF Audit Performance Section
+        # --- 2. Cleaned NSF Audit Summary ---
         pdf.set_font("Arial", size=11, style='B')
-        pdf.cell(200, 7, txt="2. NSF Audit Intelligence (Cloud Records)", ln=1, align='L')
+        pdf.cell(200, 6, txt="2. NSF Audit Performance Summary (Cloud Records)", ln=1, align='L')
         
         pdf.set_font("Arial", size=9)
         if not nsf_data.empty and 'store_name' in nsf_data.columns:
-            for _, row in nsf_data.iterrows():
-                s_name = row.get('store_name', 'Unknown')
-                s_score = row.get('score', 'N/A')
-                s_result = row.get('result', 'N/A')
-                row_text = f" - {s_name} | Score: {s_score}% | Result: {s_result}"
-                pdf.cell(200, 6, txt=row_text, ln=1, align='L')
+            # Filter out rows with missing scores or nan results
+            valid_nsf = nsf_data.dropna(subset=['score']).copy()
+            valid_nsf = valid_nsf[valid_nsf['score'] > 0]
+            
+            if not valid_nsf.empty:
+                # Group by store and get the latest/average score to avoid clutter
+                for _, row in valid_nsf.head(15).iterrows(): # Limits to top 15 clean entries for readability
+                    s_name = row.get('store_name', 'Unknown')
+                    s_score = row.get('score', 0)
+                    s_result = row.get('result', 'N/A')
+                    row_text = f" • {s_name} | Score: {s_score}% | Result: {s_result}"
+                    pdf.cell(200, 5, txt=row_text, ln=1, align='L')
+            else:
+                pdf.cell(200, 5, txt=" • No valid NSF scores available in the database.", ln=1, align='L')
         else:
-            pdf.cell(200, 6, txt=" - No NSF audit records found in cloud database.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" • No NSF audit records found.", ln=1, align='L')
             
         pdf.ln(4)
         
-        # 3. Vendor Audits Section
+        # --- 3. Enhanced Vendor & Supply Chain Section ---
         pdf.set_font("Arial", size=11, style='B')
-        pdf.cell(200, 7, txt="3. Vendor Operations & Supply Chain", ln=1, align='L')
+        pdf.cell(200, 6, txt="3. Vendor Operations & Supply Chain Status", ln=1, align='L')
         
         pdf.set_font("Arial", size=9)
         if vendors:
             for v in vendors:
                 v_name = v.get('vendor', 'Unknown')
+                v_cat = v.get('category', 'General')
                 v_score = v.get('score', 'N/A')
                 v_status = v.get('status', 'N/A')
-                v_text = f" - {v_name} | Status: {v_status} | Score: {v_score}"
-                pdf.cell(200, 6, txt=v_text, ln=1, align='L')
+                v_remark = v.get('remark', 'None')
+                v_text = f" • [{v_cat}] {v_name} | Status: {v_status} | Score: {v_score}"
+                pdf.cell(200, 5, txt=v_text, ln=1, align='L')
+                pdf.cell(200, 4, txt=f"   Remark: {v_remark}", ln=1, align='L')
         else:
-            pdf.cell(200, 6, txt=" - No vendor audits recorded for this period.", ln=1, align='L')
+            pdf.cell(200, 5, txt=" • No vendor audits recorded for this period.", ln=1, align='L')
+
+        pdf.ln(4)
+
+        # --- 4. License Compliance Flags ---
+        pdf.set_font("Arial", size=11, style='B')
+        pdf.cell(200, 6, txt="4. Active License Compliance Flags", ln=1, align='L')
+        
+        pdf.set_font("Arial", size=9)
+        flagged_stores = [r for r in records if r.get('has_license_issue')]
+        if flagged_stores:
+            for store in flagged_stores:
+                pdf.cell(200, 5, txt=f" • {store['name']} has pending or expired statutory licenses.", ln=1, align='L')
+        else:
+            pdf.cell(200, 5, txt=" • All store statutory licenses are currently valid and up to date.", ln=1, align='L')
 
         try:
             return bytes(pdf.output())
         except TypeError:
             return pdf.output(dest='S').encode('latin-1')
 
-    if st.button("Generate Comprehensive PDF Report", type="primary"):
+    if st.button("Generate Executive PDF Report", type="primary"):
         vendor_data = st.session_state.get('vendor_db', {}).get(selected_month, [])
         pdf_bytes = generate_pdf(selected_month, monthly_records, vendor_data, df_db)
         
         if pdf_bytes:
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("✅ Comprehensive Executive PDF generated successfully!")
+            st.success("✅ Executive PDF generated successfully!")
         else:
             st.error("FPDF library missing.")
             
     if selected_month in st.session_state['pdf_archive']:
         st.download_button(
-            label=f"📥 Download Executive PDF Report", 
+            label="📥 Download Executive PDF Report", 
             data=st.session_state['pdf_archive'][selected_month], 
-            file_name=f"CBTL_QA_Executive_Report_{selected_month}.pdf", 
+            file_name=f"CBTL_Executive_Report_{selected_month}.pdf", 
             mime="application/pdf"
         )
 # ==========================================
