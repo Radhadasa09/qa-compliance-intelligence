@@ -55,8 +55,8 @@ else:
     ekaagra_df = pd.DataFrame()
     subfranchise_df = pd.DataFrame()
 
-# Set statically to "Live Data" so the manual entry tabs continue to function silently
 selected_month = "Live Data"
+
 # --- 4. DATA LOADING (Local Session State for non-Supabase data) ---
 if 'master_stores' not in st.session_state:
     st.session_state['master_stores'] = [
@@ -158,6 +158,7 @@ st.title("🛡️ QA & Compliance Leadership Briefing — Live Status")
 st.markdown("**Command Center Admin:** Girish Kumar")
 st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensing, Supply Chain, and Sub Franchise compliance.")
 st.divider()
+
 # --- DASHBOARD TABS ---
 tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_calendar, tab_subfranchise, tab_reports, tab_admin = st.tabs([
     "📊 Executive Dashboard", 
@@ -359,7 +360,6 @@ with tab_subfranchise:
         total_sf_audits = len(subfranchise_df)
         avg_sf_score = subfranchise_df['score'].mean()
         
-        # Check if 'result' column exists to calculate pass rate dynamically
         if 'result' in subfranchise_df.columns:
             pass_count = len(subfranchise_df[subfranchise_df['result'] == 'PASS'])
             pass_rate = (pass_count / total_sf_audits) * 100 if total_sf_audits > 0 else 0
@@ -481,10 +481,8 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                         try:
                             import numpy as np
 
-                            # 1. Convert columns to snake_case
                             df_upload.columns = [c.lower().strip().replace(" ", "_") for c in df_upload.columns]
                             
-                            # 2. Drop unneeded PDF columns
                             cols_to_drop = [
                                 'city', 'address_line', 'postal_code', 'audit_status', 'audit_time', 
                                 'time_zone', 'customer_name', 'car_status', 'grade', 'audit_type', 
@@ -493,17 +491,13 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                             ]
                             df_upload = df_upload.drop(columns=[c for c in cols_to_drop if c in df_upload.columns], errors='ignore')
                             
-                            # 3. Rename site_name to store_name
                             if "site_name" in df_upload.columns:
                                 df_upload = df_upload.rename(columns={"site_name": "store_name"})
                             
-                            # 4. Clean text and resolve newline (\n) issues across all string columns
                             for col in df_upload.columns:
                                 df_upload[col] = df_upload[col].astype(str).str.replace('\n', '').str.strip()
-                                # Turn empty strings and stringified nulls back into actual None objects
                                 df_upload[col] = df_upload[col].replace({'': None, 'nan': None, 'None': None})
                             
-                            # 5. Sanitize numeric and date columns
                             if 'audit_code' in df_upload.columns:
                                 df_upload['audit_code'] = pd.to_numeric(df_upload['audit_code'].astype(str).str.replace(r'\D', '', regex=True), errors='coerce')
                                 
@@ -511,10 +505,8 @@ with st.expander("Upload Official NSF Audit PDF", expanded=False):
                                 df_upload['score'] = pd.to_numeric(df_upload['score'], errors='coerce')
                                 
                             if 'audit_date' in df_upload.columns:
-                                # Standardize date format to YYYY-MM-DD so PostgreSQL accepts it natively
                                 df_upload['audit_date'] = pd.to_datetime(df_upload['audit_date'], errors='coerce').dt.strftime('%Y-%m-%d')
                             
-                            # 6. Replace all NaN/NaT values with None for JSON compliance
                             df_upload = df_upload.replace({np.nan: None, pd.NaT: None, 'NaT': None})
                             
                             st.info(f"🔍 Verifying extracted columns before upload: {df_upload.columns.tolist()}")
