@@ -6,7 +6,28 @@ import os
 import datetime
 import io
 import copy
+import cloudinary
+import cloudinary.uploader
 
+# --- CLOUDINARY CONFIGURATION & HELPER ---
+try:
+    cloudinary.config(
+        cloud_name=st.secrets.get("CLOUDINARY_CLOUD_NAME", os.environ.get("CLOUDINARY_CLOUD_NAME")),
+        api_key=st.secrets.get("CLOUDINARY_API_KEY", os.environ.get("CLOUDINARY_API_KEY")),
+        api_secret=st.secrets.get("CLOUDINARY_API_SECRET", os.environ.get("CLOUDINARY_API_SECRET")),
+        secure=True
+    )
+except Exception:
+    pass
+
+def upload_photo(file_buffer, folder_name, sub_folder):
+    """Uploads file to Cloudinary and returns the secure URL"""
+    try:
+        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{folder_name}/{sub_folder}")
+        return res.get("secure_url")
+    except Exception as e:
+        st.error(f"Upload failed: {e}")
+        return None
 try:
     from fpdf import FPDF
 except ImportError:
