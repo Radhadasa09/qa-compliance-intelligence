@@ -287,7 +287,7 @@ with tab_ops:
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
 
-             st.success("Successfully recorded operations data!")
+            st.success("Successfully recorded operations data!")
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Proofs)
 # ==========================================
