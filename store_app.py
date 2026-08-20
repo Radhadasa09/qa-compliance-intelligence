@@ -5,7 +5,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="CBTL Store Operations", page_layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="CBTL Store Operations", layout="centered", initial_sidebar_state="collapsed")
 
 # --- HIDE STREAMLIT BRANDING & APPLY QA HEADER STYLING ---
 hide_streamlit_style = """
