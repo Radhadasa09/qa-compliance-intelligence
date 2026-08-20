@@ -56,7 +56,7 @@ def load_vendor_audits():
 
 # Fetch live vendor data from Supabase globally (OUTSIDE the function)
 df_vendors_live = load_vendor_audits()
-        return pd.DataFrame()
+
 # Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
 if not df_db.empty and 'site_code' in df_db.columns:
     df_db['site_code'] = df_db['site_code'].astype(str)
