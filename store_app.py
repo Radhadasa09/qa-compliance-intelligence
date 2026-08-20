@@ -6,7 +6,15 @@ import cloudinary.uploader
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="CBTL Store Operations", layout="centered", initial_sidebar_state="collapsed")
-
+# --- HIDE STREAMLIT BRANDING & TOOLBAR FOR USERS ---
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- INITIALIZATION (DB & CLOUD) ---
 @st.cache_resource
 def init_supabase() -> Client:
