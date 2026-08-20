@@ -100,32 +100,6 @@ if 'vendor_db' not in st.session_state:
         ]
     }
 
-if 'qa_calendar_db' not in st.session_state:
-    st.session_state['qa_calendar_db'] = {
-        "July 2026": [
-            {"date": "03", "day": "Monday", "activity": "Platina"},
-            {"date": "04", "day": "Tuesday", "activity": "M3M Gurgaon-Audit"},
-            {"date": "05", "day": "Wednesday", "activity": "GK-1-Audit"},
-            {"date": "06", "day": "Thursday", "activity": "WFH"},
-            {"date": "07", "day": "Friday", "activity": "Platina"},
-            {"date": "10", "day": "Monday", "activity": "Janakpuri-Training"},
-            {"date": "11", "day": "Tuesday", "activity": "Head Office"},
-            {"date": "12", "day": "Wednesday", "activity": "Warehouse"},
-            {"date": "13", "day": "Thursday", "activity": "Noida"},
-            {"date": "14", "day": "Friday", "activity": "Malcha Marg"},
-            {"date": "17", "day": "Monday", "activity": "Janakpuri"},
-            {"date": "18", "day": "Tuesday", "activity": "Moti Nagar"},
-            {"date": "19", "day": "Wednesday", "activity": "Patiala"},
-            {"date": "20", "day": "Thursday", "activity": "Ludhiana"},
-            {"date": "21", "day": "Friday", "activity": "Head Office"},
-            {"date": "24", "day": "Monday", "activity": "Warehouse"},
-            {"date": "25", "day": "Tuesday", "activity": "Vendor Audit"},
-            {"date": "26", "day": "Wednesday", "activity": "Head Office"},
-            {"date": "27", "day": "Thursday", "activity": "Pune Season Mall"},
-            {"date": "28", "day": "Friday", "activity": "Sky City Mumbai"},
-            {"date": "31", "day": "Monday", "activity": "Platina"}
-        ]
-    }
 
 if 'pdf_archive' not in st.session_state:
     st.session_state['pdf_archive'] = {}
