@@ -64,7 +64,7 @@ if "store_id" not in st.session_state:
 if "store_name" not in st.session_state:
     st.session_state["store_name"] = ""
 
-# --- LOGIN SCREEN ---
+# --- LOGIN SCREEN (Pulls Directly from Supabase Stores Table) ---
 def login_screen():
     st.title("☕ CBTL Store Login")
     st.caption("FSSAI & NSF Operational Compliance Portal")
@@ -73,7 +73,7 @@ def login_screen():
         response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
         
         if not response.data:
-            st.warning("⚠️ Connected to database, but no stores found. Please check Supabase table.")
+            st.warning("⚠️ Connected to database, but no stores found. Please check your Supabase 'stores' table.")
             return
 
         store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
@@ -111,7 +111,7 @@ def store_dashboard():
         "🗑️ Wastage"
     ])
     
- # --- TAB 1: DAILY FSSAI & NSF CHECKLIST (LIVE) ---
+    # --- TAB 1: DAILY FSSAI & NSF CHECKLIST (LIVE) ---
     with tab1:
         st.subheader("FSSAI & NSF Shift Checklist")
         st.caption("All metrics must pass for audit readiness.")
@@ -125,7 +125,6 @@ def store_dashboard():
             c_med = st.checkbox("Current medical certificates available on-site for all team members")
             c_water = st.checkbox("IS-10500:2012 Water Analysis report on file")
             
-            # Clean Toggle for Camera Proof
             with st.expander("📸 Attach Proof: Documents / Board (Optional/Required)"):
                 proof_a = st.camera_input("Capture Admin Proof", key="cam_a")
             
@@ -198,6 +197,7 @@ def store_dashboard():
                             st.balloons()
                         except Exception as e:
                             st.error(f"Database error: {e}")
+                            
     with tab2:
         st.subheader("Receive Warehouse Delivery")
         st.info("Inventory DB connection pending. UI preserved.")
