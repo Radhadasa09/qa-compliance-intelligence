@@ -305,7 +305,7 @@ with tab_supply:
                     st.write(f"**Remark:** {row.get('remark', 'None')}")
                     
                     proof = row.get('proof_url')
-                    if proof:
+                    if proof and isinstance(proof, str):
                         if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
                             st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
                         else:
