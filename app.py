@@ -314,10 +314,13 @@ with tab_ops:
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
                 st.success("Successfully recorded operations data!")
+import requests
+from io import BytesIO
+
 # ==========================================
-# HELPER: ITEMIZED CHECKLIST PDF GENERATOR
+# HELPER: ITEMIZED CHECKLIST PDF GENERATOR (With Embedded Photos)
 # ==========================================
-def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_responses, score_val, grade, remarks, photo_urls):
+def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_date, audit_responses, score_val, grade, remarks, photo_urls):
     if FPDF is None: return None
     pdf = FPDF()
     pdf.add_page()
@@ -335,7 +338,7 @@ def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_res
     pdf.cell(200, 5, txt=f"FBO License No.: {lic_no} | Address: {address}", ln=1, align='L')
     pdf.cell(200, 5, txt=f"Food Safety Officer / Auditor: {fso}", ln=1, align='L')
     pdf.cell(200, 5, txt=f"Final Score: {score_val:.1f}% | Grade: {grade}", ln=1, align='L')
-    pdf.cell(200, 5, txt=f"Audit Date: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L')
+    pdf.cell(200, 5, txt=f"Audit Date: {audit_date.strftime('%d-%b-%Y')} | Generated On: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L')
     pdf.ln(5)
     
     # Itemized Checklist Table Header
@@ -361,17 +364,31 @@ def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_res
     pdf.cell(200, 5, txt="Overall Remarks & Corrective Actions:", ln=1, align='L')
     pdf.set_font("Arial", size=9)
     pdf.multi_cell(200, 5, txt=str(remarks if remarks else "None"))
+    pdf.ln(6)
+    
+    # --- EMBEDDED PHOTO EVIDENCE SECTION ---
+    pdf.add_page() # Adds a clean dedicated page for inspection snaps
+    pdf.set_font("Arial", size=12, style='B')
+    pdf.cell(200, 7, txt="Attached Inspection Snap Evidence", ln=1, align='L')
     pdf.ln(4)
     
-    # Photo Proof Links
-    pdf.set_font("Arial", size=10, style='B')
-    pdf.cell(200, 5, txt="Attached Inspection Snap Evidence:", ln=1, align='L')
-    pdf.set_font("Arial", size=8)
     if photo_urls:
         urls = [u.strip() for u in photo_urls.split(",")]
         for idx, u in enumerate(urls):
-            pdf.cell(200, 5, txt=f" - Photo Proof {idx+1}: {u}", ln=1, align='L')
+            try:
+                response = requests.get(u)
+                if response.status_code == 200:
+                    image_stream = BytesIO(response.content)
+                    pdf.set_font("Arial", size=9, style='B')
+                    pdf.cell(200, 5, txt=f"Photo Proof {idx+1}:", ln=1, align='L')
+                    # Embeds the actual image into the PDF layout with a width of 70mm
+                    pdf.image(image_stream, w=70)
+                    pdf.ln(6)
+            except Exception:
+                pdf.set_font("Arial", size=9)
+                pdf.cell(200, 5, txt=f" - Could not load image {idx+1} from cloud storage.", ln=1, align='L')
     else:
+        pdf.set_font("Arial", size=9)
         pdf.cell(200, 5, txt=" - No photo evidence attached.", ln=1, align='L')
 
     try:
@@ -420,6 +437,7 @@ with tab_supply:
         with col_v1:
             audit_vendor_name = st.text_input("Vendor / FBO Name")
             audit_fso = st.text_input("Food Safety Officer / Auditor Name")
+            audit_date = st.date_input("Actual Audit Date", value=datetime.date.today())
         with col_v2:
             audit_lic_no = st.text_input("FBO License No.")
             audit_address = st.text_input("Facility Address")
@@ -522,7 +540,7 @@ with tab_supply:
             if not audit_vendor_name:
                 st.error("❌ Vendor Name is required.")
             else:
-                with st.spinner("Uploading photos and calculating compliance score..."):
+                with st.spinner("Uploading photos and compiling official audit report..."):
                     photo_urls = []
                     if audit_photos:
                         for idx, photo_file in enumerate(audit_photos):
@@ -551,7 +569,7 @@ with tab_supply:
 
                     final_percentage = (earned_points / max_points) * 100
 
-                    # Determine Official Grade
+                    # Determine Official Grade[cite: 2]
                     if has_star_failure or final_percentage < 45:
                         grade = "Non Compliance"
                         status_result = "Failed"
@@ -571,7 +589,7 @@ with tab_supply:
                         "category": "General Manufacturing",
                         "score": f"{final_percentage:.1f}% ({earned_points}/{max_points} - Grade: {grade})",
                         "status": status_result,
-                        "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Remarks: {audit_remarks}",
+                        "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Date: {audit_date.strftime('%d-%b-%Y')} | Remarks: {audit_remarks}",
                         "audit_month": selected_month,
                         "proof_url": final_proof_url
                     }
@@ -580,9 +598,9 @@ with tab_supply:
                         if supabase is not None:
                             supabase.table("vendor_audits").insert(payload).execute()
                         
-                        # Generate itemized PDF report and store in session state for instant download
+                        # Generate itemized PDF report with embedded photos
                         pdf_report_bytes = generate_detailed_checklist_pdf(
-                            audit_vendor_name, audit_fso, audit_lic_no, audit_address, 
+                            audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date,
                             audit_responses, final_percentage, grade, audit_remarks, final_proof_url
                         )
                         st.session_state['latest_generated_audit_pdf'] = {
