@@ -154,6 +154,7 @@ tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_admin 
     "📑 Reports & Archive",
     "⚙️ System Administration"
 ])
+
 # ==========================================
 # TAB 1: EXECUTIVE DASHBOARD
 # ==========================================
@@ -257,29 +258,87 @@ with tab_ops:
                     "nsf_score": current_data['nsf_score'], "self_audit_done": self_audit_choice,
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
+                st.success("Successfully recorded operations data!")
 
-            st.success("Successfully recorded operations data!")
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Edit Support)
+# TAB 3: VENDOR & SUPPLY CHAIN (Management View First)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
     
-    # 1. DISPLAY EXISTING RECORDED AUDITS & EDIT OPTION
+    # 1. DISPLAY RECORDED AUDITS ON TOP (Management View)
     if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
         month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
         if not month_vendors.empty:
             st.markdown("### 📋 Recorded Vendor Audits")
+            for _, row in month_vendors.iterrows():
+                with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
+                    st.write(f"**Category:** {row.get('category', 'N/A')}")
+                    st.write(f"**Remark:** {row.get('remark', 'None')}")
+                    
+                    proof = row.get('proof_url')
+                    if proof and isinstance(proof, str):
+                        if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
+                            st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
+                    else:
+                        st.warning("⚠️ No document or proof link attached to this record.")
+        else:
+            st.info(f"No vendor audits recorded for {selected_month} yet.")
+    else:
+        st.info("No vendor audit records found in the database.")
+
+    st.markdown("---")
+    
+    # 2. DATA ENTRY & EDIT MOVED TO THE BOTTOM
+    st.markdown("### 🛠️ Vendor Record Management (Admin)")
+    
+    with st.expander("➕ Add New Vendor Audit"):
+        with st.form("vendor_form"):
+            col_v1, col_v2, col_v3 = st.columns(3)
+            with col_v1: 
+                v_name = st.text_input("Vendor Name")
+            with col_v2: 
+                v_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"])
+                v_score = st.text_input("Score / %")
+            with col_v3: 
+                v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
+                
+            v_remark = st.text_input("Remark")
+            onedrive_link = st.text_input("Paste MS OneDrive Shareable Link (Optional)")
             
-            # --- EDIT EXISTING VENDOR AUDIT ---
-            with st.expander("✏️ Edit an Existing Vendor Audit Record", expanded=False):
-                # Create a selector based on vendor name and ID/index
+            if st.form_submit_button("Add Vendor Audit") and v_name:
+                if supabase is None:
+                    st.error("❌ Database connection is inactive.")
+                else:
+                    try:
+                        payload = {
+                            "vendor_name": v_name,
+                            "category": v_cat,
+                            "score": v_score,
+                            "status": v_status,
+                            "remark": v_remark,
+                            "audit_month": selected_month,
+                            "proof_url": onedrive_link if onedrive_link else None
+                        }
+                        supabase.table("vendor_audits").insert(payload).execute()
+                        st.success("✅ Vendor audit saved permanently!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Failed to save: {e}")
+
+    if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
+        month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
+        if not month_vendors.empty:
+            with st.expander("✏️ Edit an Existing Vendor Audit Record"):
                 vendor_options = {f"{row['vendor_name']} ({row.get('category', 'General')})": row for _, row in month_vendors.iterrows()}
                 selected_to_edit = st.selectbox("Select Vendor to Modify", options=list(vendor_options.keys()))
                 
                 if selected_to_edit:
                     target_row = vendor_options[selected_to_edit]
-                    record_id = target_row.get('id') # Requires an 'id' primary key in Supabase
+                    record_id = target_row.get('id')
                     
                     with st.form(f"edit_vendor_form_{record_id}"):
                         e_name = st.text_input("Vendor Name", value=str(target_row.get('vendor_name', '')))
@@ -306,7 +365,6 @@ with tab_supply:
                                         "remark": e_remark,
                                         "proof_url": e_proof if e_proof else None
                                     }
-                                    # Target the exact row by its unique ID in Supabase
                                     supabase.table("vendor_audits").update(update_payload).eq("id", record_id).execute()
                                     st.success("✅ Vendor audit updated successfully!")
                                     st.cache_data.clear()
@@ -314,65 +372,6 @@ with tab_supply:
                                 except Exception as e:
                                     st.error(f"❌ Update failed: {e}")
 
-            st.markdown("---")
-            
-            # Display current records
-            for _, row in month_vendors.iterrows():
-                with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
-                    st.write(f"**Category:** {row.get('category', 'N/A')}")
-                    st.write(f"**Remark:** {row.get('remark', 'None')}")
-                    
-                    proof = row.get('proof_url')
-                    if proof and isinstance(proof, str):
-                        if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
-                            st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
-                    else:
-                        st.warning("⚠️ No document or proof link attached to this record.")
-        else:
-            st.info(f"No vendor audits recorded for {selected_month} yet.")
-    else:
-        st.info("No vendor audit records found in the database.")
-
-    st.markdown("---")
-    
-    # 2. DATA ENTRY FORM FOR NEW AUDITS
-    st.markdown("### ➕ Add New Vendor Audit")
-    with st.form("vendor_form"):
-        col_v1, col_v2, col_v3 = st.columns(3)
-        with col_v1: 
-            v_name = st.text_input("Vendor Name")
-        with col_v2: 
-            v_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"])
-            v_score = st.text_input("Score / %")
-        with col_v3: 
-            v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
-            
-        v_remark = st.text_input("Remark")
-        onedrive_link = st.text_input("Paste MS OneDrive Shareable Link (Optional)")
-        
-        if st.form_submit_button("Add Vendor Audit") and v_name:
-            if supabase is None:
-                st.error("❌ Database connection is inactive.")
-            else:
-                try:
-                    payload = {
-                        "vendor_name": v_name,
-                        "category": v_cat,
-                        "score": v_score,
-                        "status": v_status,
-                        "remark": v_remark,
-                        "audit_month": selected_month,
-                        "proof_url": onedrive_link if onedrive_link else None
-                    }
-                    
-                    supabase.table("vendor_audits").insert(payload).execute()
-                    st.success("✅ Vendor audit saved permanently!")
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Failed to save: {e}")
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
@@ -396,9 +395,9 @@ with tab_lic_summary:
         st.dataframe(df_lic_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 6: NSF AUDIT INTELLIGENCE
+# TAB 5: NSF AUDIT INTELLIGENCE (Fixed Tab Variable)
 # ==========================================
-with tab_subfranchise:
+with tab_nsf:
     st.subheader(f"📈 NSF Audit Intelligence (Cloud Database)")
     st.markdown("Real-time live NSF audits for Sub Franchise outlets pulled from Supabase.")
     
@@ -435,12 +434,12 @@ with tab_subfranchise:
         st.info("No Sub Franchise data available. Please upload a PDF using the uploader tool below.")
 
 # ==========================================
-# TAB 7: REPORTS & ARCHIVE
+# TAB 6: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
     st.subheader(f"📑 PDF Report Generation")
     
-    def generate_pdf(month_str, records, vendors, calendar_entries):
+    def generate_pdf(month_str, records, vendors):
         if FPDF is None: return None
         pdf = FPDF()
         pdf.add_page()
@@ -449,7 +448,7 @@ with tab_reports:
         return pdf.output(dest='S').encode('latin-1')
 
     if st.button("Generate Basic PDF Report", type="primary"):
-        pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []), st.session_state['qa_calendar_db'].get(selected_month, []))
+        pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []))
         if pdf_bytes:
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
             st.success("PDF generated!")
@@ -460,7 +459,7 @@ with tab_reports:
         st.download_button(label=f"📥 Download PDF", data=st.session_state['pdf_archive'][selected_month], file_name=f"QA_{selected_month}.pdf", mime="application/pdf")
 
 # ==========================================
-# TAB 8: SYSTEM ADMINISTRATION
+# TAB 7: SYSTEM ADMINISTRATION
 # ==========================================
 with tab_admin:
     st.subheader("⚙️ Store Portfolio & System Administration")
