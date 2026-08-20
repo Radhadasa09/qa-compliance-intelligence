@@ -477,12 +477,12 @@ with tab_reports:
         
         # Document Title
         pdf.set_font("Arial", size=14, style='B')
-        pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=True, align='C')
-        pdf.ln(5) # Add a line break
+        pdf.cell(200, 10, txt=f"QA & Compliance Report - {month_str}", ln=1, align='C')
+        pdf.ln(5)
         
-        # Store Compliance Data Section
+        # 1. Store Compliance Section
         pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 10, txt="Store Network Compliance Status", ln=True, align='L')
+        pdf.cell(200, 10, txt="Store Network Compliance Status", ln=1, align='L')
         
         pdf.set_font("Arial", size=10)
         if records:
@@ -492,12 +492,28 @@ with tab_reports:
                 med = record.get('medical_pending', 0)
                 is_comp = "Yes" if record.get('is_compliant') else "No"
                 
-                # Format the data row
-                row_text = f"Store: {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical Pending: {med}"
-                pdf.cell(200, 8, txt=row_text, ln=True, align='L')
+                row_text = f"- {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
+                pdf.cell(200, 8, txt=row_text, ln=1, align='L')
         else:
-            pdf.cell(200, 8, txt="No store data available.", ln=True, align='L')
+            pdf.cell(200, 8, txt="No store data available.", ln=1, align='L')
             
+        pdf.ln(5)
+        
+        # 2. Vendor Audits Section
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 10, txt="Vendor Operations & Supply Chain", ln=1, align='L')
+        
+        pdf.set_font("Arial", size=10)
+        if vendors:
+            for v in vendors:
+                v_name = v.get('vendor', 'Unknown')
+                v_score = v.get('score', 'N/A')
+                v_status = v.get('status', 'N/A')
+                v_text = f"- {v_name} | Status: {v_status} | Score: {v_score}"
+                pdf.cell(200, 8, txt=v_text, ln=1, align='L')
+        else:
+            pdf.cell(200, 8, txt="- No vendor audits recorded for this period.", ln=1, align='L')
+
         try:
             # Modern fpdf2 approach (Streamlit Cloud default)
             return bytes(pdf.output())
@@ -506,11 +522,14 @@ with tab_reports:
             return pdf.output(dest='S').encode('latin-1')
 
     if st.button("Generate Basic PDF Report", type="primary"):
-        # Pass the monthly_records list into the generator
-        pdf_bytes = generate_pdf(selected_month, monthly_records, st.session_state['vendor_db'].get(selected_month, []))
+        # Fetch vendor data dynamically for the report
+        vendor_data = st.session_state.get('vendor_db', {}).get(selected_month, [])
+        
+        pdf_bytes = generate_pdf(selected_month, monthly_records, vendor_data)
         if pdf_bytes:
+            # This overwrites the old blank PDF in memory
             st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("PDF generated successfully!")
+            st.success("✅ New PDF generated successfully! You can now download it.")
         else:
             st.error("FPDF library missing.")
             
@@ -521,6 +540,7 @@ with tab_reports:
             file_name=f"QA_Compliance_Report_{selected_month}.pdf", 
             mime="application/pdf"
         )
+
 # ==========================================
 # TAB 7: SYSTEM ADMINISTRATION
 # ==========================================
