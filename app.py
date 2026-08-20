@@ -46,6 +46,8 @@ def load_nsf_audits():
 df_db = load_nsf_audits()
 @st.cache_data(ttl=60)
 def load_vendor_audits():
+    # Fetch live vendor data from Supabase globally
+df_vendors_live = load_vendor_audits()
     if supabase is None:
         return pd.DataFrame()
     try:
