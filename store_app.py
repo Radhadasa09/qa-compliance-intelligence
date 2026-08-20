@@ -111,7 +111,7 @@ def store_dashboard():
         "🗑️ Wastage"
     ])
     
-    # --- TAB 1: DAILY FSSAI & NSF CHECKLIST (LIVE) ---
+ # --- TAB 1: DAILY FSSAI & NSF CHECKLIST (LIVE) ---
     with tab1:
         st.subheader("FSSAI & NSF Shift Checklist")
         st.caption("All metrics must pass for audit readiness.")
@@ -124,7 +124,10 @@ def store_dashboard():
             c_fssai = st.checkbox("FSSAI License & Display Board prominently visible")
             c_med = st.checkbox("Current medical certificates available on-site for all team members")
             c_water = st.checkbox("IS-10500:2012 Water Analysis report on file")
-            proof_a = st.camera_input("Proof: Documents / Board", key="cam_a")
+            
+            # Clean Toggle for Camera Proof
+            with st.expander("📸 Attach Proof: Documents / Board (Optional/Required)"):
+                proof_a = st.camera_input("Capture Admin Proof", key="cam_a")
             
             st.markdown("### B. Team Hygiene")
             c_soap = st.checkbox("Handwash sinks fully stocked with paper towels & soap")
@@ -132,7 +135,9 @@ def store_dashboard():
             c_uni = st.checkbox("Staff in clean, approved uniforms with aprons tied")
             c_jewel = st.checkbox("Zero Jewellery policy strictly enforced")
             c_glove = st.checkbox("Gloves and bright bandages stocked and used")
-            proof_b = st.camera_input("Proof: Handwash Station", key="cam_b")
+            
+            with st.expander("📸 Attach Proof: Handwash Station"):
+                proof_b = st.camera_input("Capture Hygiene Proof", key="cam_b")
             
             st.markdown("### C. Sanitation")
             c_sink = st.checkbox("3-Compartment sink set up correctly")
@@ -141,7 +146,9 @@ def store_dashboard():
             c_mop = st.checkbox("Mops stored clean and elevated")
             c_trash = st.checkbox("Trash bins covered and foot-operated")
             c_chem = st.checkbox("Chemical spray bottles clearly labeled")
-            proof_c = st.camera_input("Proof: Sanitizer Test Strip", key="cam_c")
+            
+            with st.expander("📸 Attach Proof: Sanitizer Test Strip"):
+                proof_c = st.camera_input("Capture Sanitation Proof", key="cam_c")
             
             st.markdown("### D. Product & Equipment")
             c_cold = st.checkbox("Cold holding maintained < 5°C / 41°F")
@@ -150,14 +157,18 @@ def store_dashboard():
             c_ice = st.checkbox("Ice machine 100% mold-free")
             c_tool = st.checkbox("Thermometers calibrated & scoops available")
             c_esp = st.checkbox("Espresso calibrated 18-26s (14g dose)")
-            proof_d = st.camera_input("Proof: MRD Labels", key="cam_d")
+            
+            with st.expander("📸 Attach Proof: MRD Labels"):
+                proof_d = st.camera_input("Capture Product Proof", key="cam_d")
             
             st.markdown("### E. Facility Integrity")
             c_pest = st.checkbox("Zero pests; fly catchers ON")
             c_gask = st.checkbox("Refrigeration gaskets clean/untorn")
             c_drain = st.checkbox("Drains unclogged and odor-free")
             c_struct = st.checkbox("No structural seepage or peeling paint")
-            proof_e = st.camera_input("Proof: Clean Gaskets", key="cam_e")
+            
+            with st.expander("📸 Attach Proof: Clean Gaskets"):
+                proof_e = st.camera_input("Capture Facility Proof", key="cam_e")
             
             st.markdown("---")
             if st.form_submit_button("Submit Daily Audit"):
@@ -187,7 +198,6 @@ def store_dashboard():
                             st.balloons()
                         except Exception as e:
                             st.error(f"Database error: {e}")
-
     with tab2:
         st.subheader("Receive Warehouse Delivery")
         st.info("Inventory DB connection pending. UI preserved.")
