@@ -39,7 +39,6 @@ if "store_id" not in st.session_state:
     st.session_state["store_id"] = ""
 if "store_name" not in st.session_state:
     st.session_state["store_name"] = ""
-
 # --- LOGIN SCREEN ---
 def login_screen():
     st.title("☕ CBTL Store Login")
@@ -48,6 +47,11 @@ def login_screen():
     try:
         # Fetch live stores and PINs from Supabase
         response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
+        
+        if not response.data:
+            st.warning("⚠️ Connected to database, but no stores found. Please check Supabase table.")
+            return
+
         store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
         
         with st.form("login_form"):
@@ -70,7 +74,6 @@ def login_screen():
                     
     except Exception as e:
         st.error(f"Database connection error: {e}")
-
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     st.header(f"{st.session_state['store_name']}")
