@@ -30,18 +30,20 @@ try:
     supabase: Client = create_client(URL, KEY)
 except Exception as e:
     supabase = None
+
 # Fetch daily operational shift checklists submitted by stores
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_daily_audits():
     if supabase is None:
         return pd.DataFrame()
     try:
-        response = supabase.table("daily_audits").select("*").execute()
+        response = supabase.table("daily_audits").select("*").order("id", desc=True).execute()
         return pd.DataFrame(response.data)
     except Exception:
         return pd.DataFrame()
 
 df_daily_live = load_daily_audits()
+
 # --- 2. DATA FETCHING (From Cloud) ---
 @st.cache_data(ttl=60)
 def load_nsf_audits():
@@ -53,8 +55,8 @@ def load_nsf_audits():
     except Exception:
         return pd.DataFrame()
 
-# Fetch live data from Supabase
 df_db = load_nsf_audits()
+
 @st.cache_data(ttl=60)
 def load_vendor_audits():
     if supabase is None:
@@ -65,7 +67,6 @@ def load_vendor_audits():
     except Exception:
         return pd.DataFrame()
 
-# Fetch live vendor data from Supabase globally (OUTSIDE the function)
 df_vendors_live = load_vendor_audits()
 
 # Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
@@ -207,10 +208,32 @@ with tab_exec:
         st.dataframe(table_view, use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 2: RETAIL OPERATIONS (Data Entry)
+# TAB 2: RETAIL OPERATIONS (Data Entry & Live Logs)
 # ==========================================
 with tab_ops:
-    st.subheader("Update Store-Level Compliance & Licenses")
+    st.subheader("🏬 Retail Operations & Compliance Status")
+    
+    # --- 1. LIVE DAILY SHIFT CHECKLISTS ---
+    st.markdown("### 📋 Live Daily Shift Submissions")
+    if not df_daily_live.empty:
+        # Select the most important columns to show management
+        cols_to_show = ['store_id', 'manager_name', 'shift']
+        if 'created_at' in df_daily_live.columns:
+            cols_to_show.append('created_at')
+            
+        display_df = df_daily_live[cols_to_show].copy()
+        
+        # Rename columns for a cleaner presentation
+        display_df.columns = [col.replace("_", " ").title() for col in display_df.columns]
+        
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No daily shift checklists submitted by store managers yet.")
+
+    st.markdown("---")
+
+    # --- 2. MONTHLY COMPLIANCE TRACKER ---
+    st.markdown("### ⚙️ Update Store-Level Monthly Compliance & Licenses")
     if not df_stores.empty:
         store_names = df_stores['name'].tolist()
         selected_store = st.selectbox("Select Store", store_names, key=f"ops_store_{selected_month}")
@@ -272,12 +295,11 @@ with tab_ops:
                 st.success("Successfully recorded operations data!")
 
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (Management View First)
+# TAB 3: VENDOR & SUPPLY CHAIN
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
     
-    # 1. DISPLAY RECORDED AUDITS ON TOP (Management View)
     if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
         month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
         if not month_vendors.empty:
@@ -302,7 +324,6 @@ with tab_supply:
 
     st.markdown("---")
     
-    # 2. DATA ENTRY & EDIT MOVED TO THE BOTTOM
     st.markdown("### 🛠️ Vendor Record Management (Admin)")
     
     with st.expander("➕ Add New Vendor Audit"):
@@ -406,7 +427,7 @@ with tab_lic_summary:
         st.dataframe(df_lic_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 5: NSF AUDIT INTELLIGENCE (Fixed Tab Variable)
+# TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
 with tab_nsf:
     st.subheader(f"📈 NSF Audit Intelligence (Cloud Database)")
