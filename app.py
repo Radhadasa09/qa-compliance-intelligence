@@ -285,32 +285,57 @@ with tab_ops:
                 st.success("Successfully recorded operations data!")
 
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN
+# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
-    current_vendors = st.session_state['vendor_db'].get(selected_month, [])
+    
+    # Fetch live vendor records from Supabase
+    df_vendors = load_vendor_audits()
     
     with st.form("vendor_form"):
         col_v1, col_v2, col_v3 = st.columns(3)
-        with col_v1: v_name = st.text_input("Vendor Name")
+        with col_v1: 
+            v_name = st.text_input("Vendor Name")
         with col_v2: 
             v_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"])
             v_score = st.text_input("Score / %")
-        with col_v3: v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
+        with col_v3: 
+            v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
         v_remark = st.text_input("Remark")
         
         if st.form_submit_button("Add Vendor Audit") and v_name:
-            if selected_month not in st.session_state['vendor_db']: st.session_state['vendor_db'][selected_month] = []
-            st.session_state['vendor_db'][selected_month].append({
-                "vendor": v_name, "category": v_cat, "score": v_score, "status": v_status, "remark": v_remark
-            })
-            st.success("Vendor added!")
-            st.rerun()
+            if supabase is None:
+                st.error("❌ Database connection is inactive.")
+            else:
+                try:
+                    payload = {
+                        "vendor_name": v_name,
+                        "category": v_cat,
+                        "score": v_score,
+                        "status": v_status,
+                        "remark": v_remark,
+                        "audit_month": selected_month
+                    }
+                    supabase.table("vendor_audits").insert(payload).execute()
+                    st.success("✅ Vendor audit saved permanently to Supabase!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to save: {e}")
             
-    if current_vendors:
-        st.dataframe(pd.DataFrame(current_vendors), use_container_width=True, hide_index=True)
-
+    # Filter and display vendor records for the active month
+    if not df_vendors.empty and 'audit_month' in df_vendors.columns:
+        month_vendors = df_vendors[df_vendors['audit_month'] == selected_month]
+        if not month_vendors.empty:
+            # Clean up display columns
+            display_vendors = month_vendors[['vendor_name', 'category', 'score', 'status', 'remark']].copy()
+            display_vendors.columns = ["Vendor Name", "Category", "Score / %", "Status", "Remark"]
+            st.dataframe(display_vendors, use_container_width=True, hide_index=True)
+        else:
+            st.info(f"No vendor audits recorded for {selected_month} yet.")
+    else:
+        st.info("No vendor audit records found in the database.")
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
