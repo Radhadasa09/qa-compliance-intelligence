@@ -283,9 +283,8 @@ with tab_ops:
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
                 st.success("Successfully recorded operations data!")
-
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent)
+# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Proofs)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
@@ -302,23 +301,46 @@ with tab_supply:
             v_score = st.text_input("Score / %")
         with col_v3: 
             v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
+            
         v_remark = st.text_input("Remark")
+        
+        # --- DOCUMENTATION & PROOF OPTIONS ---
+        st.markdown("#### 📎 Audit Documentation / Report Proof")
+        doc_option = st.radio("Choose proof method:", ["None", "Upload Audit Document / PDF", "Microsoft OneDrive Link"], horizontal=True)
+        
+        onedrive_link = ""
+        uploaded_doc = None
+        
+        if doc_option == "Upload Audit Document / PDF":
+            uploaded_doc = st.file_uploader("Upload Report File (PDF/Image)", type=["pdf", "png", "jpg", "jpeg"])
+        elif doc_option == "Microsoft OneDrive Link":
+            onedrive_link = st.text_input("Paste MS OneDrive Shareable Link")
         
         if st.form_submit_button("Add Vendor Audit") and v_name:
             if supabase is None:
                 st.error("❌ Database connection is inactive.")
             else:
                 try:
+                    # Handle Cloudinary upload if a file was attached
+                    proof_url = None
+                    if uploaded_doc and 'cloudinary' in globals():
+                        res = cloudinary.uploader.upload(uploaded_doc, folder=f"cbtl/vendors/{v_name.replace(' ', '_')}")
+                        proof_url = res.get("secure_url")
+                    elif onedrive_link:
+                        proof_url = onedrive_link
+
                     payload = {
                         "vendor_name": v_name,
                         "category": v_cat,
                         "score": v_score,
                         "status": v_status,
                         "remark": v_remark,
-                        "audit_month": selected_month
+                        "audit_month": selected_month,
+                        "proof_url": proof_url  # Stores either the Cloudinary file URL or OneDrive link
                     }
+                    
                     supabase.table("vendor_audits").insert(payload).execute()
-                    st.success("✅ Vendor audit saved permanently to Supabase!")
+                    st.success("✅ Vendor audit and documentation saved permanently!")
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
@@ -328,10 +350,18 @@ with tab_supply:
     if not df_vendors.empty and 'audit_month' in df_vendors.columns:
         month_vendors = df_vendors[df_vendors['audit_month'] == selected_month]
         if not month_vendors.empty:
-            # Clean up display columns
-            display_vendors = month_vendors[['vendor_name', 'category', 'score', 'status', 'remark']].copy()
-            display_vendors.columns = ["Vendor Name", "Category", "Score / %", "Status", "Remark"]
-            st.dataframe(display_vendors, use_container_width=True, hide_index=True)
+            st.markdown("### 📋 Recorded Vendor Audits")
+            for _, row in month_vendors.iterrows():
+                with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
+                    st.write(f"**Category:** {row.get('category', 'N/A')}")
+                    st.write(f"**Remark:** {row.get('remark', 'None')}")
+                    
+                    proof = row.get('proof_url')
+                    if proof:
+                        if "onedrive" in proof.lower() or "sharepoint" in proof.lower() or "http" in proof:
+                            st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
         else:
             st.info(f"No vendor audits recorded for {selected_month} yet.")
     else:
