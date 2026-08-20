@@ -15,6 +15,32 @@ hide_streamlit_style = """
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="CBTL Store Operations", page_layout="centered", initial_sidebar_state="collapsed")
+
+# --- HIDE STREAMLIT BRANDING & APPLY QA HEADER STYLING ---
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .block-container {padding-top: 2rem; padding-bottom: 2rem;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# --- PROFESSIONAL CORPORATE BANNER ---
+st.markdown(
+    """
+    <div style="background-color: #1a1a1a; padding: 18px; border-radius: 8px; text-align: center; border: 1px solid #333; margin-bottom: 25px;">
+        <h2 style="color: #ffffff; margin: 0; font-family: sans-serif; font-size: 22px;">☕ The Coffee Bean & Tea Leaf (CBTL) India</h2>
+        <p style="color: #b0b0b0; margin: 6px 0 0 0; font-size: 13px; font-weight: 500; letter-spacing: 0.5px;">
+            EKAAGRA OSTALARITZA PRIVATE LIMITED &bull; QA & COMPLIANCE VAULT
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # --- INITIALIZATION (DB & CLOUD) ---
 @st.cache_resource
 def init_supabase() -> Client:
