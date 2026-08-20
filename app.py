@@ -293,9 +293,6 @@ with tab_ops:
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
     
-    # Fetch live vendor records from Supabase
-    df_vendors = load_vendor_audits()
-    
     with st.form("vendor_form"):
         col_v1, col_v2, col_v3 = st.columns(3)
         with col_v1: 
@@ -325,7 +322,6 @@ with tab_supply:
                 st.error("❌ Database connection is inactive.")
             else:
                 try:
-                    # Handle Cloudinary upload if a file was attached
                     proof_url = None
                     if uploaded_doc and 'cloudinary' in globals():
                         res = cloudinary.uploader.upload(uploaded_doc, folder=f"cbtl/vendors/{v_name.replace(' ', '_')}")
@@ -340,7 +336,7 @@ with tab_supply:
                         "status": v_status,
                         "remark": v_remark,
                         "audit_month": selected_month,
-                        "proof_url": proof_url  # Stores either the Cloudinary file URL or OneDrive link
+                        "proof_url": proof_url
                     }
                     
                     supabase.table("vendor_audits").insert(payload).execute()
@@ -350,9 +346,9 @@ with tab_supply:
                 except Exception as e:
                     st.error(f"❌ Failed to save: {e}")
             
-    # Filter and display vendor records for the active month
-    if not df_vendors.empty and 'audit_month' in df_vendors.columns:
-        month_vendors = df_vendors[df_vendors['audit_month'] == selected_month]
+    # Filter and display vendor records from the live cloud dataframe
+    if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
+        month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
         if not month_vendors.empty:
             st.markdown("### 📋 Recorded Vendor Audits")
             for _, row in month_vendors.iterrows():
