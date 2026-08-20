@@ -44,7 +44,15 @@ def load_nsf_audits():
 
 # Fetch live data from Supabase
 df_db = load_nsf_audits()
-
+@st.cache_data(ttl=60)
+def load_vendor_audits():
+    if supabase is None:
+        return pd.DataFrame()
+    try:
+        response = supabase.table("vendor_audits").select("*").execute()
+        return pd.DataFrame(response.data)
+    except Exception:
+        return pd.DataFrame()
 # Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
 if not df_db.empty and 'site_code' in df_db.columns:
     df_db['site_code'] = df_db['site_code'].astype(str)
