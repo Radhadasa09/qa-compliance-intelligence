@@ -293,9 +293,8 @@ with tab_ops:
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
                 st.success("Successfully recorded operations data!")
-
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (With Point-by-Point Photos & Scoring)
+# TAB 3: VENDOR & SUPPLY CHAIN (Multi-Photo & Auto-Scoring)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
@@ -312,10 +311,12 @@ with tab_supply:
                     
                     proof = row.get('proof_url')
                     if proof and isinstance(proof, str):
-                        if "http" in proof:
-                            st.markdown(f"🔗 [Open Documentation / Photo Proof]({proof})", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"📄 [View Proof]({proof})", unsafe_allow_html=True)
+                        urls = [u.strip() for u in proof.split(",")]
+                        for idx, u in enumerate(urls):
+                            if "http" in u:
+                                st.markdown(f"🔗 [Open Photo Proof {idx+1}]({u})", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"📄 [View Proof {idx+1}]({u})", unsafe_allow_html=True)
         else:
             st.info(f"No vendor audits recorded for {selected_month} yet.")
     else:
@@ -323,9 +324,9 @@ with tab_supply:
 
     st.markdown("---")
     
-    # 2. INTERACTIVE GENERAL MANUFACTURING VENDOR AUDIT TOOL WITH PHOTO PROOFS
+    # 2. INTERACTIVE GENERAL MANUFACTURING VENDOR AUDIT TOOL
     st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
-    st.caption("Evaluate vendors across the 40-point checklist[cite: 2], upload point-specific photo evidence, and calculate final scores automatically.")
+    st.caption("Evaluate vendors across the 40-point checklist, attach multiple photo proofs, and calculate final scores automatically[cite: 2].")
     
     with st.form("manufacturing_audit_form"):
         col_v1, col_v2 = st.columns(2)
@@ -338,7 +339,6 @@ with tab_supply:
             
         st.markdown("---")
         
-        # Helper dictionary to capture selections and photos
         audit_responses = {}
         
         st.markdown("#### 1. Design & Facilities (Q1 - Q12)")
@@ -356,7 +356,6 @@ with tab_supply:
             ("Q11: Adequate storage facility for food, chemicals, packaging", 2, False),
             ("Q12: Personnel hygiene facilities (toilets, handwash) available", 2, False)
         ]
-        
         for q_text, points, is_star in design_questions:
             label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
             status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"des_{q_text}")
@@ -424,7 +423,11 @@ with tab_supply:
 
         st.markdown("---")
         st.markdown("#### 📸 Audit Evidence & Photo Documentation")
-        audit_photo = st.file_uploader("Upload Audit Inspection Photo / Corrective Action Proof", type=["jpg", "png", "jpeg"])
+        audit_photos = st.file_uploader(
+            "Upload Inspection Snaps (Select multiple files if needed)", 
+            type=["jpg", "png", "jpeg"], 
+            accept_multiple_files=True
+        )
         
         audit_remarks = st.text_area("Overall Audit Remarks / Corrective Actions Required")
 
@@ -432,13 +435,17 @@ with tab_supply:
             if not audit_vendor_name:
                 st.error("❌ Vendor Name is required.")
             else:
-                with st.spinner("Uploading evidence and calculating final compliance score..."):
-                    # Handle Cloudinary photo upload if attached
-                    photo_url = None
-                    if audit_photo:
-                        photo_url = upload_photo(audit_photo, "vendor_audits", audit_vendor_name.replace(" ", "_"))
+                with st.spinner("Uploading photos and calculating compliance score..."):
+                    photo_urls = []
+                    if audit_photos:
+                        for idx, photo_file in enumerate(audit_photos):
+                            url = upload_photo(photo_file, "vendor_audits", f"{audit_vendor_name.replace(' ', '_')}_{idx+1}")
+                            if url:
+                                photo_urls.append(url)
+                    
+                    final_proof_url = ", ".join(photo_urls) if photo_urls else None
 
-                    # Automatic Scoring Engine
+                    # Automatic Scoring Engine (Out of 90 total points)
                     earned_points = 0
                     max_points = 90
                     has_star_failure = False
@@ -479,13 +486,13 @@ with tab_supply:
                         "status": status_result,
                         "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Remarks: {audit_remarks}",
                         "audit_month": selected_month,
-                        "proof_url": photo_url if photo_url else None
+                        "proof_url": final_proof_url
                     }
                     
                     try:
                         if supabase is not None:
                             supabase.table("vendor_audits").insert(payload).execute()
-                        st.success(f"✅ Audit Completed Successfully! Score: {final_percentage:.1f}% | Grade: {grade}")
+                        st.success(f"✅ Audit Completed! Score: {final_percentage:.1f}% | Grade: {grade}")
                         st.balloons()
                         st.cache_data.clear()
                         st.rerun()
