@@ -289,16 +289,63 @@ with tab_ops:
 
             st.success("Successfully recorded operations data!")
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Proofs)
+# TAB 3: VENDOR & SUPPLY CHAIN (Cloud Permanent + Edit Support)
 # ==========================================
 with tab_supply:
     st.subheader(f"Vendor Audit Performance — {selected_month}")
     
-    # 1. DISPLAY EXISTING RECORDED AUDITS AT THE TOP
+    # 1. DISPLAY EXISTING RECORDED AUDITS & EDIT OPTION
     if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
         month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
         if not month_vendors.empty:
             st.markdown("### 📋 Recorded Vendor Audits")
+            
+            # --- EDIT EXISTING VENDOR AUDIT ---
+            with st.expander("✏️ Edit an Existing Vendor Audit Record", expanded=False):
+                # Create a selector based on vendor name and ID/index
+                vendor_options = {f"{row['vendor_name']} ({row.get('category', 'General')})": row for _, row in month_vendors.iterrows()}
+                selected_to_edit = st.selectbox("Select Vendor to Modify", options=list(vendor_options.keys()))
+                
+                if selected_to_edit:
+                    target_row = vendor_options[selected_to_edit]
+                    record_id = target_row.get('id') # Requires an 'id' primary key in Supabase
+                    
+                    with st.form(f"edit_vendor_form_{record_id}"):
+                        e_name = st.text_input("Vendor Name", value=str(target_row.get('vendor_name', '')))
+                        e_cat = st.selectbox("Category", ["Pest Control", "Supply Chain", "Packaging", "Chemicals"], index=["Pest Control", "Supply Chain", "Packaging", "Chemicals"].index(target_row.get('category', 'Pest Control')) if target_row.get('category') in ["Pest Control", "Supply Chain", "Packaging", "Chemicals"] else 0)
+                        e_score = st.text_input("Score / %", value=str(target_row.get('score', '')))
+                        
+                        status_list = ["Passed", "Conditionally Approved", "Failed"]
+                        curr_status = target_row.get('status', 'Passed')
+                        e_status = st.selectbox("Status", status_list, index=status_list.index(curr_status) if curr_status in status_list else 0)
+                        
+                        e_remark = st.text_input("Remark", value=str(target_row.get('remark', '')))
+                        e_proof = st.text_input("OneDrive Link / Proof URL", value=str(target_row.get('proof_url', '') if target_row.get('proof_url') else ''))
+                        
+                        if st.form_submit_button("Update Vendor Record", type="primary"):
+                            if supabase is None:
+                                st.error("❌ Database connection is inactive.")
+                            else:
+                                try:
+                                    update_payload = {
+                                        "vendor_name": e_name,
+                                        "category": e_cat,
+                                        "score": e_score,
+                                        "status": e_status,
+                                        "remark": e_remark,
+                                        "proof_url": e_proof if e_proof else None
+                                    }
+                                    # Target the exact row by its unique ID in Supabase
+                                    supabase.table("vendor_audits").update(update_payload).eq("id", record_id).execute()
+                                    st.success("✅ Vendor audit updated successfully!")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Update failed: {e}")
+
+            st.markdown("---")
+            
+            # Display current records
             for _, row in month_vendors.iterrows():
                 with st.expander(f"🏢 {row['vendor_name']} — Status: {row['status']} (Score: {row['score']})"):
                     st.write(f"**Category:** {row.get('category', 'N/A')}")
@@ -310,6 +357,8 @@ with tab_supply:
                             st.markdown(f"🔗 [Open Documentation Link]({proof})", unsafe_allow_html=True)
                         else:
                             st.markdown(f"📄 [View Uploaded Audit Report]({proof})", unsafe_allow_html=True)
+                    else:
+                        st.warning("⚠️ No document or proof link attached to this record.")
         else:
             st.info(f"No vendor audits recorded for {selected_month} yet.")
     else:
@@ -317,7 +366,7 @@ with tab_supply:
 
     st.markdown("---")
     
-    # 2. DATA ENTRY FORM BELOW THE SUMMARY
+    # 2. DATA ENTRY FORM FOR NEW AUDITS
     st.markdown("### ➕ Add New Vendor Audit")
     with st.form("vendor_form"):
         col_v1, col_v2, col_v3 = st.columns(3)
@@ -330,31 +379,13 @@ with tab_supply:
             v_status = st.selectbox("Status", ["Passed", "Conditionally Approved", "Failed"])
             
         v_remark = st.text_input("Remark")
-        
-        # --- DOCUMENTATION & PROOF OPTIONS ---
-        st.markdown("#### 📎 Audit Documentation / Report Proof")
-        doc_option = st.radio("Choose proof method:", ["None", "Upload Audit Document / PDF", "Microsoft OneDrive Link"], horizontal=True)
-        
-        onedrive_link = ""
-        uploaded_doc = None
-        
-        if doc_option == "Upload Audit Document / PDF":
-            uploaded_doc = st.file_uploader("Upload Report File (PDF/Image)", type=["pdf", "png", "jpg", "jpeg"])
-        elif doc_option == "Microsoft OneDrive Link":
-            onedrive_link = st.text_input("Paste MS OneDrive Shareable Link")
+        onedrive_link = st.text_input("Paste MS OneDrive Shareable Link (Optional)")
         
         if st.form_submit_button("Add Vendor Audit") and v_name:
             if supabase is None:
                 st.error("❌ Database connection is inactive.")
             else:
                 try:
-                    proof_url = None
-                    if uploaded_doc and 'cloudinary' in globals():
-                        res = cloudinary.uploader.upload(uploaded_doc, folder=f"cbtl/vendors/{v_name.replace(' ', '_')}")
-                        proof_url = res.get("secure_url")
-                    elif onedrive_link:
-                        proof_url = onedrive_link
-
                     payload = {
                         "vendor_name": v_name,
                         "category": v_cat,
@@ -362,15 +393,15 @@ with tab_supply:
                         "status": v_status,
                         "remark": v_remark,
                         "audit_month": selected_month,
-                        "proof_url": proof_url
+                        "proof_url": onedrive_link if onedrive_link else None
                     }
                     
                     supabase.table("vendor_audits").insert(payload).execute()
-                    st.success("✅ Vendor audit and documentation saved permanently!")
+                    st.success("✅ Vendor audit saved permanently!")
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to save: {e}")            
+                    st.error(f"❌ Failed to save: {e}")
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
