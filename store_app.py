@@ -11,7 +11,65 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
     page_icon="☕"
 )
+import streamlit as st
+import cloudinary
+import cloudinary.uploader
 
+# --- SECURE CLOUDINARY INIT ---
+cloudinary.config(
+    cloud_name = st.secrets["cloudinary"]["cloud_name"],
+    api_key = st.secrets["cloudinary"]["api_key"],
+    api_secret = st.secrets["cloudinary"]["api_secret"],
+    secure = True
+)
+
+# --- MOBILE-FIRST CBTL CORPORATE UI THEME ---
+st.markdown("""
+    <style>
+        /* Main background */
+        .stApp {
+            background-color: #F5F7FA;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        /* Mobile-friendly large submit buttons */
+        .stButton>button {
+            width: 100%;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #003366; /* CBTL Navy */
+            color: white;
+            border: none;
+        }
+        .stButton>button:hover {
+            background-color: #002244;
+            color: white;
+        }
+        
+        /* Light Blue Informational Cards */
+        div[data-testid="stExpander"] {
+            background-color: #EAF2F8;
+            border-radius: 10px;
+            border: 1px solid #D6EAF8;
+            margin-bottom: 10px;
+        }
+        
+        /* Clean inputs for touch screens */
+        .stSelectbox, .stTextInput, .stNumberInput {
+            margin-bottom: 10px;
+        }
+        
+        /* File uploader mobile styling */
+        [data-testid="stFileUploadDropzone"] {
+            background-color: #ffffff;
+            border: 2px dashed #63B3ED;
+            border-radius: 10px;
+            padding: 20px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 # --- PREMIUM CBTL AESTHETICS & CSS ---
 premium_style = """
     <style>
