@@ -662,23 +662,27 @@ with tab_lic_summary:
     
     uploaded_file = st.file_uploader("Upload Master License Tracker Excel File", type=["xlsx", "xls"], key="cloud_license_uploader")
     
-    if uploaded_file is not None:
+if uploaded_file is not None:
         if st.button("🚀 Sync & Save Permanently to Cloud Database", type="primary"):
             with st.spinner("Uploading and syncing records to Supabase..."):
                 try:
                     df_upload = pd.read_excel(uploaded_file, sheet_name="Sheet1")
                     df_upload.columns = ['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']
+                    
+                    # Drop the header row if it's acting as a sub-header
                     df_upload = df_upload.iloc[1:].reset_index(drop=True)
                     
-                    # FIX: Convert all datetime / timestamp objects to standard strings so JSON serialization works
+                    # 1. Format dates nicely before stringifying
                     for col in ['fssai', 'trade', 'fire', 'pollution_cto', 'signage']:
                         if col in df_upload.columns:
-                            df_upload[col] = pd.to_datetime(df_upload[col], errors='ignore')
-                            # Format valid dates as strings, leave empty/text ones alone
-                            df_upload[col] = df_upload[col].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) and hasattr(x, 'strftime') else str(x) if pd.notna(x) else None)
+                            # Coerce turns weird data into NaT, then formats valid dates to YYYY-MM-DD
+                            df_upload[col] = pd.to_datetime(df_upload[col], errors='coerce').dt.strftime('%Y-%m-%d')
 
-                    # Clean NaN values to None for Supabase compatibility
-                    df_upload = df_upload.where(pd.notnull(df_upload), None)
+                    # 2. BULLETPROOFING: Convert entire dataframe to string (fixes int64/float64 JSON errors)
+                    df_upload = df_upload.astype(str)
+                    
+                    # 3. Replace all pandas stringified nulls with actual Python `None` so Supabase accepts them
+                    df_upload = df_upload.replace({'nan': None, 'NaT': None, 'None': None, '<NA>': None, '': None})
                     
                     if supabase is not None:
                         # Clear old table data first
