@@ -670,6 +670,13 @@ with tab_lic_summary:
                     df_upload.columns = ['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']
                     df_upload = df_upload.iloc[1:].reset_index(drop=True)
                     
+                    # FIX: Convert all datetime / timestamp objects to standard strings so JSON serialization works
+                    for col in ['fssai', 'trade', 'fire', 'pollution_cto', 'signage']:
+                        if col in df_upload.columns:
+                            df_upload[col] = pd.to_datetime(df_upload[col], errors='ignore')
+                            # Format valid dates as strings, leave empty/text ones alone
+                            df_upload[col] = df_upload[col].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notna(x) and hasattr(x, 'strftime') else str(x) if pd.notna(x) else None)
+
                     # Clean NaN values to None for Supabase compatibility
                     df_upload = df_upload.where(pd.notnull(df_upload), None)
                     
@@ -677,7 +684,7 @@ with tab_lic_summary:
                         # Clear old table data first
                         supabase.table("license_tracker").delete().neq("id", 0).execute()
                         
-                        # Insert new rows in chunks
+                        # Insert new rows
                         records = df_upload.to_dict(orient="records")
                         supabase.table("license_tracker").insert(records).execute()
                         
