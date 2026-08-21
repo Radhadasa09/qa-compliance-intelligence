@@ -39,7 +39,35 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-
+# --- MODERN EXECUTIVE UI THEME ---
+st.markdown("""
+    <style>
+        /* Modernize metric cards with subtle shadows and rounded corners */
+        [data-testid="stMetric"] {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 15px 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+        /* Style the tabs to look like polished software interface elements */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 6px 6px 0px 0px;
+            padding: 10px 20px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-bottom: none;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #ffffff;
+            border-top: 3px solid #2563eb !important;
+            font-weight: 600;
+        }
+    </style>
+""", unsafe_allow_html=True)
 # --- 1. SECURE DATABASE CONNECTION ---
 try:
     URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
