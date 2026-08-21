@@ -666,7 +666,7 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Executive Metrics + Store Cards + Uploader)
+# TAB 4: LICENSE SUMMARY (Executive Metrics + Expiry Bar Chart + Uploader)
 # ==========================================
 with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Executive Dashboard")
@@ -684,16 +684,60 @@ with tab_lic_summary:
         df_lic = df_lic.iloc[1:].reset_index(drop=True)
         
         # ------------------------------------------
-        # EXECUTIVE KPI METRICS (Top Summary Cards)
+        # EXPIRY & METRIC CALCULATIONS
         # ------------------------------------------
+        today = datetime.datetime.now()
+        three_months_later = today + datetime.timedelta(days=90)
+        
+        license_cols = ['FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage']
+        expiring_soon_count = 0
+        chart_data_rows = []
+        
+        for _, row in df_lic.iterrows():
+            loc = row['Location']
+            city = row['City']
+            active_licenses = 0
+            expiring_alert = False
+            
+            for col in license_cols:
+                val = row[col]
+                if pd.notna(val) and str(val).strip().lower() not in ['nan', 'nat', 'not started', 'under process', 'part of trade lic']:
+                    active_licenses += 1
+                    try:
+                        dt = pd.to_datetime(val)
+                        if today <= dt <= three_months_later:
+                            expiring_soon_count += 1
+                            expiring_alert = True
+                    except:
+                        pass
+            
+            chart_data_rows.append({
+                "Location": f"{loc} ({city})",
+                "Active Licenses": active_licenses,
+                "Expiring Soon": 1 if expiring_alert else 0
+            })
+            
         total_stores = len(df_lic)
-        pending_remarks_count = df_lic['Remark'].notna().sum()
         total_cities = df_lic['City'].dropna().nunique()
         
+        # ------------------------------------------
+        # TOP EXECUTIVE KPI METRICS
+        # ------------------------------------------
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("🏢 Total Tracked Facilities", f"{total_stores} Stores")
         col_m2.metric("🌍 Operating Cities", f"{total_cities} Cities")
-        col_m3.metric("⚠️ Stores with Pending Remarks", f"{pending_remarks_count} Stores", delta_color="inverse" if pending_remarks_count > 0 else "off")
+        col_m3.metric("🚨 Expiring in 3 Months", f"{expiring_soon_count} Licenses", delta_color="inverse" if expiring_soon_count > 0 else "off")
+        
+        st.markdown("---")
+        
+        # ------------------------------------------
+        # EXECUTIVE VISUALIZATION (Bar Chart)
+        # ------------------------------------------
+        st.markdown("### 📊 Facility License Portfolio & Expiry Alert Overview")
+        chart_df = pd.DataFrame(chart_data_rows).set_index("Location")
+        
+        # Display a clean bar chart showing active licenses per outlet
+        st.bar_chart(chart_df[["Active Licenses"]], color="#1f77b4")
         
         st.markdown("---")
         
