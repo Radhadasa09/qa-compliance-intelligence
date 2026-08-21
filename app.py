@@ -668,27 +668,68 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY
+# TAB 4: LICENSE SUMMARY (Integrated with Excel Tracker)
 # ==========================================
-with tab_lic_summary:
-    st.subheader(f"📜 License Compliance Summary — {selected_month}")
-    lic_summary_rows = []
-    for _, row in df_stores.iterrows():
-        m_data = get_store_monthly(row['name'], selected_month)
-        for l_name, l_info in m_data['licenses'].items():
-            lic_summary_rows.append({
-                "Store Name": row['name'], "License Name": l_name,
-                "Applicable": "Yes" if l_info['applicable'] else "No",
-                "Status": l_info['status'], "Expiry Date": str(l_info['expiry'])
-            })
+with tab_license: # (Make sure this variable matches your actual tab name)
+    st.subheader("📜 License Compliance Summary — Live Data")
+    st.caption("Live overview of store statutory licenses pulled directly from the 90-Day Tracker.")
+    
+    try:
+        # 1. Load and clean the Excel file directly
+        excel_file = "License 90 Day tracker.xlsx"
+        df_lic = pd.read_excel(excel_file, sheet_name="Sheet1")
+        
+        # Clean up the headers (row 0 contains the actual column names in your sheet)
+        df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
+        df_lic = df_lic.iloc[1:].reset_index(drop=True)
+        
+        # 2. Interactive Filters
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
+        with col_f2:
+            status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
             
-    if lic_summary_rows:
-        df_lic_summary = pd.DataFrame(lic_summary_rows)
-        f_status = st.selectbox("Filter by Status", ["All"] + list(df_lic_summary['Status'].unique()))
-        if f_status != "All":
-            df_lic_summary = df_lic_summary[df_lic_summary['Status'] == f_status]
-        st.dataframe(df_lic_summary, use_container_width=True, hide_index=True)
+        # Apply Filters
+        filtered_df = df_lic.copy()
+        if city_filter != "All Cities":
+            filtered_df = filtered_df[filtered_df['City'] == city_filter]
+        if status_filter == "Pending / Has Remarks":
+            filtered_df = filtered_df[filtered_df['Remark'].notna()]
+            
+        st.markdown("---")
+        st.markdown("### 🔍 Store License Details")
+        
+        # Helper function to clean up messy date formats or blank cells from Excel
+        def format_date(d):
+            if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
+                return "N/A"
+            if isinstance(d, datetime.datetime): 
+                return d.strftime('%d-%b-%Y')
+            return str(d)[:10] # Fallback for string dates
 
+        # 3. Presentable Executive View (Consolidated Store Cards)
+        for _, row in filtered_df.iterrows():
+            with st.expander(f"📍 {row['Location']} ({row['City']})"):
+                # Display all 5 licenses side-by-side using metrics
+                cols = st.columns(5)
+                cols[0].metric("FSSAI", format_date(row['FSSAI']))
+                cols[1].metric("Trade License", format_date(row['Trade']))
+                cols[2].metric("Fire NOC", format_date(row['Fire']))
+                cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
+                cols[4].metric("Signage", format_date(row['Signage']))
+                
+                # Highlight remarks and pending actions below the dates
+                remark_text = row['Remark']
+                if pd.notna(remark_text):
+                    st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
+                else:
+                    st.success("✅ All statutory licenses up to date.")
+                    
+    except FileNotFoundError:
+        st.error("❌ 'License 90 Day tracker.xlsx' not found. Please ensure the file is uploaded to the root directory.")
+    except Exception as e:
+        st.error(f"❌ Could not load license tracker: {e}")
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
