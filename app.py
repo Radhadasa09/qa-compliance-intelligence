@@ -619,12 +619,11 @@ with tab_lic_summary:
         # EXECUTIVE VISUALIZATION (Bar Chart)
         # ------------------------------------------
         st.markdown("### 📊 Facility License Portfolio & Expiry Alert Overview")
-        chart_df = pd.DataFrame(chart_data_rows).set_index("Location")
-        
-        # Display a clean bar chart showing active licenses per outlet
-        st.bar_chart(chart_df[["Active Licenses"]], color="#1f77b4")
-        
-        st.markdown("---")
+        if len(chart_data_rows) > 0:
+            chart_df = pd.DataFrame(chart_data_rows).set_index("Location")
+            st.bar_chart(chart_df[["Active Licenses"]], color="#1f77b4")
+        else:
+            st.info("📈 Awaiting data upload to generate visual charts.")
         
         # ------------------------------------------
         # FILTERS SECTION
