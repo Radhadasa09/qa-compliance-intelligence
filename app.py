@@ -233,7 +233,7 @@ with tab_exec:
 # ==========================================
 with tab_ops:
     st.subheader("🏬 Retail Operations & Compliance Status")
-    st.caption("Real-time oversight of daily shift submissions, staff training, and store-level monthly compliance.")
+    st.caption("Real-time oversight of daily shift submissions, staff training, and store-level monthly NSF self-audits.")
     
     # --- 1. LIVE DAILY SHIFT CHECKLISTS ---
     st.markdown("### 📋 Live Daily Shift Submissions")
@@ -251,8 +251,8 @@ with tab_ops:
 
     st.markdown("---")
 
-    # --- 2. MONTHLY COMPLIANCE TRACKER ---
-    st.markdown("### ⚙️ Update Store-Level Monthly Compliance & Licenses")
+    # --- 2. MONTHLY COMPLIANCE & NSF SELF-AUDIT TRACKER ---
+    st.markdown("### ⚙️ Store-Level Monthly Compliance & NSF Self-Audit")
     if not df_stores.empty:
         store_names = df_stores['name'].tolist()
         selected_store = st.selectbox("Select Store", store_names, key=f"ops_store_{selected_month}")
@@ -265,56 +265,38 @@ with tab_ops:
             
             with col_a:
                 st.markdown("#### 👥 Staff Compliance & Pending Counts")
-                fostac_val = st.number_input("FoSTaC Pending Count", min_value=0, value=int(current_data['fostac_pending']))
-                medical_val = st.number_input("Medical Pending Count", min_value=0, value=int(current_data['medical_pending']))
-                
-                st.markdown("#### 📋 Self-Audit")
-                audit_options = ["No", "Yes"]
-                default_audit_idx = 1 if current_data['self_audit_done'] == "Yes" else 0
-                self_audit_choice = st.selectbox("Monthly Self Audit Done?", audit_options, index=default_audit_idx)
-                self_score_val = st.number_input("Self Audit Score (%)", min_value=0, max_value=100, value=int(current_data['self_audit_score']))
+                fostac_val = st.number_input("FoSTaC Pending Count", min_value=0, value=int(current_data.get('fostac_pending', 0)))
+                medical_val = st.number_input("Medical Pending Count", min_value=0, value=int(current_data.get('medical_pending', 0)))
             
             with col_b:
-                st.markdown("#### 📑 License Compliance Tracking")
-                updated_licenses = {}
-                licenses_dict = current_data['licenses']
+                st.markdown("#### 📋 Monthly NSF Self-Audit Status")
+                audit_options = ["Not Done", "Done"]
+                curr_audit = current_data.get('self_audit_done', "No")
+                default_audit_idx = 1 if curr_audit in ["Yes", "Done"] else 0
                 
-                for lic_name, lic_info in licenses_dict.items():
-                    with st.expander(f"License: {lic_name}", expanded=True):
-                        is_app = st.checkbox("Applicable?", value=bool(lic_info['applicable']), key=f"app_{selected_store}_{lic_name}")
-                        if is_app:
-                            status_opts = ["Valid", "Applied/Pending", "Expired"]
-                            curr_stat = lic_info['status'] if lic_info['status'] in status_opts else "Valid"
-                            stat_val = st.selectbox("Status", status_opts, index=status_opts.index(curr_stat), key=f"stat_{selected_store}_{lic_name}")
-                            try:
-                                default_exp = lic_info['expiry'] if isinstance(lic_info['expiry'], datetime.date) else datetime.date.today()
-                            except:
-                                default_exp = datetime.date.today()
-                            exp_val = st.date_input("Expiry Date", value=default_exp, key=f"exp_{selected_store}_{lic_name}")
-                        else:
-                            stat_val, exp_val = "N/A", datetime.date(2027, 1, 1)
-                        updated_licenses[lic_name] = {"applicable": is_app, "status": stat_val, "expiry": exp_val}
-                
-                st.markdown("---")
-                new_lic_name = st.text_input("New License Name")
-                if st.form_submit_button("Add License") and new_lic_name:
-                    if new_lic_name not in updated_licenses:
-                        updated_licenses[new_lic_name] = {"applicable": True, "status": "Valid", "expiry": datetime.date.today()}
-                        st.success(f"Added {new_lic_name}!")
-
+                self_audit_choice = st.selectbox("Monthly NSF Self-Audit Checklist", audit_options, index=default_audit_idx)
+            
             st.markdown("---")
-            remark_val = st.text_area("Remark / Notes", value=str(current_data['remark']))
+            critical_points_val = st.text_area(
+                "⚠️ Critical Points Needing Attention / Corrective Actions", 
+                value=str(current_data.get('remark', '')),
+                placeholder="Mention any critical food safety gaps, infrastructure issues, or action items..."
+            )
             
             if st.form_submit_button(f"Save Store Data for {selected_month}", type="primary"):
+                # Save data back into session state without touching licenses
                 st.session_state['monthly_db'][(selected_store, selected_month)] = {
-                    "fostac_pending": fostac_val, "medical_pending": medical_val, 
-                    "nsf_score": current_data['nsf_score'], "self_audit_done": self_audit_choice,
-                    "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
+                    "fostac_pending": fostac_val, 
+                    "medical_pending": medical_val, 
+                    "nsf_score": current_data.get('nsf_score', 0), 
+                    "self_audit_done": self_audit_choice,
+                    "self_audit_score": 0, # Score removed as requested
+                    "remark": critical_points_val, 
+                    "licenses": current_data.get('licenses', {}) # Preserves existing license data untouched
                 }
-                st.success("Successfully recorded operations data!")
+                st.success("Successfully recorded retail operations and NSF audit data!")
     else:
         st.info("No store locations available in configuration.")
-
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
 # ==========================================
