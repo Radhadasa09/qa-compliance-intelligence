@@ -318,21 +318,21 @@ import requests
 from io import BytesIO
 
 # ==========================================
-# ENHANCED ITEMIZED CHECKLIST PDF GENERATOR
+# HELPER: ITEMIZED CHECKLIST PDF GENERATOR (With Item-Level Comments)
 # ==========================================
 def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_date, audit_responses, score_val, grade, remarks, photo_urls):
     if FPDF is None: return None
     pdf = FPDF()
     pdf.add_page()
     
-    # --- HEADER ---
+    # Header
     pdf.set_font("Arial", size=15, style='B')
     pdf.cell(200, 8, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
     pdf.set_font("Arial", size=9, style='I')
     pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - General Manufacturing Audit Report", ln=1, align='C')
     pdf.ln(4)
     
-    # --- METADATA BOX ---
+    # Metadata Box
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("Arial", size=9, style='B')
     pdf.cell(200, 6, txt=f"  Vendor / FBO Name: {vendor_name}", ln=1, align='L', fill=True)
@@ -342,38 +342,41 @@ def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_dat
     pdf.cell(200, 6, txt=f"  Audit Date: {audit_date.strftime('%d-%b-%Y')}  |  Report Generated: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L', fill=True)
     pdf.ln(6)
     
-    # --- TABLE HEADER ---
+    # Table Header
     pdf.set_font("Arial", size=9, style='B')
     pdf.set_fill_color(50, 50, 50)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(150, 7, txt="  Audit Question / Checklist Parameter", border=1, align='L', fill=True)
-    pdf.cell(40, 7, txt="Status (Pts)", border=1, align='C', fill=True)
-    pdf.set_text_color(0, 0, 0) # Reset text color
+    pdf.cell(130, 7, txt="  Audit Question / Checklist Parameter", border=1, align='L', fill=True)
+    pdf.cell(30, 7, txt="Status", border=1, align='C', fill=True)
+    pdf.cell(30, 7, txt="Deduction Note", border=1, align='C', fill=True)
+    pdf.set_text_color(0, 0, 0)
     pdf.ln()
     
-    # --- TABLE BODY ---
+    # Table Body
     pdf.set_font("Arial", size=8)
     fill_row = False
     for q_text, data in audit_responses.items():
         status_short = data["status"].split(" ")[0]
         row_label = f"  {q_text} ({data['points']} pts)"
+        comment_note = data.get("comment", "")
         
         pdf.set_fill_color(245, 245, 245) if fill_row else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(150, 5.5, txt=row_label, border=1, align='L', fill=True)
-        pdf.cell(40, 5.5, txt=status_short, border=1, align='C', fill=True)
+        pdf.cell(130, 6, txt=row_label, border=1, align='L', fill=True)
+        pdf.cell(30, 6, txt=status_short, border=1, align='C', fill=True)
+        pdf.cell(30, 6, txt=comment_note[:18] if comment_note else "-", border=1, align='C', fill=True)
         pdf.ln()
         fill_row = not fill_row
         
     pdf.ln(6)
     
-    # --- REMARKS SECTION ---
+    # Overall Remarks
     pdf.set_font("Arial", size=10, style='B')
     pdf.cell(200, 6, txt="Overall Remarks & Corrective Actions Required:", ln=1, align='L')
     pdf.set_font("Arial", size=9)
     pdf.multi_cell(200, 5, txt=str(remarks if remarks else "None"))
     pdf.ln(6)
     
-    # --- EMBEDDED PHOTO EVIDENCE GALLERY ---
+    # Embedded Photo Gallery
     if photo_urls:
         pdf.add_page()
         pdf.set_font("Arial", size=12, style='B')
@@ -381,36 +384,30 @@ def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_dat
         pdf.ln(4)
         
         urls = [u.strip() for u in photo_urls.split(",")]
-        x_start = pdf.get_x()
-        y_start = pdf.get_y()
         col_width = 85
         col_gap = 10
         current_col = 0
+        y_start = pdf.get_y()
         
         for idx, u in enumerate(urls):
             try:
                 response = requests.get(u)
                 if response.status_code == 200:
                     image_stream = BytesIO(response.content)
-                    
-                    # Calculate grid coordinates (2 photos per row)
                     x_pos = 10 + current_col * (col_width + col_gap)
                     y_pos = pdf.get_y()
                     
                     if current_col == 1 and idx > 0:
-                        # Move down if second column
                         y_pos = y_start
                     
                     pdf.set_xy(x_pos, y_pos)
                     pdf.set_font("Arial", size=8, style='B')
                     pdf.cell(col_width, 5, txt=f"Proof Photo {idx+1}", ln=1, align='L')
                     pdf.set_x(x_pos)
-                    
-                    # Embed image cleanly with a fixed width
                     pdf.image(image_stream, x=x_pos, w=col_width)
                     
                     if current_col == 1:
-                        pdf.ln(55) # Spacing after row
+                        pdf.ln(55)
                         y_start = pdf.get_y()
                         current_col = 0
                     else:
@@ -422,234 +419,254 @@ def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_dat
         return bytes(pdf.output())
     except TypeError:
         return pdf.output(dest='S').encode('latin-1')
+
+
 # ==========================================
-# TAB 3: VENDOR & SUPPLY CHAIN
+# TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
 # ==========================================
 with tab_supply:
-    st.subheader(f"Vendor Audit Performance — {selected_month}")
+    st.subheader(f"Vendor Audit Management — {selected_month}")
     
-    # 1. DISPLAY RECORDED AUDITS ON TOP
-    if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
-        month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
-        if not month_vendors.empty:
-            st.markdown("### 📋 Recorded Vendor Audits")
-            for _, row in month_vendors.iterrows():
-                with st.expander(f"🏢 {row['vendor_name']} — Status: {row.get('status', 'N/A')} (Score: {row.get('score', 'N/A')})"):
-                    st.write(f"**Category:** {row.get('category', 'N/A')}")
-                    st.write(f"**Remark:** {row.get('remark', 'None')}")
-                    
-                    proof = row.get('proof_url')
-                    if proof and isinstance(proof, str):
-                        urls = [u.strip() for u in proof.split(",")]
-                        for idx, u in enumerate(urls):
-                            if "http" in u:
-                                st.markdown(f"🔗 [Open Photo Proof {idx+1}]({u})", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"📄 [View Proof {idx+1}]({u})", unsafe_allow_html=True)
-        else:
-            st.info(f"No vendor audits recorded for {selected_month} yet.")
-    else:
-        st.info("No vendor audit records found in the database.")
-
-    st.markdown("---")
+    # Nested Sub-Tabs to keep the interface organized
+    sub_tab_view, sub_tab_create = st.tabs(["📋 Recorded Audits", "📝 New Manufacturing Audit Checklist"])
     
-    # 2. INTERACTIVE GENERAL MANUFACTURING VENDOR AUDIT TOOL
-    st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
-    st.caption("Evaluate vendors across the 40-point checklist[cite: 2], attach multiple photo proofs, and calculate final scores automatically.")
-    
-    with st.form("manufacturing_audit_form"):
-        col_v1, col_v2 = st.columns(2)
-        with col_v1:
-            audit_vendor_name = st.text_input("Vendor / FBO Name")
-            audit_fso = st.text_input("Food Safety Officer / Auditor Name")
-            audit_date = st.date_input("Actual Audit Date", value=datetime.date.today())
-        with col_v2:
-            audit_lic_no = st.text_input("FBO License No.")
-            audit_address = st.text_input("Facility Address")
-            
-        st.markdown("---")
-        
-        audit_responses = {}
-        
-        st.markdown("#### 1. Design & Facilities (Q1 - Q12)")
-        design_questions = [
-            ("Q1: Updated FSSAI license displayed prominently", 2, True),
-            ("Q2: Adequate working space & clean premises design", 2, False),
-            ("Q3: Internal structures made of non-toxic, impermeable material", 2, False),
-            ("Q4: Walls, ceilings & doors free from flaking paint or plaster", 2, False),
-            ("Q5: Floors non-slippery & sloped appropriately", 2, False),
-            ("Q6: Windows fitted with insect-proof screens", 2, False),
-            ("Q7: Doors close-fitted to avoid pest entry", 2, False),
-            ("Q8: Equipment made of non-toxic, impervious material", 2, False),
-            ("Q9: Sufficient lighting provided", 2, False),
-            ("Q10: Adequate ventilation provided", 2, False),
-            ("Q11: Adequate storage facility for food, chemicals, packaging", 2, False),
-            ("Q12: Personnel hygiene facilities (toilets, handwash) available", 2, False)
-        ]
-        for q_text, points, is_star in design_questions:
-            label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
-            status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"des_{q_text}")
-            audit_responses[q_text] = {"status": status, "points": points, "is_star": is_star}
-
-        st.markdown("#### 2. Control of Operation (Q13 - Q24)")
-        ops_questions = [
-            ("Q13: Potable water (IS:10500) tested semi-annually with records", 4, True),
-            ("Q14: Food material tested internally or via accredited lab", 2, False),
-            ("Q15: Incoming material procured from approved vendors with records", 2, False),
-            ("Q16: Raw materials inspected at receiving for safety hazards", 2, False),
-            ("Q17: Proper storage temperature/humidity, FIFO & FEFO practiced", 4, True),
-            ("Q18: Manufacturing time/temperature maintained and recorded", 4, True),
-            ("Q19: Food packed in a hygienic manner", 2, False),
-            ("Q20: Packaging materials food-grade & in sound condition", 2, False),
-            ("Q21: Cleaning chemicals clearly identified & stored separately", 2, False),
-            ("Q22: Transporting vehicles kept clean and maintained", 2, False),
-            ("Q23: Transporting vehicles capable of requisite temperature", 2, False),
-            ("Q24: Recalled products handled safely with records", 2, False)
-        ]
-        for q_text, points, is_star in ops_questions:
-            label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
-            status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"ops_{q_text}")
-            audit_responses[q_text] = {"status": status, "points": points, "is_star": is_star}
-
-        st.markdown("#### 3. Maintenance & Sanitation (Q25 - Q32)")
-        maint_questions = [
-            ("Q25: Cleaning done as per schedule & program", 2, False),
-            ("Q26: Preventive maintenance of equipment carried out regularly", 2, False),
-            ("Q27: Measuring & monitoring devices calibrated periodically", 2, False),
-            ("Q28: Pest control program carried out by trained personnel with records", 4, True),
-            ("Q29: No signs of pest activity or infestation", 2, False),
-            ("Q30: Drains equipped with traps to capture contaminants", 2, False),
-            ("Q31: Food waste removed periodically", 2, False),
-            ("Q32: Sewage/effluent disposal conforms to Environment Protection Act", 2, False)
-        ]
-        for q_text, points, is_star in maint_questions:
-            label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
-            status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"maint_{q_text}")
-            audit_responses[q_text] = {"status": status, "points": points, "is_star": is_star}
-
-        st.markdown("#### 4. Personal Hygiene (Q33 - Q36)")
-        hyg_questions = [
-            ("Q33: Annual medical examination & inoculation of food handlers", 2, False),
-            ("Q34: No person with illness, open wounds handling food", 2, False),
-            ("Q35: Food handlers maintain personal cleanliness & behavior", 4, True),
-            ("Q36: Food handlers equipped with aprons, gloves, headgear", 2, False)
-        ]
-        for q_text, points, is_star in hyg_questions:
-            label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
-            status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"hyg_{q_text}")
-            audit_responses[q_text] = {"status": status, "points": points, "is_star": is_star}
-
-        st.markdown("#### 5. Training & Complaint Handling (Q37 - Q40)")
-        train_questions = [
-            ("Q37: Internal/External audit done periodically with records", 2, False),
-            ("Q38: Effective consumer complaints redressal mechanism", 2, False),
-            ("Q39: Food handlers trained to handle food safely", 2, False),
-            ("Q40: Appropriate documentation & records retained for 1 year", 4, True)
-        ]
-        for q_text, points, is_star in train_questions:
-            label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
-            status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"train_{q_text}")
-            audit_responses[q_text] = {"status": status, "points": points, "is_star": is_star}
-
-        st.markdown("---")
-        st.markdown("#### 📸 Audit Evidence & Photo Documentation")
-        audit_photos = st.file_uploader(
-            "Upload Inspection Snaps (Select multiple files if needed)", 
-            type=["jpg", "png", "jpeg"], 
-            accept_multiple_files=True
-        )
-        
-        audit_remarks = st.text_area("Overall Audit Remarks / Corrective Actions Required")
-
-        if st.form_submit_button("Calculate Score & Submit Audit", type="primary"):
-            if not audit_vendor_name:
-                st.error("❌ Vendor Name is required.")
+    # ------------------------------------------
+    # SUB-TAB 1: RECORDED AUDITS
+    # ------------------------------------------
+    with sub_tab_view:
+        if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
+            month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
+            if not month_vendors.empty:
+                st.markdown("### 📋 Recorded Vendor Audits for this Period")
+                for _, row in month_vendors.iterrows():
+                    with st.expander(f"🏢 {row['vendor_name']} — Status: {row.get('status', 'N/A')} (Score: {row.get('score', 'N/A')})"):
+                        st.write(f"**Category:** {row.get('category', 'N/A')}")
+                        st.write(f"**Remark:** {row.get('remark', 'None')}")
+                        
+                        proof = row.get('proof_url')
+                        if proof and isinstance(proof, str):
+                            urls = [u.strip() for u in proof.split(",")]
+                            for idx, u in enumerate(urls):
+                                if "http" in u:
+                                    st.markdown(f"🔗 [Open Photo Proof {idx+1}]({u})", unsafe_allow_html=True)
+                        
+                        st.markdown("---")
+                        if st.button(f"🗑️ Delete Audit Record ({row['vendor_name']})", key=f"del_audit_{row.get('id', _)}"):
+                            try:
+                                if supabase is not None:
+                                    supabase.table("vendor_audits").delete().eq("id", row['id']).execute()
+                                st.success("✅ Audit record deleted successfully!")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to delete record: {e}")
             else:
-                with st.spinner("Uploading photos and compiling official audit report..."):
-                    photo_urls = []
-                    if audit_photos:
-                        for idx, photo_file in enumerate(audit_photos):
-                            url = upload_photo(photo_file, "vendor_audits", f"{audit_vendor_name.replace(' ', '_')}_{idx+1}")
-                            if url:
-                                photo_urls.append(url)
-                    
-                    final_proof_url = ", ".join(photo_urls) if photo_urls else None
+                st.info(f"No vendor audits recorded for {selected_month} yet.")
+        else:
+            st.info("No vendor audit records found in the database.")
 
-                    # Automatic Scoring Engine (Out of 90 total points)
-                    earned_points = 0
-                    max_points = 90
-                    has_star_failure = False
+    # ------------------------------------------
+    # SUB-TAB 2: NEW AUDIT CHECKLIST FORM
+    # ------------------------------------------
+    with sub_tab_create:
+        st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
+        st.caption("Evaluate vendors across the 40-point checklist[cite: 2]. Point deduction comment boxes appear automatically when compliance is compromised.")
+        
+        with st.form("manufacturing_audit_form"):
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                audit_vendor_name = st.text_input("Vendor / FBO Name")
+                audit_fso = st.text_input("Food Safety Officer / Auditor Name")
+                audit_date = st.date_input("Actual Audit Date", value=datetime.date.today())
+            with col_v2:
+                audit_lic_no = st.text_input("FBO License No.")
+                audit_address = st.text_input("Facility Address")
+                
+            st.markdown("---")
+            
+            audit_responses = {}
+            
+            def render_checklist_section(section_title, questions_list):
+                st.markdown(f"#### {section_title}")
+                section_data = {}
+                for q_text, points, is_star in questions_list:
+                    label = f"⭐ {q_text} ({points} pts)" if is_star else f"{q_text} ({points} pts)"
                     
-                    for q_key, data in audit_responses.items():
-                        status = data["status"]
-                        pts = data["points"]
-                        is_star_item = data["is_star"]
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"status_{q_text}")
+                    
+                    comment = ""
+                    # Conditional comment box if points are deducted
+                    if status in ["Noncompliance (NC)", "Partial Compliance (PC)"]:
+                        with c2:
+                            comment = st.text_input("Reason / Deduction Note", key=f"comm_{q_text}", placeholder="Brief reason...")
+                    
+                    section_data[q_text] = {"status": status, "points": points, "is_star": is_star, "comment": comment}
+                return section_data
+
+            # Section 1
+            design_questions = [
+                ("Q1: Updated FSSAI license displayed prominently", 2, True),
+                ("Q2: Adequate working space & clean premises design", 2, False),
+                ("Q3: Internal structures made of non-toxic, impermeable material", 2, False),
+                ("Q4: Walls, ceilings & doors free from flaking paint or plaster", 2, False),
+                ("Q5: Floors non-slippery & sloped appropriately", 2, False),
+                ("Q6: Windows fitted with insect-proof screens", 2, False),
+                ("Q7: Doors close-fitted to avoid pest entry", 2, False),
+                ("Q8: Equipment made of non-toxic, impervious material", 2, False),
+                ("Q9: Sufficient lighting provided", 2, False),
+                ("Q10: Adequate ventilation provided", 2, False),
+                ("Q11: Adequate storage facility for food, chemicals, packaging", 2, False),
+                ("Q12: Personnel hygiene facilities available", 2, False)
+            ]
+            q_design = render_checklist_section("1. Design & Facilities (Q1 - Q12)", design_questions)
+
+            # Section 2
+            ops_questions = [
+                ("Q13: Potable water (IS:10500) tested semi-annually with records", 4, True),
+                ("Q14: Food material tested internally or via accredited lab", 2, False),
+                ("Q15: Incoming material procured from approved vendors with records", 2, False),
+                ("Q16: Raw materials inspected at receiving for safety hazards", 2, False),
+                ("Q17: Proper storage temperature/humidity, FIFO & FEFO practiced", 4, True),
+                ("Q18: Manufacturing time/temperature maintained and recorded", 4, True),
+                ("Q19: Food packed in a hygienic manner", 2, False),
+                ("Q20: Packaging materials food-grade & in sound condition", 2, False),
+                ("Q21: Cleaning chemicals clearly identified & stored separately", 2, False),
+                ("Q22: Transporting vehicles kept clean and maintained", 2, False),
+                ("Q23: Transporting vehicles capable of requisite temperature", 2, False),
+                ("Q24: Recalled products handled safely with records", 2, False)
+            ]
+            q_ops = render_checklist_section("2. Control of Operation (Q13 - Q24)", ops_questions)
+
+            # Section 3
+            maint_questions = [
+                ("Q25: Cleaning done as per schedule & program", 2, False),
+                ("Q26: Preventive maintenance of equipment carried out regularly", 2, False),
+                ("Q27: Measuring & monitoring devices calibrated periodically", 2, False),
+                ("Q28: Pest control program carried out by trained personnel with records", 4, True),
+                ("Q29: No signs of pest activity or infestation", 2, False),
+                ("Q30: Drains equipped with traps to capture contaminants", 2, False),
+                ("Q31: Food waste removed periodically", 2, False),
+                ("Q32: Sewage/effluent disposal conforms to Environment Protection Act", 2, False)
+            ]
+            q_maint = render_checklist_section("3. Maintenance & Sanitation (Q25 - Q32)", maint_questions)
+
+            # Section 4
+            hyg_questions = [
+                ("Q33: Annual medical examination & inoculation of food handlers", 2, False),
+                ("Q34: No person with illness, open wounds handling food", 2, False),
+                ("Q35: Food handlers maintain personal cleanliness & behavior", 4, True),
+                ("Q36: Food handlers equipped with aprons, gloves, headgear", 2, False)
+            ]
+            q_hyg = render_checklist_section("4. Personal Hygiene (Q33 - Q36)", hyg_questions)
+
+            # Section 5
+            train_questions = [
+                ("Q37: Internal/External audit done periodically with records", 2, False),
+                ("Q38: Effective consumer complaints redressal mechanism", 2, False),
+                ("Q39: Food handlers trained to handle food safely", 2, False),
+                ("Q40: Appropriate documentation & records retained for 1 year", 4, True)
+            ]
+            q_train = render_checklist_section("5. Training & Complaint Handling (Q37 - Q40)", train_questions)
+
+            # Combine dictionaries
+            audit_responses = {**q_design, **q_ops, **q_maint, **q_hyg, **q_train}
+
+            st.markdown("---")
+            st.markdown("#### 📸 Audit Evidence & Photo Documentation")
+            audit_photos = st.file_uploader(
+                "Upload Inspection Snaps (Select multiple files if needed)", 
+                type=["jpg", "png", "jpeg"], 
+                accept_multiple_files=True
+            )
+            
+            audit_remarks = st.text_area("Overall Audit Remarks / Corrective Actions Required")
+
+            if st.form_submit_button("Calculate Score & Submit Audit", type="primary"):
+                if not audit_vendor_name:
+                    st.error("❌ Vendor Name is required.")
+                else:
+                    with st.spinner("Uploading photos and calculating compliance score..."):
+                        photo_urls = []
+                        if audit_photos:
+                            for idx, photo_file in enumerate(audit_photos):
+                                url = upload_photo(photo_file, "vendor_audits", f"{audit_vendor_name.replace(' ', '_')}_{idx+1}")
+                                if url:
+                                    photo_urls.append(url)
                         
-                        if status == "Compliance (C)":
-                            earned_points += pts
-                        elif status == "Partial Compliance (PC)":
-                            earned_points += (pts / 2)
-                        elif status == "Noncompliance (NC)" and is_star_item:
-                            has_star_failure = True
+                        final_proof_url = ", ".join(photo_urls) if photo_urls else None
 
-                    final_percentage = (earned_points / max_points) * 100
-
-                    # Determine Official Grade[cite: 2]
-                    if has_star_failure or final_percentage < 45:
-                        grade = "Non Compliance"
-                        status_result = "Failed"
-                    elif 80 <= final_percentage <= 90 and not has_star_failure:
-                        grade = "A+ (Exemplar)"[cite: 2]
-                        status_result = "Passed"
-                    elif 72 <= final_percentage < 80:
-                        grade = "A (Satisfactory)"[cite: 2]
-                        status_result = "Passed"
-                    else:
-                        grade = "B (Needs Improvement)"[cite: 2]
-                        status_result = "Conditionally Approved"
-
-                    # Save payload to Supabase
-                    payload = {
-                        "vendor_name": audit_vendor_name,
-                        "category": "General Manufacturing",
-                        "score": f"{final_percentage:.1f}% ({earned_points}/{max_points} - Grade: {grade})",
-                        "status": status_result,
-                        "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Date: {audit_date.strftime('%d-%b-%Y')} | Remarks: {audit_remarks}",
-                        "audit_month": selected_month,
-                        "proof_url": final_proof_url
-                    }
-                    
-                    try:
-                        if supabase is not None:
-                            supabase.table("vendor_audits").insert(payload).execute()
+                        # Automatic Scoring Engine
+                        earned_points = 0
+                        max_points = 90
                         
-                        # Generate itemized PDF report with embedded photos
-                        pdf_report_bytes = generate_detailed_checklist_pdf(
-                            audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date,
-                            audit_responses, final_percentage, grade, audit_remarks, final_proof_url
-                        )
-                        st.session_state['latest_generated_audit_pdf'] = {
-                            "name": audit_vendor_name,
-                            "data": pdf_report_bytes
+                        for q_key, data in audit_responses.items():
+                            status = data["status"]
+                            pts = data["points"]
+                            
+                            if status == "Compliance (C)":
+                                earned_points += pts
+                            elif status == "Partial Compliance (PC)":
+                                earned_points += (pts / 2)
+
+                        final_percentage = (earned_points / max_points) * 100
+
+                        # Grade Assignment based strictly on percentage
+                        if final_percentage >= 80:
+                            grade = "A+ (Exemplar)"[cite: 2]
+                            status_result = "Passed"
+                        elif 72 <= final_percentage < 80:
+                            grade = "A (Satisfactory)"[cite: 2]
+                            status_result = "Passed"
+                        elif 45 <= final_percentage < 72:
+                            grade = "B (Needs Improvement)"[cite: 2]
+                            status_result = "Conditionally Approved"
+                        else:
+                            grade = "Non Compliance"[cite: 2]
+                            status_result = "Failed"
+
+                        # Save payload to Supabase
+                        payload = {
+                            "vendor_name": audit_vendor_name,
+                            "category": "General Manufacturing",
+                            "score": f"{final_percentage:.1f}% ({earned_points}/{max_points} - Grade: {grade})",
+                            "status": status_result,
+                            "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Date: {audit_date.strftime('%d-%b-%Y')} | Remarks: {audit_remarks}",
+                            "audit_month": selected_month,
+                            "proof_url": final_proof_url
                         }
                         
-                        st.success(f"✅ Audit Completed & Saved! Score: {final_percentage:.1f}% | Grade: {grade}")
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"❌ Failed to save audit: {e}")
+                        try:
+                            if supabase is not None:
+                                supabase.table("vendor_audits").insert(payload).execute()
+                            
+                            pdf_report_bytes = generate_detailed_checklist_pdf(
+                                audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date,
+                                audit_responses, final_percentage, grade, audit_remarks, final_proof_url
+                            )
+                            st.session_state['latest_generated_audit_pdf'] = {
+                                "name": audit_vendor_name,
+                                "data": pdf_report_bytes
+                            }
+                            
+                            st.success(f"✅ Audit Completed & Saved! Score: {final_percentage:.1f}% | Grade: {grade}")
+                            st.balloons()
+                        except Exception as e:
+                            st.error(f"❌ Failed to save audit: {e}")
 
-    # --- INSTANT DOWNLOAD BUTTON FOR THE RECENTLY COMPLETED AUDIT ---
-    if 'latest_generated_audit_pdf' in st.session_state:
-        latest = st.session_state['latest_generated_audit_pdf']
-        st.markdown("---")
-        st.success(f"📄 Itemized audit report ready for **{latest['name']}**!")
-        st.download_button(
-            label=f"📥 Download Itemized PDF Report ({latest['name']})",
-            data=latest['data'],
-            file_name=f"General_Manufacturing_Audit_{latest['name'].replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
+        # Instant Download Button if just submitted
+        if 'latest_generated_audit_pdf' in st.session_state:
+            latest = st.session_state['latest_generated_audit_pdf']
+            st.markdown("---")
+            st.success(f"📄 Itemized audit report ready for **{latest['name']}**!")
+            st.download_button(
+                label=f"📥 Download Itemized PDF Report ({latest['name']})",
+                data=latest['data'],
+                file_name=f"General_Manufacturing_Audit_{latest['name'].replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
 # ==========================================
 # TAB 4: LICENSE SUMMARY
 # ==========================================
