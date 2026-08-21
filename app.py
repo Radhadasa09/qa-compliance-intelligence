@@ -666,25 +666,40 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Interactive File Upload)
+# TAB 4: LICENSE SUMMARY (Dashboard on Top, Upload on Bottom)
 # ==========================================
 with tab_lic_summary:
-    st.subheader("📜 License Compliance Summary — Live Data")
-    st.caption("Upload your 90-Day Tracker Excel file to generate the live compliance dashboard.")
+    # 1. Create Layout Containers (This dictates the visual order on screen)
+    header_container = st.container()
+    dashboard_container = st.container()
+    st.markdown("---") # Visual divider
+    upload_container = st.container()
     
-    # 1. Add the File Uploader
-    uploaded_file = st.file_uploader("Upload License Tracker (Excel)", type=["xlsx", "xls"])
-    
-    if uploaded_file is not None:
+    # 2. Put the Uploader in the Bottom Container FIRST in logic
+    with upload_container:
+        st.markdown("#### 📂 Update Dashboard Data")
+        st.caption("Upload a new 90-Day Tracker Excel file here to instantly update the live dashboard above.")
+        uploaded_file = st.file_uploader("Upload Latest License Tracker (Excel)", type=["xlsx", "xls"])
+
+    # 3. Build the Header in the Top Container
+    with header_container:
+        st.subheader("📜 License Compliance Summary — Live Data")
+        st.caption("Live overview of store statutory licenses.")
+        
+    # 4. Build the Dashboard in the Middle Container
+    with dashboard_container:
         try:
-            # 2. Load and clean the Excel file directly from the uploader
-            df_lic = pd.read_excel(uploaded_file, sheet_name="Sheet1")
+            # Smart Loading: Use the uploaded file if present, otherwise use the server's default file
+            if uploaded_file is not None:
+                df_lic = pd.read_excel(uploaded_file, sheet_name="Sheet1")
+            else:
+                df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
             
-            # Clean up the headers (row 0 contains the actual column names in your sheet)
+            # Clean up the headers
             df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
             df_lic = df_lic.iloc[1:].reset_index(drop=True)
             
-            # 3. Interactive Filters
+            # Interactive Filters (Kept exactly as you liked them)
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
@@ -701,18 +716,17 @@ with tab_lic_summary:
             st.markdown("---")
             st.markdown("### 🔍 Store License Details")
             
-            # Helper function to clean up messy date formats or blank cells from Excel
+            # Helper function for dates
             def format_date(d):
                 if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
                     return "N/A"
                 if isinstance(d, datetime.datetime): 
                     return d.strftime('%d-%b-%Y')
-                return str(d)[:10] # Fallback for string dates
+                return str(d)[:10] 
 
-            # 4. Presentable Executive View (Consolidated Store Cards)
+            # Presentable Executive View
             for _, row in filtered_df.iterrows():
                 with st.expander(f"📍 {row['Location']} ({row['City']})"):
-                    # Display all 5 licenses side-by-side using metrics
                     cols = st.columns(5)
                     cols[0].metric("FSSAI", format_date(row['FSSAI']))
                     cols[1].metric("Trade License", format_date(row['Trade']))
@@ -720,18 +734,16 @@ with tab_lic_summary:
                     cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
                     cols[4].metric("Signage", format_date(row['Signage']))
                     
-                    # Highlight remarks and pending actions below the dates
                     remark_text = row['Remark']
                     if pd.notna(remark_text):
                         st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
                     else:
                         st.success("✅ All statutory licenses up to date.")
                         
+        except FileNotFoundError:
+            st.info("👆 Dashboard is currently empty. Please upload your 'License 90 Day tracker' Excel file in the section below to populate it.")
         except Exception as e:
-            st.error(f"❌ Could not process the uploaded file. Please make sure it's the correct format. Error: {e}")
-    else:
-        # Prompt the user to upload a file if nothing is uploaded yet
-        st.info("👆 Please upload your 'License 90 Day tracker' Excel file above to view the dashboard.")
+            st.error(f"❌ Could not process the file. Error: {e}")
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
