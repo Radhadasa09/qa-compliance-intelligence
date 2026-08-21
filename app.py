@@ -666,19 +666,31 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Dashboard on Top, Upload on Bottom)
+# TAB 4: LICENSE SUMMARY (Stable, Loop-Free Version)
 # ==========================================
 with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Live Data")
     st.caption("Live overview of store statutory licenses pulled from the tracker.")
     
-    # 1. LOAD AND DISPLAY THE DASHBOARD FIRST (Top of Page)
+    # 1. UPLOAD SECTION AT THE BOTTOM (Evaluated first or handled via session state)
+    st.markdown("### 📂 Update License Tracker Data")
+    st.caption("Upload a new Excel sheet anytime to update the live dashboard above instantly.")
+    
+    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
+    
+    # Save to session state if a new file is provided
+    if uploaded_file is not None:
+        st.session_state['uploaded_license_file'] = uploaded_file
+    
+    st.markdown("---")
+    st.markdown("### 🔍 Store License Details")
+
+    # 2. LOAD AND DISPLAY THE DASHBOARD
     try:
-        # Check if an uploaded file exists in session state or locally
+        # Check if an uploaded file exists in session state, otherwise use default
         if 'uploaded_license_file' in st.session_state and st.session_state['uploaded_license_file'] is not None:
             df_lic = pd.read_excel(st.session_state['uploaded_license_file'], sheet_name="Sheet1")
         else:
-            # Fallback to default file on server/GitHub
             df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
         
         # Clean up headers
@@ -700,7 +712,6 @@ with tab_lic_summary:
             filtered_df = filtered_df[filtered_df['Remark'].notna()]
             
         st.markdown("---")
-        st.markdown("### 🔍 Store License Details")
         
         def format_date(d):
             if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
@@ -727,19 +738,6 @@ with tab_lic_summary:
                     
     except Exception as e:
         st.error(f"❌ Could not load license tracker data: {e}")
-
-    # 2. UPLOAD SECTION PLACED AT THE VERY BOTTOM
-    st.markdown("---")
-    st.markdown("### 📂 Update License Tracker Data")
-    st.caption("Scroll down here anytime you receive a new Excel sheet to update the live dashboard above.")
-    
-    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
-    
-    if uploaded_file is not None:
-        # Save uploaded file to session state so it persists across tab switches
-        st.session_state['uploaded_license_file'] = uploaded_file
-        st.success("✅ New license tracker uploaded successfully! The executive summary above has been updated.")
-        st.rerun()
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
