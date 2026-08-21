@@ -555,7 +555,7 @@ with tab_lic_summary:
             response = supabase.table("license_tracker").select("*").execute()
             if response.data:
                 df_lic = pd.DataFrame(response.data)
-                # Rename columns back to match your tracker format
+                # Rename columns back to match your tracker format for the UI
                 df_lic = df_lic[['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']]
                 df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
     except Exception as e:
@@ -582,7 +582,8 @@ with tab_lic_summary:
             
             for col in license_cols:
                 val = row[col]
-                if pd.notna(val) and str(val).strip().lower() not in ['nan', 'nat', 'not started', 'under process', 'part of trade lic']:
+                # Safely ignore all variations of empty/null values
+                if pd.notna(val) and str(val).strip().lower() not in ['nan', 'nat', 'none', 'not started', 'under process', 'part of trade lic']:
                     active_licenses += 1
                     try:
                         dt = pd.to_datetime(val)
@@ -620,7 +621,9 @@ with tab_lic_summary:
         # FILTERS & TABLE DETAILS
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
+            # Handle potential None/NaN in City column for selectbox
+            valid_cities = [c for c in df_lic['City'].unique() if pd.notna(c) and str(c).strip().lower() != 'nan']
+            city_filter = st.selectbox("Filter by City", ["All Cities"] + valid_cities)
         with col_f2:
             status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
             
@@ -628,13 +631,14 @@ with tab_lic_summary:
         if city_filter != "All Cities":
             filtered_df = filtered_df[filtered_df['City'] == city_filter]
         if status_filter == "Pending / Has Remarks":
-            filtered_df = filtered_df[filtered_df['Remark'].notna()]
+            # Filter where remark is not null and not empty
+            filtered_df = filtered_df[filtered_df['Remark'].notna() & (filtered_df['Remark'].astype(str).str.strip() != '') & (filtered_df['Remark'].astype(str).str.lower() != 'nan')]
             
         st.markdown("---")
         st.markdown("### 🔍 Store License Details")
         
         def format_date(d):
-            if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
+            if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat', 'none']: 
                 return "N/A"
             if isinstance(d, datetime.datetime): 
                 return d.strftime('%d-%b-%Y')
@@ -650,7 +654,7 @@ with tab_lic_summary:
                 cols[4].metric("Signage", format_date(row['Signage']))
                 
                 remark_text = row['Remark']
-                if pd.notna(remark_text):
+                if pd.notna(remark_text) and str(remark_text).strip().lower() not in ['nan', 'none', '']:
                     st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
                 else:
                     st.success("✅ All statutory licenses up to date.")
@@ -662,7 +666,7 @@ with tab_lic_summary:
     
     uploaded_file = st.file_uploader("Upload Master License Tracker Excel File", type=["xlsx", "xls"], key="cloud_license_uploader")
     
-if uploaded_file is not None:
+    if uploaded_file is not None:
         if st.button("🚀 Sync & Save Permanently to Cloud Database", type="primary"):
             with st.spinner("Uploading and syncing records to Supabase..."):
                 try:
@@ -672,25 +676,34 @@ if uploaded_file is not None:
                     # Drop the header row if it's acting as a sub-header
                     df_upload = df_upload.iloc[1:].reset_index(drop=True)
                     
-                    # 1. Format dates nicely before stringifying
+                    # 1. Format dates nicely
                     for col in ['fssai', 'trade', 'fire', 'pollution_cto', 'signage']:
                         if col in df_upload.columns:
-                            # Coerce turns weird data into NaT, then formats valid dates to YYYY-MM-DD
                             df_upload[col] = pd.to_datetime(df_upload[col], errors='coerce').dt.strftime('%Y-%m-%d')
 
-                    # 2. BULLETPROOFING: Convert entire dataframe to string (fixes int64/float64 JSON errors)
+                    # 2. Convert entire dataframe to string to strip away complex Pandas/NumPy types
                     df_upload = df_upload.astype(str)
                     
-                    # 3. Replace all pandas stringified nulls with actual Python `None` so Supabase accepts them
-                    df_upload = df_upload.replace({'nan': None, 'NaT': None, 'None': None, '<NA>': None, '': None})
+                    # 3. BULLETPROOF DICTIONARY CLEANER
+                    raw_records = df_upload.to_dict(orient="records")
+                    clean_records = []
+                    
+                    for row in raw_records:
+                        clean_row = {}
+                        for k, v in row.items():
+                            # If the string represents a null value, convert to an actual Python None for Supabase
+                            if pd.isna(v) or str(v).strip().lower() in ['nan', 'nat', 'none', '<na>', '']:
+                                clean_row[k] = None
+                            else:
+                                clean_row[k] = str(v).strip()
+                        clean_records.append(clean_row)
                     
                     if supabase is not None:
                         # Clear old table data first
                         supabase.table("license_tracker").delete().neq("id", 0).execute()
                         
-                        # Insert new rows
-                        records = df_upload.to_dict(orient="records")
-                        supabase.table("license_tracker").insert(records).execute()
+                        # Insert clean records
+                        supabase.table("license_tracker").insert(clean_records).execute()
                         
                         st.success("✅ License tracker successfully saved to Supabase cloud database! Refreshing...")
                         st.rerun()
