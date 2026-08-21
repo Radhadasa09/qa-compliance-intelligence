@@ -496,11 +496,9 @@ with tab_supply:
                     with c1:
                         status = st.selectbox(label, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"status_{q_text}")
                     
-                    comment = ""
-                    # Conditional comment box if points are deducted
-                    if status in ["Noncompliance (NC)", "Partial Compliance (PC)"]:
-                        with c2:
-                            comment = st.text_input("Reason / Deduction Note", key=f"comm_{q_text}", placeholder="Brief reason...")
+                    with c2:
+                        # ALWAYS render the text input so it's available inside the st.form
+                        comment = st.text_input("Deduction Note (If NC/PC)", key=f"comm_{q_text}", placeholder="Brief reason...")
                     
                     section_data[q_text] = {"status": status, "points": points, "is_star": is_star, "comment": comment}
                 return section_data
