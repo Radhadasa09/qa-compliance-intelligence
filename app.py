@@ -670,7 +670,7 @@ with tab_supply:
 # ==========================================
 # TAB 4: LICENSE SUMMARY (Integrated with Excel Tracker)
 # ==========================================
-with tab_license: # (Make sure this variable matches your actual tab name)
+with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Live Data")
     st.caption("Live overview of store statutory licenses pulled directly from the 90-Day Tracker.")
     
