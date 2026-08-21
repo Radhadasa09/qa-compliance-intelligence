@@ -294,7 +294,7 @@ with tab_exec:
 # ==========================================
 # TAB 2: RETAIL OPERATIONS (Store Compliance Input)
 # ==========================================
-with tab_retail:
+with tab_ops:
     st.subheader("🏪 Store Staff Compliance Entry")
     st.caption("Submit monthly compliance records. Data is permanently saved to the cloud database.")
     
