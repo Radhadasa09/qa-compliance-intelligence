@@ -668,68 +668,72 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Integrated with Excel Tracker)
+# TAB 4: LICENSE SUMMARY (Interactive File Upload)
 # ==========================================
 with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Live Data")
-    st.caption("Live overview of store statutory licenses pulled directly from the 90-Day Tracker.")
+    st.caption("Upload your 90-Day Tracker Excel file to generate the live compliance dashboard.")
     
-    try:
-        # 1. Load and clean the Excel file directly
-        excel_file = "License 90 Day tracker.xlsx"
-        df_lic = pd.read_excel(excel_file, sheet_name="Sheet1")
-        
-        # Clean up the headers (row 0 contains the actual column names in your sheet)
-        df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
-        df_lic = df_lic.iloc[1:].reset_index(drop=True)
-        
-        # 2. Interactive Filters
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
-        with col_f2:
-            status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
+    # 1. Add the File Uploader
+    uploaded_file = st.file_uploader("Upload License Tracker (Excel)", type=["xlsx", "xls"])
+    
+    if uploaded_file is not None:
+        try:
+            # 2. Load and clean the Excel file directly from the uploader
+            df_lic = pd.read_excel(uploaded_file, sheet_name="Sheet1")
             
-        # Apply Filters
-        filtered_df = df_lic.copy()
-        if city_filter != "All Cities":
-            filtered_df = filtered_df[filtered_df['City'] == city_filter]
-        if status_filter == "Pending / Has Remarks":
-            filtered_df = filtered_df[filtered_df['Remark'].notna()]
+            # Clean up the headers (row 0 contains the actual column names in your sheet)
+            df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
+            df_lic = df_lic.iloc[1:].reset_index(drop=True)
             
-        st.markdown("---")
-        st.markdown("### 🔍 Store License Details")
-        
-        # Helper function to clean up messy date formats or blank cells from Excel
-        def format_date(d):
-            if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
-                return "N/A"
-            if isinstance(d, datetime.datetime): 
-                return d.strftime('%d-%b-%Y')
-            return str(d)[:10] # Fallback for string dates
-
-        # 3. Presentable Executive View (Consolidated Store Cards)
-        for _, row in filtered_df.iterrows():
-            with st.expander(f"📍 {row['Location']} ({row['City']})"):
-                # Display all 5 licenses side-by-side using metrics
-                cols = st.columns(5)
-                cols[0].metric("FSSAI", format_date(row['FSSAI']))
-                cols[1].metric("Trade License", format_date(row['Trade']))
-                cols[2].metric("Fire NOC", format_date(row['Fire']))
-                cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
-                cols[4].metric("Signage", format_date(row['Signage']))
+            # 3. Interactive Filters
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
+            with col_f2:
+                status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
                 
-                # Highlight remarks and pending actions below the dates
-                remark_text = row['Remark']
-                if pd.notna(remark_text):
-                    st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
-                else:
-                    st.success("✅ All statutory licenses up to date.")
+            # Apply Filters
+            filtered_df = df_lic.copy()
+            if city_filter != "All Cities":
+                filtered_df = filtered_df[filtered_df['City'] == city_filter]
+            if status_filter == "Pending / Has Remarks":
+                filtered_df = filtered_df[filtered_df['Remark'].notna()]
+                
+            st.markdown("---")
+            st.markdown("### 🔍 Store License Details")
+            
+            # Helper function to clean up messy date formats or blank cells from Excel
+            def format_date(d):
+                if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
+                    return "N/A"
+                if isinstance(d, datetime.datetime): 
+                    return d.strftime('%d-%b-%Y')
+                return str(d)[:10] # Fallback for string dates
+
+            # 4. Presentable Executive View (Consolidated Store Cards)
+            for _, row in filtered_df.iterrows():
+                with st.expander(f"📍 {row['Location']} ({row['City']})"):
+                    # Display all 5 licenses side-by-side using metrics
+                    cols = st.columns(5)
+                    cols[0].metric("FSSAI", format_date(row['FSSAI']))
+                    cols[1].metric("Trade License", format_date(row['Trade']))
+                    cols[2].metric("Fire NOC", format_date(row['Fire']))
+                    cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
+                    cols[4].metric("Signage", format_date(row['Signage']))
                     
-    except FileNotFoundError:
-        st.error("❌ 'License 90 Day tracker.xlsx' not found. Please ensure the file is uploaded to the root directory.")
-    except Exception as e:
-        st.error(f"❌ Could not load license tracker: {e}")
+                    # Highlight remarks and pending actions below the dates
+                    remark_text = row['Remark']
+                    if pd.notna(remark_text):
+                        st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
+                    else:
+                        st.success("✅ All statutory licenses up to date.")
+                        
+        except Exception as e:
+            st.error(f"❌ Could not process the uploaded file. Please make sure it's the correct format. Error: {e}")
+    else:
+        # Prompt the user to upload a file if nothing is uploaded yet
+        st.info("👆 Please upload your 'License 90 Day tracker' Excel file above to view the dashboard.")
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
