@@ -367,17 +367,136 @@ def store_dashboard():
                             except Exception as e:
                                 st.error(f"Database error: {e}")
                             
-    with tab2:
-        st.subheader("📦 Receive Warehouse Delivery")
-        st.info("Inventory DB module is currently in staging.")
-        
-    with tab3:
-        st.subheader("🔄 Freezer to FDU Chiller Transfer")
-        st.info("Transfer DB module is currently in staging.")
+   # (Your Tab 1 code remains exactly the same above this, just add this caption above your camera inputs)
+    # st.caption("📱 *Note: Mobile camera initialization may take a few seconds.*")
 
+    # ==========================================
+    # TAB 2: RECEIVING (INWARD GOODS)
+    # ==========================================
+    with tab2:
+        st.subheader("📥 Goods Receiving & QA Check")
+        st.caption("Log temperature and quality parameters for incoming deliveries.")
+        
+        with st.form("receiving_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                # Pre-configured routing based on your supply chain logistics
+                supply_route = st.selectbox("Delivery Origin", [
+                    "Primary Warehouse (Haryana)", 
+                    "Direct Vendor (Delhi)", 
+                    "Inter-Store Transfer",
+                    "Other"
+                ])
+                invoice_no = st.text_input("Invoice / Chalan Number")
+            with col2:
+                receiving_temp = st.number_input("Product Receiving Temp (°C)", step=0.1, format="%.1f")
+                vehicle_hygiene = st.selectbox("Vehicle Hygiene Status", ["Acceptable", "Poor / Rejected"])
+            
+            st.markdown("### 📸 Invoice / Chalan Upload")
+            st.caption("📱 *Note: Camera may take a moment to focus on text documents.*")
+            invoice_photo = st.camera_input("Capture Invoice Image", key="recv_photo")
+            
+            if st.form_submit_button("📥 Log Receiving Entry", type="primary"):
+                if not invoice_no:
+                    st.error("❌ Invoice Number is required.")
+                else:
+                    with st.spinner("Processing delivery log..."):
+                        recv_url = upload_photo(invoice_photo, st.session_state["store_id"], "receiving") if invoice_photo else None
+                        
+                        recv_data = {
+                            "store_id": st.session_state["store_id"],
+                            "supply_route": supply_route,
+                            "invoice_no": invoice_no,
+                            "receiving_temp": receiving_temp,
+                            "vehicle_hygiene": vehicle_hygiene,
+                            "invoice_proof_url": recv_url
+                        }
+                        
+                        try:
+                            if supabase:
+                                supabase.table("store_receiving").insert(recv_data).execute()
+                                st.success("✅ Receiving data saved successfully to the cloud!")
+                            else:
+                                st.error("Database disconnected.")
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 3: STORE-TO-STORE / FDU TRANSFER
+    # ==========================================
+    with tab3:
+        st.subheader("🔄 Stock Transfer Log")
+        st.caption("Ensure strict temperature control during dispatch.")
+        
+        with st.form("transfer_form"):
+            destination = st.selectbox("Destination", ["FDU Chiller", "DLF Mid Town Plaza", "Janakpuri, Delhi", "GK1, Delhi"])
+            transfer_items = st.text_area("Items Transferred (Include Quantities)")
+            dispatch_temp = st.number_input("Dispatch Core Temp (°C)", step=0.1, format="%.1f")
+            transfer_remarks = st.text_input("Remarks / Condition of Goods")
+            
+            if st.form_submit_button("🔄 Initiate Transfer", type="primary"):
+                if not transfer_items:
+                    st.error("❌ Please list the items being transferred.")
+                else:
+                    with st.spinner("Logging transfer..."):
+                        transfer_data = {
+                            "store_id": st.session_state["store_id"],
+                            "destination": destination,
+                            "items": transfer_items,
+                            "dispatch_temp": dispatch_temp,
+                            "remarks": transfer_remarks
+                        }
+                        try:
+                            if supabase:
+                                supabase.table("store_transfers").insert(transfer_data).execute()
+                                st.success("✅ Transfer logged successfully!")
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 4: WASTAGE & DISCARD
+    # ==========================================
     with tab4:
-        st.subheader("🗑️ Register Wastage")
-        st.info("Wastage DB module is currently in staging.")
+        st.subheader("🗑️ Wastage & Quality Discard Log")
+        st.caption("Record expired or damaged goods strictly per NSF standards.")
+        
+        with st.form("wastage_form"):
+            waste_item = st.text_input("Item Name")
+            col_w1, col_w2 = st.columns(2)
+            with col_w1:
+                waste_qty = st.number_input("Quantity Discarded", min_value=0.0, step=0.5)
+            with col_w2:
+                waste_reason = st.selectbox("Reason for Discard", [
+                    "Expired / Out of Date", 
+                    "Temperature Abuse", 
+                    "Physical Damage", 
+                    "Quality Standard Failure"
+                ])
+            
+            st.markdown("### 📸 Wastage Evidence")
+            st.caption("📱 *Note: Please capture a clear photo of the discarded items.*")
+            waste_photo = st.camera_input("Capture Discard Photo", key="waste_photo")
+            
+            if st.form_submit_button("🗑️ Log Wastage", type="primary"):
+                if not waste_item or waste_qty <= 0:
+                    st.error("❌ Valid Item Name and Quantity are required.")
+                else:
+                    with st.spinner("Logging wastage record..."):
+                        waste_url = upload_photo(waste_photo, st.session_state["store_id"], "wastage") if waste_photo else None
+                        
+                        waste_data = {
+                            "store_id": st.session_state["store_id"],
+                            "item_name": waste_item,
+                            "quantity": waste_qty,
+                            "reason": waste_reason,
+                            "evidence_url": waste_url
+                        }
+                        try:
+                            if supabase:
+                                supabase.table("store_wastage").insert(waste_data).execute()
+                                st.success("✅ Wastage record permanently saved to the vault!")
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
 
 # --- APP ROUTING ---
 if st.session_state["logged_in"]:
