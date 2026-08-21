@@ -673,6 +673,90 @@ with tab_lic_summary:
         st.session_state['uploaded_license_file'] = uploaded_file
         st.success("✅ New license tracker uploaded successfully! Scroll back up to view the updated executive summary.")
 # ==========================================
+# TAB 5: NSF AUDIT INTELLIGENCE
+# ==========================================
+with tab_nsf:
+    st.subheader("📈 NSF Audit Intelligence & Network Performance")
+    st.caption("Deep-dive analytics into third-party NSF food safety audits across Corporate (Ekaagra) and Sub-Franchise locations.")
+
+    if not df_db.empty:
+        # ------------------------------------------
+        # 1. HIGH-LEVEL NETWORK METRICS
+        # ------------------------------------------
+        total_nsf = len(df_db)
+        ekaagra_count = len(ekaagra_df)
+        sub_count = len(subfranchise_df)
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Tracked NSF Audits", total_nsf)
+        col2.metric("🏢 Ekaagra Direct Stores", ekaagra_count)
+        col3.metric("🤝 Sub-Franchise Stores", sub_count)
+
+        st.markdown("---")
+
+        # ------------------------------------------
+        # 2. VISUAL ANALYTICS (Corporate vs Franchise)
+        # ------------------------------------------
+        st.markdown("### 📊 Performance by Ownership Type")
+        col_chart1, col_chart2 = st.columns(2)
+
+        with col_chart1:
+            if 'score' in df_db.columns and 'Type' in df_db.columns:
+                # Average Score by Type
+                avg_scores = df_db.groupby('Type')['score'].mean().reset_index()
+                fig_avg = px.bar(
+                    avg_scores, x='Type', y='score', color='Type', text='score',
+                    title="Average Audit Score (%) by Ownership",
+                    color_discrete_map={"Ekaagra Direct": "#3b82f6", "Sub Franchise": "#f59e0b"}
+                )
+                fig_avg.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                fig_avg.update_layout(showlegend=False, yaxis_range=[0, 100])
+                st.plotly_chart(fig_avg, use_container_width=True)
+            else:
+                st.info("Score data not available for visualization.")
+
+        with col_chart2:
+            # Look for either 'result' or 'status' column to build distribution
+            status_col = 'result' if 'result' in df_db.columns else 'status' if 'status' in df_db.columns else None
+            
+            if status_col and 'Type' in df_db.columns:
+                # Pass/Fail/Completed distribution by Type
+                result_dist = df_db.groupby(['Type', status_col]).size().reset_index(name='Count')
+                fig_dist = px.bar(
+                    result_dist, x='Type', y='Count', color=status_col, barmode='group', text='Count',
+                    title=f"Audit Status Distribution",
+                    color_discrete_map={"PASS": "#10B981", "COMPLETED": "#10B981", "FAIL": "#EF4444", "EXPIRED": "#EF4444"}
+                )
+                fig_dist.update_traces(textposition='outside')
+                st.plotly_chart(fig_dist, use_container_width=True)
+            else:
+                st.info("Status/Result data not available for visualization.")
+
+        st.markdown("---")
+
+        # ------------------------------------------
+        # 3. DETAILED DATA SPLITS (Ekaagra vs Sub-Franchise)
+        # ------------------------------------------
+        st.markdown("### 📋 Detailed Audit Records by Network")
+        
+        # Use nested tabs to keep the data tables clean and separated
+        sub_tab_ekaagra, sub_tab_franchise = st.tabs(["🏢 Ekaagra Direct (Corporate)", "🤝 Sub-Franchise Network"])
+        
+        with sub_tab_ekaagra:
+            if not ekaagra_df.empty:
+                st.dataframe(ekaagra_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No Ekaagra Direct records found in the database.")
+                
+        with sub_tab_franchise:
+            if not subfranchise_df.empty:
+                st.dataframe(subfranchise_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No Sub-Franchise records found in the database.")
+
+    else:
+        st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")
+# ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
