@@ -233,18 +233,16 @@ with tab_exec:
 # ==========================================
 with tab_ops:
     st.subheader("🏬 Retail Operations & Compliance Status")
+    st.caption("Real-time oversight of daily shift submissions, staff training, and store-level monthly compliance.")
     
     # --- 1. LIVE DAILY SHIFT CHECKLISTS ---
     st.markdown("### 📋 Live Daily Shift Submissions")
     if not df_daily_live.empty:
-        # Select the most important columns to show management
         cols_to_show = ['store_id', 'manager_name', 'shift']
         if 'created_at' in df_daily_live.columns:
             cols_to_show.append('created_at')
             
         display_df = df_daily_live[cols_to_show].copy()
-        
-        # Rename columns for a cleaner presentation
         display_df.columns = [col.replace("_", " ").title() for col in display_df.columns]
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -314,112 +312,8 @@ with tab_ops:
                     "self_audit_score": self_score_val, "remark": remark_val, "licenses": updated_licenses
                 }
                 st.success("Successfully recorded operations data!")
-import requests
-from io import BytesIO
-
-# ==========================================
-# HELPER: ITEMIZED CHECKLIST PDF GENERATOR (With Item-Level Comments)
-# ==========================================
-def generate_detailed_checklist_pdf(vendor_name, fso, lic_no, address, audit_date, audit_responses, score_val, grade, remarks, photo_urls):
-    if FPDF is None: return None
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # Header
-    pdf.set_font("Arial", size=15, style='B')
-    pdf.cell(200, 8, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
-    pdf.set_font("Arial", size=9, style='I')
-    pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - General Manufacturing Audit Report", ln=1, align='C')
-    pdf.ln(4)
-    
-    # Metadata Box
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_font("Arial", size=9, style='B')
-    pdf.cell(200, 6, txt=f"  Vendor / FBO Name: {vendor_name}", ln=1, align='L', fill=True)
-    pdf.cell(200, 6, txt=f"  FBO License No.: {lic_no}  |  Address: {address}", ln=1, align='L', fill=True)
-    pdf.cell(200, 6, txt=f"  Auditor / FSO: {fso}", ln=1, align='L', fill=True)
-    pdf.cell(200, 6, txt=f"  Final Score: {score_val:.1f}%  |  Official Grade: {grade}", ln=1, align='L', fill=True)
-    pdf.cell(200, 6, txt=f"  Audit Date: {audit_date.strftime('%d-%b-%Y')}  |  Report Generated: {datetime.date.today().strftime('%d-%b-%Y')}", ln=1, align='L', fill=True)
-    pdf.ln(6)
-    
-    # Table Header
-    pdf.set_font("Arial", size=9, style='B')
-    pdf.set_fill_color(50, 50, 50)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(130, 7, txt="  Audit Question / Checklist Parameter", border=1, align='L', fill=True)
-    pdf.cell(30, 7, txt="Status", border=1, align='C', fill=True)
-    pdf.cell(30, 7, txt="Deduction Note", border=1, align='C', fill=True)
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln()
-    
-    # Table Body
-    pdf.set_font("Arial", size=8)
-    fill_row = False
-    for q_text, data in audit_responses.items():
-        status_short = data["status"].split(" ")[0]
-        row_label = f"  {q_text} ({data['points']} pts)"
-        comment_note = data.get("comment", "")
-        
-        pdf.set_fill_color(245, 245, 245) if fill_row else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(130, 6, txt=row_label, border=1, align='L', fill=True)
-        pdf.cell(30, 6, txt=status_short, border=1, align='C', fill=True)
-        pdf.cell(30, 6, txt=comment_note[:18] if comment_note else "-", border=1, align='C', fill=True)
-        pdf.ln()
-        fill_row = not fill_row
-        
-    pdf.ln(6)
-    
-    # Overall Remarks
-    pdf.set_font("Arial", size=10, style='B')
-    pdf.cell(200, 6, txt="Overall Remarks & Corrective Actions Required:", ln=1, align='L')
-    pdf.set_font("Arial", size=9)
-    pdf.multi_cell(200, 5, txt=str(remarks if remarks else "None"))
-    pdf.ln(6)
-    
-    # Embedded Photo Gallery
-    if photo_urls:
-        pdf.add_page()
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 7, txt="Inspection Photographic Evidence", ln=1, align='L')
-        pdf.ln(4)
-        
-        urls = [u.strip() for u in photo_urls.split(",")]
-        col_width = 85
-        col_gap = 10
-        current_col = 0
-        y_start = pdf.get_y()
-        
-        for idx, u in enumerate(urls):
-            try:
-                response = requests.get(u)
-                if response.status_code == 200:
-                    image_stream = BytesIO(response.content)
-                    x_pos = 10 + current_col * (col_width + col_gap)
-                    y_pos = pdf.get_y()
-                    
-                    if current_col == 1 and idx > 0:
-                        y_pos = y_start
-                    
-                    pdf.set_xy(x_pos, y_pos)
-                    pdf.set_font("Arial", size=8, style='B')
-                    pdf.cell(col_width, 5, txt=f"Proof Photo {idx+1}", ln=1, align='L')
-                    pdf.set_x(x_pos)
-                    pdf.image(image_stream, x=x_pos, w=col_width)
-                    
-                    if current_col == 1:
-                        pdf.ln(55)
-                        y_start = pdf.get_y()
-                        current_col = 0
-                    else:
-                        current_col = 1
-            except Exception:
-                pass
-
-    try:
-        return bytes(pdf.output())
-    except TypeError:
-        return pdf.output(dest='S').encode('latin-1')
-
+    else:
+        st.info("No store locations available in configuration.")
 
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
