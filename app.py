@@ -286,11 +286,38 @@ with tab_exec:
         st.info("No Ekaagra Direct NSF data available in the cloud database yet.")
 
     st.markdown("### 👥 Store-by-Store Staff Compliance Status")
-    if not df_monthly_filtered.empty:
-        table_view = df_monthly_filtered[['name', 'fostac_pending', 'medical_pending', 'is_compliant', 'self_audit_done', 'self_audit_score', 'remark']].copy()
-        table_view.columns = ["Store Name", "FoSTaC Pending", "Medical Pending", "Fully Compliant?", "Self Audit Done?", "Self Audit Score", "Remark"]
-        st.dataframe(table_view, use_container_width=True, hide_index=True)
-
+    
+    try:
+        if supabase is not None:
+            # Fetch the live compliance data from Supabase
+            comp_response = supabase.table("store_monthly_compliance").select("*").execute()
+            
+            if comp_response.data:
+                df_comp = pd.DataFrame(comp_response.data)
+                
+                # Sort to show the most recently added records at the top
+                df_comp = df_comp.sort_values(by='id', ascending=False)
+                
+                # High-end data grid with formatted columns
+                st.dataframe(
+                    df_comp[['store_name', 'month_year', 'fostac_pending', 'medical_pending', 'fully_compliant', 'self_audit_done', 'self_audit_score', 'remark']],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "store_name": st.column_config.TextColumn("Store Name", width="medium"),
+                        "month_year": st.column_config.TextColumn("Audit Month"),
+                        "fostac_pending": st.column_config.NumberColumn("FoSTaC Pending", format="%d ⚠️"),
+                        "medical_pending": st.column_config.NumberColumn("Medical Pending", format="%d ⚠️"),
+                        "fully_compliant": st.column_config.CheckboxColumn("Fully Compliant?", default=False),
+                        "self_audit_done": st.column_config.TextColumn("Self Audit Done?"),
+                        "self_audit_score": st.column_config.NumberColumn("Self Audit Score (%)"),
+                        "remark": st.column_config.TextColumn("Remarks")
+                    }
+                )
+            else:
+                st.info("📂 No compliance data found. Store Managers need to submit data in the Retail Operations tab.")
+    except Exception as e:
+        st.error(f"❌ Could not load compliance data from the cloud: {e}")
 # ==========================================
 # TAB 2: RETAIL OPERATIONS (Store Compliance Input)
 # ==========================================
