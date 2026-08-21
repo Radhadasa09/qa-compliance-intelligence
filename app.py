@@ -292,74 +292,69 @@ with tab_exec:
         st.dataframe(table_view, use_container_width=True, hide_index=True)
 
 # ==========================================
-# TAB 2: RETAIL OPERATIONS (Data Entry & Live Logs)
+# TAB 2: RETAIL OPERATIONS (Store Compliance Input)
 # ==========================================
-with tab_ops:
-    st.subheader("🏬 Retail Operations & Compliance Status")
-    st.caption("Real-time oversight of daily shift submissions, staff training, and store-level monthly NSF self-audits.")
+with tab_retail:
+    st.subheader("🏪 Store Staff Compliance Entry")
+    st.caption("Submit monthly compliance records. Data is permanently saved to the cloud database.")
     
-    # --- 1. LIVE DAILY SHIFT CHECKLISTS ---
-    st.markdown("### 📋 Live Daily Shift Submissions")
-    if not df_daily_live.empty:
-        cols_to_show = ['store_id', 'manager_name', 'shift']
-        if 'created_at' in df_daily_live.columns:
-            cols_to_show.append('created_at')
-            
-        display_df = df_daily_live[cols_to_show].copy()
-        display_df.columns = [col.replace("_", " ").title() for col in display_df.columns]
+    # --- 1. CONFIGURATION ---
+    # Update this list with your actual complete list of stores
+    FULL_STORE_LIST = [
+        "DLF Mid Town Plaza, Moti Nagar", 
+        "Janakpuri, Delhi", 
+        "GK1, Delhi",
+        "Oberoi SkyCity, Mumbai",
+        "M3M Atrium, Gurgaon",
+        "Sector 50 Noida, Noida",
+        "Malcha, Delhi",
+        "Platina, Gurgaon",
+        "Season Mall Pune, Pune",
+        "BRS Nagar Ludhiana, Ludhiana"
+    ]
+    
+    with st.expander("📝 Enter New Compliance Record", expanded=True):
+        # --- 2. INPUT FORM ---
+        selected_store = st.selectbox("Select Store Location", FULL_STORE_LIST)
+        current_month = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
         
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No daily shift checklists submitted by store managers yet.")
+        st.markdown("---")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            input_fostac = st.number_input("FoSTaC Pending (Count)", min_value=0, step=1)
+            self_audit_done = st.selectbox("Self Audit Completed?", ["Yes", "No"])
+        with col2:
+            input_medical = st.number_input("Medical Pending (Count)", min_value=0, step=1)
+            self_audit_score = st.number_input("Self Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, help="Leave at 0 if no audit was done.")
+            
+        is_compliant = st.checkbox("✅ Mark as Fully Compliant (No pending FoSTaC/Medical)")
+        remark = st.text_area("Additional Remarks / Action Plan")
 
-    st.markdown("---")
-
-    # --- 2. MONTHLY COMPLIANCE & NSF SELF-AUDIT TRACKER ---
-    st.markdown("### ⚙️ Store-Level Monthly Compliance & NSF Self-Audit")
-    if not df_stores.empty:
-        store_names = df_stores['name'].tolist()
-        selected_store = st.selectbox("Select Store", store_names, key=f"ops_store_{selected_month}")
-        
-        current_data = get_store_monthly(selected_store, selected_month)
-        st.markdown(f"**Managing Data For:** `{selected_store}` | **Period:** `{selected_month}`")
-        
-        with st.form(f"form_{selected_store}_{selected_month}"):
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                st.markdown("#### 👥 Staff Compliance & Pending Counts")
-                fostac_val = st.number_input("FoSTaC Pending Count", min_value=0, value=int(current_data.get('fostac_pending', 0)))
-                medical_val = st.number_input("Medical Pending Count", min_value=0, value=int(current_data.get('medical_pending', 0)))
-            
-            with col_b:
-                st.markdown("#### 📋 Monthly NSF Self-Audit Status")
-                audit_options = ["Not Done", "Done"]
-                curr_audit = current_data.get('self_audit_done', "No")
-                default_audit_idx = 1 if curr_audit in ["Yes", "Done"] else 0
-                
-                self_audit_choice = st.selectbox("Monthly NSF Self-Audit Checklist", audit_options, index=default_audit_idx)
-            
-            st.markdown("---")
-            critical_points_val = st.text_area(
-                "⚠️ Critical Points Needing Attention / Corrective Actions", 
-                value=str(current_data.get('remark', '')),
-                placeholder="Mention any critical food safety gaps, infrastructure issues, or action items..."
-            )
-            
-            if st.form_submit_button(f"Save Store Data for {selected_month}", type="primary"):
-                # Save data back into session state without touching licenses
-                st.session_state['monthly_db'][(selected_store, selected_month)] = {
-                    "fostac_pending": fostac_val, 
-                    "medical_pending": medical_val, 
-                    "nsf_score": current_data.get('nsf_score', 0), 
-                    "self_audit_done": self_audit_choice,
-                    "self_audit_score": 0, # Score removed as requested
-                    "remark": critical_points_val, 
-                    "licenses": current_data.get('licenses', {}) # Preserves existing license data untouched
-                }
-                st.success("Successfully recorded retail operations and NSF audit data!")
-    else:
-        st.info("No store locations available in configuration.")
+        # --- 3. CLOUD SAVE LOGIC ---
+        if st.button("🚀 Save Store Compliance Data", type="primary"):
+            with st.spinner("Saving to cloud database..."):
+                try:
+                    compliance_data = {
+                        "store_name": selected_store,
+                        "fostac_pending": input_fostac,
+                        "medical_pending": input_medical,
+                        "fully_compliant": is_compliant,
+                        "self_audit_done": self_audit_done,
+                        "self_audit_score": self_audit_score,
+                        "remark": remark,
+                        "month_year": current_month
+                    }
+                    
+                    if supabase is not None:
+                        # Insert data into the new Supabase table
+                        supabase.table("store_monthly_compliance").insert(compliance_data).execute()
+                        st.success(f"✅ Compliance data for {selected_store} successfully saved to the cloud!")
+                    else:
+                        st.error("Database connection is not active. Please check your Supabase credentials.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Failed to save data: {e}")
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
 # ==========================================
