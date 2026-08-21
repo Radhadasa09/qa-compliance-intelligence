@@ -614,16 +614,16 @@ with tab_supply:
 
                         # Grade Assignment based strictly on percentage
                         if final_percentage >= 80:
-                            grade = "A+ (Exemplar)"[cite: 2]
+                            grade = "A+ (Exemplar)"
                             status_result = "Passed"
                         elif 72 <= final_percentage < 80:
-                            grade = "A (Satisfactory)"[cite: 2]
+                            grade = "A (Satisfactory)"
                             status_result = "Passed"
                         elif 45 <= final_percentage < 72:
-                            grade = "B (Needs Improvement)"[cite: 2]
+                            grade = "B (Needs Improvement)"
                             status_result = "Conditionally Approved"
                         else:
-                            grade = "Non Compliance"[cite: 2]
+                            grade = "Non Compliance"
                             status_result = "Failed"
 
                         # Save payload to Supabase
