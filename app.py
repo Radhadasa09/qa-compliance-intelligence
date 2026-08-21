@@ -548,12 +548,21 @@ with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Executive Dashboard")
     st.caption("High-level overview and store statutory licenses pulled from the tracker.")
     
+    import os
+    import io
+
     # 1. LOAD AND PROCESS THE DATA FIRST
     try:
         if 'uploaded_license_file' in st.session_state and st.session_state['uploaded_license_file'] is not None:
-            df_lic = pd.read_excel(st.session_state['uploaded_license_file'], sheet_name="Sheet1")
-        else:
+            # Read from raw bytes in session state
+            df_lic = pd.read_excel(io.BytesIO(st.session_state['uploaded_license_file']), sheet_name="Sheet1")
+        elif os.path.exists("License 90 Day tracker.xlsx"):
+            # Read from local server
             df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
+        else:
+            # GRACEFUL FALLBACK: Create empty dataframe so the UI doesn't crash
+            df_lic = pd.DataFrame(columns=['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark'])
+            st.info("📂 No tracker file found on server. Please upload the latest Excel sheet below to populate the dashboard.")
         
         # Clean up headers
         df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
