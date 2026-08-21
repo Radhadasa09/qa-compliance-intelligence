@@ -677,9 +677,11 @@ with tab_lic_summary:
     
     uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
     
+    # ---> PASTE THE CODE RIGHT HERE <---
     if uploaded_file is not None:
-        st.session_state['uploaded_license_file'] = uploaded_file
+        st.session_state['uploaded_license_file'] = uploaded_file.getvalue()
         st.success("✅ New license tracker uploaded successfully! Scroll back up to view the updated executive summary.")
+        st.rerun()
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
