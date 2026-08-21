@@ -666,28 +666,14 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Stable, Loop-Free Version)
+# TAB 4: LICENSE SUMMARY (Executive Metrics + Store Cards + Uploader)
 # ==========================================
 with tab_lic_summary:
-    st.subheader("📜 License Compliance Summary — Live Data")
-    st.caption("Live overview of store statutory licenses pulled from the tracker.")
+    st.subheader("📜 License Compliance Summary — Executive Dashboard")
+    st.caption("High-level overview and store statutory licenses pulled from the tracker.")
     
-    # 1. UPLOAD SECTION AT THE BOTTOM (Evaluated first or handled via session state)
-    st.markdown("### 📂 Update License Tracker Data")
-    st.caption("Upload a new Excel sheet anytime to update the live dashboard above instantly.")
-    
-    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
-    
-    # Save to session state if a new file is provided
-    if uploaded_file is not None:
-        st.session_state['uploaded_license_file'] = uploaded_file
-    
-    st.markdown("---")
-    st.markdown("### 🔍 Store License Details")
-
-    # 2. LOAD AND DISPLAY THE DASHBOARD
+    # 1. LOAD AND PROCESS THE DATA FIRST
     try:
-        # Check if an uploaded file exists in session state, otherwise use default
         if 'uploaded_license_file' in st.session_state and st.session_state['uploaded_license_file'] is not None:
             df_lic = pd.read_excel(st.session_state['uploaded_license_file'], sheet_name="Sheet1")
         else:
@@ -697,7 +683,23 @@ with tab_lic_summary:
         df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
         df_lic = df_lic.iloc[1:].reset_index(drop=True)
         
-        # Interactive Filters
+        # ------------------------------------------
+        # EXECUTIVE KPI METRICS (Top Summary Cards)
+        # ------------------------------------------
+        total_stores = len(df_lic)
+        pending_remarks_count = df_lic['Remark'].notna().sum()
+        total_cities = df_lic['City'].dropna().nunique()
+        
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("🏢 Total Tracked Facilities", f"{total_stores} Stores")
+        col_m2.metric("🌍 Operating Cities", f"{total_cities} Cities")
+        col_m3.metric("⚠️ Stores with Pending Remarks", f"{pending_remarks_count} Stores", delta_color="inverse" if pending_remarks_count > 0 else "off")
+        
+        st.markdown("---")
+        
+        # ------------------------------------------
+        # FILTERS SECTION
+        # ------------------------------------------
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
@@ -712,6 +714,7 @@ with tab_lic_summary:
             filtered_df = filtered_df[filtered_df['Remark'].notna()]
             
         st.markdown("---")
+        st.markdown("### 🔍 Store License Details")
         
         def format_date(d):
             if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
@@ -720,7 +723,7 @@ with tab_lic_summary:
                 return d.strftime('%d-%b-%Y')
             return str(d)[:10] 
 
-        # Presentable Executive View
+        # Presentable Executive View (Expanders)
         for _, row in filtered_df.iterrows():
             with st.expander(f"📍 {row['Location']} ({row['City']})"):
                 cols = st.columns(5)
@@ -738,44 +741,17 @@ with tab_lic_summary:
                     
     except Exception as e:
         st.error(f"❌ Could not load license tracker data: {e}")
-# ==========================================
-# TAB 5: NSF AUDIT INTELLIGENCE
-# ==========================================
-with tab_nsf:
-    st.subheader(f"📈 NSF Audit Intelligence (Cloud Database)")
-    st.markdown("Real-time live NSF audits for Sub Franchise outlets pulled from Supabase.")
-    
-    if not subfranchise_df.empty and 'score' in subfranchise_df.columns:
-        col_sf1, col_sf2, col_sf3, col_sf4 = st.columns(4)
-        total_sf_audits = len(subfranchise_df)
-        avg_sf_score = subfranchise_df['score'].mean()
-        
-        if 'result' in subfranchise_df.columns:
-            pass_count = len(subfranchise_df[subfranchise_df['result'] == 'PASS'])
-            pass_rate = (pass_count / total_sf_audits) * 100 if total_sf_audits > 0 else 0
-        else:
-            pass_count, pass_rate = 0, 0
-        
-        col_sf1.metric("Total SF Audits", total_sf_audits)
-        col_sf2.metric("Average SF Score", f"{avg_sf_score:.2f}%")
-        col_sf3.metric("Passed Audits", pass_count if 'result' in subfranchise_df.columns else "N/A")
-        col_sf4.metric("Pass Rate", f"{pass_rate:.1f}%" if 'result' in subfranchise_df.columns else "N/A")
 
-        if 'store_name' in subfranchise_df.columns:
-            fig_sf = px.bar(
-                subfranchise_df, x='store_name', y='score', text='score', 
-                color='result' if 'result' in subfranchise_df.columns else 'score',
-                color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'} if 'result' in subfranchise_df.columns else None,
-                title=f"Sub Franchise NSF Scores"
-            )
-            fig_sf.update_traces(textposition='outside')
-            fig_sf.update_layout(xaxis_tickangle=-15, margin=dict(t=40, b=40, l=0, r=0))
-            st.plotly_chart(fig_sf, use_container_width=True)
-        
-        st.markdown("### 📋 NSF Audit Details")
-        st.dataframe(subfranchise_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No Sub Franchise data available. Please upload a PDF using the uploader tool below.")
+    # 3. UPLOAD SECTION AT THE VERY BOTTOM
+    st.markdown("---")
+    st.markdown("### 📂 Update License Tracker Data")
+    st.caption("Scroll down here anytime you receive a new Excel sheet to update the live dashboard above.")
+    
+    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
+    
+    if uploaded_file is not None:
+        st.session_state['uploaded_license_file'] = uploaded_file
+        st.success("✅ New license tracker uploaded successfully! Scroll back up to view the updated executive summary.")
 # ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
