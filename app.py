@@ -542,32 +542,28 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Executive Metrics + Expiry Bar Chart + Uploader)
+# TAB 4: LICENSE SUMMARY (Supabase Cloud Sync)
 # ==========================================
 with tab_lic_summary:
     st.subheader("📜 License Compliance Summary — Executive Dashboard")
-    st.caption("High-level overview and store statutory licenses pulled from the tracker.")
+    st.caption("High-level overview and store statutory licenses pulled securely from Supabase cloud database.")
     
-    import os
-    import io
-
-    # 1. LOAD AND PROCESS THE DATA FIRST
+    # 1. LOAD DATA FROM SUPABASE
+    df_lic = pd.DataFrame()
     try:
-        if 'uploaded_license_file' in st.session_state and st.session_state['uploaded_license_file'] is not None:
-            # Read from raw bytes in session state
-            df_lic = pd.read_excel(io.BytesIO(st.session_state['uploaded_license_file']), sheet_name="Sheet1")
-        elif os.path.exists("License 90 Day tracker.xlsx"):
-            # Read from local server
-            df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
-        else:
-            # GRACEFUL FALLBACK: Create empty dataframe so the UI doesn't crash
-            df_lic = pd.DataFrame(columns=['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark'])
-            st.info("📂 No tracker file found on server. Please upload the latest Excel sheet below to populate the dashboard.")
-        
-        # Clean up headers
-        df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
-        df_lic = df_lic.iloc[1:].reset_index(drop=True)
-        
+        if supabase is not None:
+            response = supabase.table("license_tracker").select("*").execute()
+            if response.data:
+                df_lic = pd.DataFrame(response.data)
+                # Rename columns back to match your tracker format
+                df_lic = df_lic[['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']]
+                df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
+    except Exception as e:
+        st.error(f"Could not fetch license data from Supabase: {e}")
+
+    if df_lic.empty:
+        st.info("📂 No license data found in the cloud database. Upload your Excel sheet below *once* to save it permanently.")
+    else:
         # ------------------------------------------
         # EXPIRY & METRIC CALCULATIONS
         # ------------------------------------------
@@ -605,9 +601,7 @@ with tab_lic_summary:
         total_stores = len(df_lic)
         total_cities = df_lic['City'].dropna().nunique()
         
-        # ------------------------------------------
-        # TOP EXECUTIVE KPI METRICS
-        # ------------------------------------------
+        # TOP KPI METRICS
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("🏢 Total Tracked Facilities", f"{total_stores} Stores")
         col_m2.metric("🌍 Operating Cities", f"{total_cities} Cities")
@@ -615,26 +609,21 @@ with tab_lic_summary:
         
         st.markdown("---")
         
-        # ------------------------------------------
-        # EXECUTIVE VISUALIZATION (Bar Chart)
-        # ------------------------------------------
+        # BAR CHART
         st.markdown("### 📊 Facility License Portfolio & Expiry Alert Overview")
         if len(chart_data_rows) > 0:
             chart_df = pd.DataFrame(chart_data_rows).set_index("Location")
             st.bar_chart(chart_df[["Active Licenses"]], color="#1f77b4")
-        else:
-            st.info("📈 Awaiting data upload to generate visual charts.")
         
-        # ------------------------------------------
-        # FILTERS SECTION
-        # ------------------------------------------
+        st.markdown("---")
+        
+        # FILTERS & TABLE DETAILS
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
         with col_f2:
             status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
             
-        # Apply Filters
         filtered_df = df_lic.copy()
         if city_filter != "All Cities":
             filtered_df = filtered_df[filtered_df['City'] == city_filter]
@@ -651,7 +640,6 @@ with tab_lic_summary:
                 return d.strftime('%d-%b-%Y')
             return str(d)[:10] 
 
-        # Presentable Executive View (Expanders)
         for _, row in filtered_df.iterrows():
             with st.expander(f"📍 {row['Location']} ({row['City']})"):
                 cols = st.columns(5)
@@ -666,22 +654,37 @@ with tab_lic_summary:
                     st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
                 else:
                     st.success("✅ All statutory licenses up to date.")
-                    
-    except Exception as e:
-        st.error(f"❌ Could not load license tracker data: {e}")
 
-    # 3. UPLOAD SECTION AT THE VERY BOTTOM
+    # 3. PERMANENT CLOUD UPLOAD SECTION
     st.markdown("---")
-    st.markdown("### 📂 Update License Tracker Data")
-    st.caption("Scroll down here anytime you receive a new Excel sheet to update the live dashboard above.")
+    st.markdown("### 📂 Permanent Cloud License Sync")
+    st.caption("Upload your Excel sheet *once*. It will be saved securely to Supabase so it never deletes on page refresh.")
     
-    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
+    uploaded_file = st.file_uploader("Upload Master License Tracker Excel File", type=["xlsx", "xls"], key="cloud_license_uploader")
     
-    # ---> PASTE THE CODE RIGHT HERE <---
     if uploaded_file is not None:
-        st.session_state['uploaded_license_file'] = uploaded_file.getvalue()
-        st.success("✅ New license tracker uploaded successfully! Scroll back up to view the updated executive summary.")
-        st.rerun()
+        if st.button("🚀 Sync & Save Permanently to Cloud Database", type="primary"):
+            with st.spinner("Uploading and syncing records to Supabase..."):
+                try:
+                    df_upload = pd.read_excel(uploaded_file, sheet_name="Sheet1")
+                    df_upload.columns = ['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']
+                    df_upload = df_upload.iloc[1:].reset_index(drop=True)
+                    
+                    # Clean NaN values to None for Supabase compatibility
+                    df_upload = df_upload.where(pd.notnull(df_upload), None)
+                    
+                    if supabase is not None:
+                        # Clear old table data first
+                        supabase.table("license_tracker").delete().neq("id", 0).execute()
+                        
+                        # Insert new rows in chunks
+                        records = df_upload.to_dict(orient="records")
+                        supabase.table("license_tracker").insert(records).execute()
+                        
+                        st.success("✅ License tracker successfully saved to Supabase cloud database! Refreshing...")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to sync to database: {e}")
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
