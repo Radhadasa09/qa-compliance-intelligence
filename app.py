@@ -669,81 +669,77 @@ with tab_supply:
 # TAB 4: LICENSE SUMMARY (Dashboard on Top, Upload on Bottom)
 # ==========================================
 with tab_lic_summary:
-    # 1. Create Layout Containers (This dictates the visual order on screen)
-    header_container = st.container()
-    dashboard_container = st.container()
-    st.markdown("---") # Visual divider
-    upload_container = st.container()
+    st.subheader("📜 License Compliance Summary — Live Data")
+    st.caption("Live overview of store statutory licenses pulled from the tracker.")
     
-    # 2. Put the Uploader in the Bottom Container FIRST in logic
-    with upload_container:
-        st.markdown("#### 📂 Update Dashboard Data")
-        st.caption("Upload a new 90-Day Tracker Excel file here to instantly update the live dashboard above.")
-        uploaded_file = st.file_uploader("Upload Latest License Tracker (Excel)", type=["xlsx", "xls"])
-
-    # 3. Build the Header in the Top Container
-    with header_container:
-        st.subheader("📜 License Compliance Summary — Live Data")
-        st.caption("Live overview of store statutory licenses.")
+    # 1. LOAD AND DISPLAY THE DASHBOARD FIRST (Top of Page)
+    try:
+        # Check if an uploaded file exists in session state or locally
+        if 'uploaded_license_file' in st.session_state and st.session_state['uploaded_license_file'] is not None:
+            df_lic = pd.read_excel(st.session_state['uploaded_license_file'], sheet_name="Sheet1")
+        else:
+            # Fallback to default file on server/GitHub
+            df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
         
-    # 4. Build the Dashboard in the Middle Container
-    with dashboard_container:
-        try:
-            # Smart Loading: Use the uploaded file if present, otherwise use the server's default file
-            if uploaded_file is not None:
-                df_lic = pd.read_excel(uploaded_file, sheet_name="Sheet1")
-            else:
-                df_lic = pd.read_excel("License 90 Day tracker.xlsx", sheet_name="Sheet1")
+        # Clean up headers
+        df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
+        df_lic = df_lic.iloc[1:].reset_index(drop=True)
+        
+        # Interactive Filters
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
+        with col_f2:
+            status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
             
-            # Clean up the headers
-            df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
-            df_lic = df_lic.iloc[1:].reset_index(drop=True)
+        # Apply Filters
+        filtered_df = df_lic.copy()
+        if city_filter != "All Cities":
+            filtered_df = filtered_df[filtered_df['City'] == city_filter]
+        if status_filter == "Pending / Has Remarks":
+            filtered_df = filtered_df[filtered_df['Remark'].notna()]
             
-            # Interactive Filters (Kept exactly as you liked them)
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                city_filter = st.selectbox("Filter by City", ["All Cities"] + list(df_lic['City'].dropna().unique()))
-            with col_f2:
-                status_filter = st.selectbox("Filter by Action Required", ["All Stores", "Pending / Has Remarks"])
-                
-            # Apply Filters
-            filtered_df = df_lic.copy()
-            if city_filter != "All Cities":
-                filtered_df = filtered_df[filtered_df['City'] == city_filter]
-            if status_filter == "Pending / Has Remarks":
-                filtered_df = filtered_df[filtered_df['Remark'].notna()]
-                
-            st.markdown("---")
-            st.markdown("### 🔍 Store License Details")
-            
-            # Helper function for dates
-            def format_date(d):
-                if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
-                    return "N/A"
-                if isinstance(d, datetime.datetime): 
-                    return d.strftime('%d-%b-%Y')
-                return str(d)[:10] 
+        st.markdown("---")
+        st.markdown("### 🔍 Store License Details")
+        
+        def format_date(d):
+            if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat']: 
+                return "N/A"
+            if isinstance(d, datetime.datetime): 
+                return d.strftime('%d-%b-%Y')
+            return str(d)[:10] 
 
-            # Presentable Executive View
-            for _, row in filtered_df.iterrows():
-                with st.expander(f"📍 {row['Location']} ({row['City']})"):
-                    cols = st.columns(5)
-                    cols[0].metric("FSSAI", format_date(row['FSSAI']))
-                    cols[1].metric("Trade License", format_date(row['Trade']))
-                    cols[2].metric("Fire NOC", format_date(row['Fire']))
-                    cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
-                    cols[4].metric("Signage", format_date(row['Signage']))
+        # Presentable Executive View
+        for _, row in filtered_df.iterrows():
+            with st.expander(f"📍 {row['Location']} ({row['City']})"):
+                cols = st.columns(5)
+                cols[0].metric("FSSAI", format_date(row['FSSAI']))
+                cols[1].metric("Trade License", format_date(row['Trade']))
+                cols[2].metric("Fire NOC", format_date(row['Fire']))
+                cols[3].metric("Pollution CTO", format_date(row['Pollution CTO']))
+                cols[4].metric("Signage", format_date(row['Signage']))
+                
+                remark_text = row['Remark']
+                if pd.notna(remark_text):
+                    st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
+                else:
+                    st.success("✅ All statutory licenses up to date.")
                     
-                    remark_text = row['Remark']
-                    if pd.notna(remark_text):
-                        st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
-                    else:
-                        st.success("✅ All statutory licenses up to date.")
-                        
-        except FileNotFoundError:
-            st.info("👆 Dashboard is currently empty. Please upload your 'License 90 Day tracker' Excel file in the section below to populate it.")
-        except Exception as e:
-            st.error(f"❌ Could not process the file. Error: {e}")
+    except Exception as e:
+        st.error(f"❌ Could not load license tracker data: {e}")
+
+    # 2. UPLOAD SECTION PLACED AT THE VERY BOTTOM
+    st.markdown("---")
+    st.markdown("### 📂 Update License Tracker Data")
+    st.caption("Scroll down here anytime you receive a new Excel sheet to update the live dashboard above.")
+    
+    uploaded_file = st.file_uploader("Upload Latest License Tracker Excel File", type=["xlsx", "xls"], key="license_excel_uploader")
+    
+    if uploaded_file is not None:
+        # Save uploaded file to session state so it persists across tab switches
+        st.session_state['uploaded_license_file'] = uploaded_file
+        st.success("✅ New license tracker uploaded successfully! The executive summary above has been updated.")
+        st.rerun()
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
