@@ -39,32 +39,67 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-# --- MODERN EXECUTIVE UI THEME ---
+# --- CBTL CORPORATE UI THEME ---
 st.markdown("""
     <style>
-        /* Modernize metric cards with subtle shadows and rounded corners */
-        [data-testid="stMetric"] {
-            background-color: #ffffff;
-            border-radius: 10px;
-            padding: 15px 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
+        /* Main background and font */
+        .stApp {
+            background-color: #F5F7FA;
+            font-family: 'Arial', sans-serif;
         }
-        /* Style the tabs to look like polished software interface elements */
+        
+        /* Style the tabs to match the solid underline active state */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
+            gap: 15px;
+            border-bottom: 2px solid #E2E8F0;
         }
         .stTabs [data-baseweb="tab"] {
-            border-radius: 6px 6px 0px 0px;
-            padding: 10px 20px;
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-bottom: none;
+            border: none;
+            background-color: transparent;
+            padding-bottom: 10px;
         }
         .stTabs [aria-selected="true"] {
-            background-color: #ffffff;
-            border-top: 3px solid #2563eb !important;
-            font-weight: 600;
+            background-color: transparent;
+            border-bottom: 3px solid #003366 !important; /* Dark blue underline */
+            color: #003366;
+            font-weight: 800;
+        }
+        
+        /* Light Blue Informational Cards (matching the Checklist Info card) */
+        div[data-testid="stExpander"] {
+            background-color: #EAF2F8; /* Light blue */
+            border-radius: 10px;
+            border: 1px solid #D6EAF8;
+        }
+        div[data-testid="stExpander"] summary {
+            background-color: #EAF2F8;
+            border-radius: 10px;
+        }
+        
+        /* Metric Cards / Score Badges */
+        [data-testid="stMetric"] {
+            background-color: #EAF2F8;
+            border-radius: 8px;
+            padding: 10px 15px;
+            box-shadow: none;
+            border: none;
+        }
+        
+        /* Special Green Gradient for Scores (matching the "Score / Grade" blocks) */
+        [data-testid="stMetric"]:has(label:contains("Score")), 
+        [data-testid="stMetric"]:has(label:contains("Grade")) {
+            background: linear-gradient(135deg, #E0F8E9 0%, #C8F0D6 100%);
+            border-left: 4px solid #2ECC71;
+        }
+        
+        /* Blue Status Badges */
+        .status-badge {
+            background-color: #63B3ED;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
         }
     </style>
 """, unsafe_allow_html=True)
