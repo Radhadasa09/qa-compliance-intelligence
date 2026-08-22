@@ -319,14 +319,18 @@ with tab_exec:
     except Exception as e:
         st.error(f"❌ Could not load compliance data from the cloud: {e}")
 # ==========================================
-# TAB 2: RETAIL OPERATIONS (Store Compliance Input)
+# TAB 2: RETAIL OPERATIONS 
 # ==========================================
 with tab_ops:
-    st.subheader("🏪 Store Staff Compliance Entry")
+    st.header("🏪 Retail Operations & Logistics")
+    
+    # ==========================================
+    # --- PART 1: ORIGINAL COMPLIANCE ENTRY ---
+    # ==========================================
+    st.subheader("📋 Store Staff Compliance Entry")
     st.caption("Submit monthly compliance records. Data is permanently saved to the cloud database.")
     
     # --- 1. CONFIGURATION ---
-    # Update this list with your actual complete list of stores
     FULL_STORE_LIST = [
         "DLF Mid Town Plaza, Moti Nagar", 
         "Janakpuri, Delhi", 
@@ -340,48 +344,109 @@ with tab_ops:
         "BRS Nagar Ludhiana, Ludhiana"
     ]
     
-    with st.expander("📝 Enter New Compliance Record", expanded=True):
-        # --- 2. INPUT FORM ---
-        selected_store = st.selectbox("Select Store Location", FULL_STORE_LIST)
-        current_month = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
-        
-        st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            input_fostac = st.number_input("FoSTaC Pending (Count)", min_value=0, step=1)
-            self_audit_done = st.selectbox("Self Audit Completed?", ["Yes", "No"])
-        with col2:
-            input_medical = st.number_input("Medical Pending (Count)", min_value=0, step=1)
-            self_audit_score = st.number_input("Self Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, help="Leave at 0 if no audit was done.")
+    with st.expander("📝 Enter New Compliance Record", expanded=False):
+        with st.form("compliance_entry_form"):
+            # --- 2. INPUT FORM ---
+            selected_store = st.selectbox("Select Store Location", FULL_STORE_LIST)
+            current_month = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
             
-        is_compliant = st.checkbox("✅ Mark as Fully Compliant (No pending FoSTaC/Medical)")
-        remark = st.text_area("Additional Remarks / Action Plan")
+            st.markdown("---")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                input_fostac = st.number_input("FoSTaC Pending (Count)", min_value=0, step=1)
+                self_audit_done = st.selectbox("Self Audit Completed?", ["Yes", "No"])
+            with col2:
+                input_medical = st.number_input("Medical Pending (Count)", min_value=0, step=1)
+                self_audit_score = st.number_input("Self Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, help="Leave at 0 if no audit was done.")
+                
+            is_compliant = st.checkbox("✅ Mark as Fully Compliant (No pending FoSTaC/Medical)")
+            remark = st.text_area("Additional Remarks / Action Plan")
 
-        # --- 3. CLOUD SAVE LOGIC ---
-        if st.button("🚀 Save Store Compliance Data", type="primary"):
-            with st.spinner("Saving to cloud database..."):
-                try:
-                    compliance_data = {
-                        "store_name": selected_store,
-                        "fostac_pending": input_fostac,
-                        "medical_pending": input_medical,
-                        "fully_compliant": is_compliant,
-                        "self_audit_done": self_audit_done,
-                        "self_audit_score": self_audit_score,
-                        "remark": remark,
-                        "month_year": current_month
-                    }
-                    
-                    if supabase is not None:
-                        # Insert data into the new Supabase table
-                        supabase.table("store_monthly_compliance").insert(compliance_data).execute()
-                        st.success(f"✅ Compliance data for {selected_store} successfully saved to the cloud!")
-                    else:
-                        st.error("Database connection is not active. Please check your Supabase credentials.")
+            # --- 3. CLOUD SAVE LOGIC ---
+            if st.form_submit_button("🚀 Save Store Compliance Data", type="primary"):
+                with st.spinner("Saving to cloud database..."):
+                    try:
+                        compliance_data = {
+                            "store_name": selected_store,
+                            "fostac_pending": input_fostac,
+                            "medical_pending": input_medical,
+                            "fully_compliant": is_compliant,
+                            "self_audit_done": self_audit_done,
+                            "self_audit_score": self_audit_score,
+                            "remark": remark,
+                            "month_year": current_month
+                        }
                         
-                except Exception as e:
-                    st.error(f"❌ Failed to save data: {e}")
+                        if supabase is not None:
+                            supabase.table("store_monthly_compliance").insert(compliance_data).execute()
+                            st.success(f"✅ Compliance data for {selected_store} successfully saved to the cloud!")
+                        else:
+                            st.error("Database connection is not active. Please check your Supabase credentials.")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Failed to save data: {e}")
+
+    st.markdown("---")
+    
+    # ==========================================
+    # --- PART 2: NEW LOGISTICS & FDU MONITORING ---
+    # ==========================================
+    st.subheader("🔄 Real-Time Logistics & FDU Compliance")
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        st.markdown("### Inter-Store Dispatches")
+        try:
+            if supabase is not None:
+                transfers_res = supabase.table("store_transfers").select("*").order("created_at", desc=True).limit(50).execute()
+                if transfers_res.data:
+                    df_transfers = pd.DataFrame(transfers_res.data)
+                    # Format timestamp
+                    df_transfers['created_at'] = pd.to_datetime(df_transfers['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                    
+                    st.dataframe(
+                        df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "created_at": "Date/Time",
+                            "store_id": "Origin Store",
+                            "destination": "Destination",
+                            "dispatch_temp": "Temp (°C)",
+                            "items": "Manifest"
+                        }
+                    )
+                else:
+                    st.info("No inter-store dispatches logged.")
+        except Exception as e:
+            st.error(f"Error loading dispatch data: {e}")
+            
+    with col4:
+        st.markdown("### FDU Thaw Compliance (MRD Matrix)")
+        try:
+            if supabase is not None:
+                fdu_res = supabase.table("store_fdu_transfers").select("*").order("created_at", desc=True).limit(50).execute()
+                if fdu_res.data:
+                    df_fdu = pd.DataFrame(fdu_res.data)
+                    
+                    st.dataframe(
+                        df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "store_id": "Store ID",
+                            "store_name": "Retail Item",
+                            "quantity": "Qty",
+                            "thaw_start_time": "Thaw Initiated",
+                            "discard_time": "Discard Deadline"
+                        }
+                    )
+                else:
+                    st.info("No FDU transfers logged.")
+        except Exception as e:
+            st.error(f"Error loading FDU compliance data: {e}")
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
 # ==========================================
