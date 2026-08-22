@@ -1002,11 +1002,80 @@ with tab_reports:
 # ==========================================
 with tab_admin:
     st.subheader("⚙️ Store Portfolio & System Administration")
+    
+    # --- 1. YOUR ORIGINAL STORE MANAGEMENT TOOL ---
     with st.expander("➕ Add a New Store Location", expanded=False):
         with st.form("new_store_form"):
             new_name = st.text_input("Store Name")
             is_out = st.checkbox("Is Outstation?")
             if st.form_submit_button("Add Store") and new_name:
+                # Ensure the list exists in session state before appending
+                if 'master_stores' not in st.session_state:
+                    st.session_state['master_stores'] = []
                 st.session_state['master_stores'].append({'name': new_name, 'is_outstation': is_out})
                 st.success("Added!")
                 st.rerun()
+                
+    st.markdown("---") # Adds a clean visual divider line
+    
+    # --- 2. THE NEW TERMINOLOGY UNIFICATION TRACKER ---
+    st.subheader("📦 Supply Chain Terminology Unification Management")
+    st.caption("Track and update vendor compliance with standardized retail names.")
+
+    try:
+        if supabase is not None:
+            # Fetch the master item list
+            response = supabase.table("master_item_reference").select("*").order("id").execute()
+            
+            if response.data:
+                df_items = pd.DataFrame(response.data)
+                
+                # --- METRICS & PROGRESS ---
+                total_items = len(df_items)
+                unified_items = df_items['is_name_unified'].sum()
+                completion_rate = (unified_items / total_items) if total_items > 0 else 0
+                
+                st.progress(completion_rate, text=f"Overall Unification Progress: {int(unified_items)} out of {total_items} items unified.")
+                
+                # --- INTERACTIVE DATA EDITOR ---
+                st.info("Instructions: When a vendor successfully updates their invoice to match the target retail name, check the 'Unified?' box below and save.")
+                
+                edited_df = st.data_editor(
+                    df_items[['id', 'warehouse_item_name', 'store_retail_name', 'item_category', 'is_name_unified']],
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=['id', 'warehouse_item_name', 'store_retail_name', 'item_category'],
+                    column_config={
+                        "id": None, 
+                        "warehouse_item_name": st.column_config.TextColumn("Current Invoice Name"),
+                        "store_retail_name": st.column_config.TextColumn("Target Retail Name (Standard)"),
+                        "item_category": st.column_config.TextColumn("Category"),
+                        "is_name_unified": st.column_config.CheckboxColumn("Unified?", default=False)
+                    },
+                    key="unification_tracker"
+                )
+                
+                # --- SAVE LOGIC ---
+                if st.button("💾 Save Compliance Updates", type="primary"):
+                    with st.spinner("Syncing updates to central database..."):
+                        updates_made = 0
+                        for index, row in edited_df.iterrows():
+                            original_status = df_items.loc[index, 'is_name_unified']
+                            new_status = row['is_name_unified']
+                            
+                            if original_status != new_status:
+                                supabase.table("master_item_reference").update(
+                                    {"is_name_unified": new_status}
+                                ).eq("id", row['id']).execute()
+                                updates_made += 1
+                                
+                        if updates_made > 0:
+                            st.success(f"✅ Successfully updated {updates_made} terminology records.")
+                            st.rerun() 
+                        else:
+                            st.info("No changes detected.")
+                            
+            else:
+                st.warning("No items found in the master reference table. Please add items via Supabase.")
+    except Exception as e:
+        st.error(f"Failed to load terminology data: {e}")
