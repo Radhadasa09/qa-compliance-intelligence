@@ -421,38 +421,99 @@ def store_dashboard():
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
-    # ==========================================
-    # TAB 3: STORE-TO-STORE / FDU TRANSFER
+   # ==========================================
+    # TAB 3: STOCK & INTERNAL TRANSFERS
     # ==========================================
     with tab3:
-        st.subheader("🔄 Stock Transfer Log")
-        st.caption("Ensure strict temperature control during dispatch.")
+        st.subheader("🔄 Stock Transfer & Thaw Log")
+        st.caption("Manage Inter-Store dispatch and strict FDU Chiller shelf-life protocols.")
         
-        with st.form("transfer_form"):
-            destination = st.selectbox("Destination", ["FDU Chiller", "DLF Mid Town Plaza", "Janakpuri, Delhi", "GK1, Delhi"])
-            transfer_items = st.text_area("Items Transferred (Include Quantities)")
-            dispatch_temp = st.number_input("Dispatch Core Temp (°C)", step=0.1, format="%.1f")
-            transfer_remarks = st.text_input("Remarks / Condition of Goods")
+        transfer_type = st.radio("Select Transfer Protocol", ["Freezer to FDU Chiller (Internal Thaw)", "Inter-Store Dispatch (External)"])
+        
+        if transfer_type == "Freezer to FDU Chiller (Internal Thaw)":
+            # 1. Fetch live data from Supabase
+            master_data = load_master_reference()
             
-            if st.form_submit_button("🔄 Initiate Transfer", type="primary"):
-                if not transfer_items:
-                    st.error("❌ Please list the items being transferred.")
-                else:
-                    with st.spinner("Logging transfer..."):
-                        transfer_data = {
-                            "store_id": st.session_state["store_id"],
-                            "destination": destination,
-                            "items": transfer_items,
-                            "dispatch_temp": dispatch_temp,
-                            "remarks": transfer_remarks
-                        }
-                        try:
-                            if supabase:
-                                supabase.table("store_transfers").insert(transfer_data).execute()
-                                st.success("✅ Transfer logged successfully!")
-                        except Exception as e:
-                            st.error(f"Database error: {e}")
-
+            # 2. Build dictionaries dynamically using the generic column names
+            ITEM_MAPPING = {item['warehouse_item_name']: item['store_retail_name'] for item in master_data}
+            SHELF_LIFE_HOURS = {item['store_retail_name']: item['shelf_life_hours'] for item in master_data}
+            TEMP_ZONES = {item['store_retail_name']: item['temperature_zone'] for item in master_data}
+            
+            with st.form("fdu_transfer_form"):
+                wh_item = st.selectbox("Select Warehouse Item (Invoice Name)", ["Select Item..."] + list(ITEM_MAPPING.keys()))
+                
+                # Auto-calculate and display Name B, Shelf Life, and Temp Zone
+                if wh_item != "Select Item...":
+                    store_name = ITEM_MAPPING[wh_item]
+                    shelf_life = SHELF_LIFE_HOURS.get(store_name, 24)
+                    temp_zone = TEMP_ZONES.get(store_name, "Chiller Zone (1-5°C)")
+                    
+                    now = datetime.datetime.now()
+                    expiry_time = now + datetime.timedelta(hours=shelf_life)
+                    
+                    st.info(f"""
+                    🏷️ **Store Retail Name:** {store_name}
+                    ⏳ **FSSAI Shelf Life:** {shelf_life} hours
+                    🌡️ **Storage Requirement:** {temp_zone}
+                    """)
+                    
+                    if shelf_life == 0:
+                        st.error("🚨 **RED-LINE PROTOCOL:** Do not thaw. Cook directly from Freezer Zone (<-18°C).")
+                    else:
+                        st.warning(f"🚨 **MRD Label Required:** Must be discarded by **{expiry_time.strftime('%d-%b-%Y %I:%M %p')}**")
+                
+                transfer_qty = st.number_input("Quantity Transferred to FDU", min_value=1, step=1)
+                fdu_temp = st.number_input("Current FDU Chiller Temp (°C)", value=4.0, step=0.1)
+                
+                if st.form_submit_button("🔄 Log FDU Transfer", type="primary"):
+                    if wh_item == "Select Item...":
+                        st.error("❌ Please select an item to transfer.")
+                    elif shelf_life == 0:
+                        st.error("❌ Item cannot be transferred to FDU. Red-Line protocol enforced.")
+                    else:
+                        with st.spinner("Logging FDU transfer and locking shelf life..."):
+                            fdu_data = {
+                                "store_id": st.session_state["store_id"],
+                                "warehouse_name": wh_item,
+                                "store_name": store_name,
+                                "quantity": transfer_qty,
+                                "fdu_temp": fdu_temp,
+                                "thaw_start_time": now.strftime('%Y-%m-%d %H:%M:%S'),
+                                "discard_time": expiry_time.strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            try:
+                                if supabase:
+                                    supabase.table("store_fdu_transfers").insert(fdu_data).execute()
+                                    st.success(f"✅ Transfer logged! Ensure {store_name} is labelled.")
+                            except Exception as e:
+                                st.error(f"Database error: {e}")
+                                
+        elif transfer_type == "Inter-Store Dispatch (External)":
+            with st.form("transfer_form"):
+                # Removed "FDU Chiller" from this list as it is now handled above
+                destination = st.selectbox("Destination", ["DLF Mid Town Plaza", "Janakpuri, Delhi", "GK1, Delhi"])
+                transfer_items = st.text_area("Items Transferred (Include Quantities)")
+                dispatch_temp = st.number_input("Dispatch Core Temp (°C)", step=0.1, format="%.1f")
+                transfer_remarks = st.text_input("Remarks / Condition of Goods")
+                
+                if st.form_submit_button("🔄 Initiate Dispatch", type="primary"):
+                    if not transfer_items:
+                        st.error("❌ Please list the items being transferred.")
+                    else:
+                        with st.spinner("Logging transfer..."):
+                            transfer_data = {
+                                "store_id": st.session_state["store_id"],
+                                "destination": destination,
+                                "items": transfer_items,
+                                "dispatch_temp": dispatch_temp,
+                                "remarks": transfer_remarks
+                            }
+                            try:
+                                if supabase:
+                                    supabase.table("store_transfers").insert(transfer_data).execute()
+                                    st.success("✅ Dispatch logged successfully!")
+                            except Exception as e:
+                                st.error(f"Database error: {e}")
     # ==========================================
     # TAB 4: WASTAGE & DISCARD
     # ==========================================
