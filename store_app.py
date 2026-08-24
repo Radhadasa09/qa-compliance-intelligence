@@ -273,7 +273,43 @@ def store_dashboard():
 
         draft = st.session_state[draft_key]
         status_msg = st.empty()
+        # ==========================================
+# TAB 1: DAILY AUDIT & OUTLET READINESS
+# ==========================================
+with tab1:
+    st.subheader("☀️ Daily Opening Checklist & Readiness")
+    st.caption("Verify essential hygiene and station setup before opening operations.")
+    
+    # === PLACE THE NEW READINESS SECTION HERE (At the top of Tab 1) ===
+    with st.expander("📸 Opening Hygiene & Readiness Proofs", expanded=True):
+        st.markdown("Upload required photo verification for morning setup compliance:")
+        
+        if "enable_readiness_cam" not in st.session_state:
+            st.session_state["enable_readiness_cam"] = False
+            
+        if st.button("📷 Open Readiness Camera", key="btn_toggle_readiness"):
+            st.session_state["enable_readiness_cam"] = not st.session_state["enable_readiness_cam"]
+            
+        readiness_photos = []
+        if st.session_state["enable_readiness_cam"]:
+            p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
+            p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
+            p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
+            p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
+            readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
+        else:
+            readiness_photos = st.file_uploader(
+                "Or Upload Readiness Photos (Multiple Allowed)", 
+                type=['png', 'jpg', 'jpeg'], 
+                accept_multiple_files=True,
+                key="proof_files"
+            )
+            
+    st.markdown("---")
 
+    # === THEN YOUR EXISTING DAILY CHECKLIST FORM FOLLOWS RIGHT BELOW ===
+    with st.form("daily_audit_form"):
+        # Your existing checklist questions and submit button go here...
         with st.form("daily_checklist_form"):
             manager_name = st.text_input("Manager on Duty Name", value=draft["manager_name"])
             shift = st.selectbox("Shift", ["Morning", "Evening"], index=draft["shift_idx"])
