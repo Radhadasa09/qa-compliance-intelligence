@@ -1,19 +1,40 @@
 import streamlit as st
 import datetime
+import pandas as pd
 from supabase import create_client, Client
 import cloudinary
 import cloudinary.uploader
 
-# --- PAGE CONFIGURATION ---
+# --- PAGE CONFIGURATION (Must be the first Streamlit command) ---
 st.set_page_config(
     page_title="CBTL Store Operations", 
     layout="centered", 
     initial_sidebar_state="collapsed",
     page_icon="☕"
 )
-import streamlit as st
-import cloudinary
-import cloudinary.uploader
+
+# --- SECURE CLOUDINARY INIT ---
+cloudinary.config(
+    cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+    api_key = st.secrets["CLOUDINARY_API_KEY"],
+    api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+    secure = True
+)
+cloudinary_configured = True
+
+# --- INITIALIZATION (DB) ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+try:
+    supabase = init_supabase()
+except Exception:
+    supabase = None
+    st.error("⚠️ Database configuration missing or invalid.")
+
 @st.cache_data(ttl=3600)
 def load_master_reference():
     try:
@@ -24,68 +45,30 @@ def load_master_reference():
         st.error(f"Failed to load master reference: {e}")
     return []
 
-# --- SECURE CLOUDINARY INIT ---
-cloudinary.config(
-    cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
-    api_key = st.secrets["CLOUDINARY_API_KEY"],
-    api_secret = st.secrets["CLOUDINARY_API_SECRET"],
-    secure = True
-)
+def upload_photo(file_buffer, store_id, folder_name):
+    """Uploads file to Cloudinary and returns the secure URL"""
+    try:
+        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{store_id}/{folder_name}")
+        return res.get("secure_url")
+    except Exception as e:
+        st.error(f"Upload failed: {e}")
+        return None
 
-# --- MOBILE-FIRST CBTL CORPORATE UI THEME ---
-st.markdown("""
-    <style>
-        /* Main background */
-        .stApp {
-            background-color: #F5F7FA;
-            font-family: 'Arial', sans-serif;
-        }
-        
-        /* Mobile-friendly large submit buttons */
-        .stButton>button {
-            width: 100%;
-            border-radius: 8px;
-            padding: 15px;
-            font-size: 18px;
-            font-weight: bold;
-            background-color: #003366; /* CBTL Navy */
-            color: white;
-            border: none;
-        }
-        .stButton>button:hover {
-            background-color: #002244;
-            color: white;
-        }
-        
-        /* Light Blue Informational Cards */
-        div[data-testid="stExpander"] {
-            background-color: #EAF2F8;
-            border-radius: 10px;
-            border: 1px solid #D6EAF8;
-            margin-bottom: 10px;
-        }
-        
-        /* Clean inputs for touch screens */
-        .stSelectbox, .stTextInput, .stNumberInput {
-            margin-bottom: 10px;
-        }
-        
-        /* File uploader mobile styling */
-        [data-testid="stFileUploadDropzone"] {
-            background-color: #ffffff;
-            border: 2px dashed #63B3ED;
-            border-radius: 10px;
-            padding: 20px;
-        }
-    </style>
-""", unsafe_allow_html=True)
-# --- PREMIUM CBTL AESTHETICS & CSS ---
+# --- AUTO-SAVE HELPER ---
+def get_draft_key(store_id):
+    return f"draft_{store_id}_daily"
+
+# --- AESTHETICS & CSS ---
 premium_style = """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Montserrat', sans-serif;
+    }
+    
+    .stApp {
+        background-color: #F5F7FA;
     }
     
     #MainMenu {visibility: hidden;}
@@ -97,8 +80,10 @@ premium_style = """
     .stButton>button {
         background-color: #C5A059; 
         color: #1A110A; 
-        border-radius: 6px;
+        border-radius: 8px;
         border: none;
+        padding: 15px;
+        font-size: 16px;
         font-weight: 600;
         letter-spacing: 0.5px;
         transition: all 0.3s ease;
@@ -136,13 +121,28 @@ premium_style = """
         text-transform: uppercase;
     }
     
-    /* Form & Expander Styling */
+    /* Light Blue Informational Cards */
+    div[data-testid="stExpander"] {
+        background-color: #EAF2F8;
+        border-radius: 10px;
+        border: 1px solid #D6EAF8;
+        margin-bottom: 10px;
+    }
+    
+    /* Form Styling */
     div[data-testid="stForm"] {
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         padding: 20px;
         background-color: #ffffff;
         box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    
+    [data-testid="stFileUploadDropzone"] {
+        background-color: #ffffff;
+        border: 2px dashed #63B3ED;
+        border-radius: 10px;
+        padding: 20px;
     }
     </style>
 """
@@ -158,39 +158,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# --- INITIALIZATION (DB & CLOUD) ---
-@st.cache_resource
-def init_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
-try:
-    supabase = init_supabase()
-except Exception:
-    supabase = None
-    st.error("⚠️ Database configuration missing or invalid.")
-
-cloudinary.config(
-    cloud_name=st.secrets["CLOUDINARY_CLOUD_NAME"],
-    api_key=st.secrets["CLOUDINARY_API_KEY"],
-    api_secret=st.secrets["CLOUDINARY_API_SECRET"],
-    secure=True
-)
-
-def upload_photo(file_buffer, store_id, folder_name):
-    """Uploads file to Cloudinary and returns the secure URL"""
-    try:
-        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{store_id}/{folder_name}")
-        return res.get("secure_url")
-    except Exception as e:
-        st.error(f"Upload failed: {e}")
-        return None
-
-# --- AUTO-SAVE HELPER ---
-def get_draft_key(store_id):
-    return f"draft_{store_id}_daily"
 
 # --- SESSION STATE ---
 if "logged_in" not in st.session_state:
@@ -246,6 +213,7 @@ def store_dashboard():
     with col2:
         st.button("🔒 Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
     
+    # Initialize tabs
     tab1, tab2, tab3, tab4 = st.tabs([
         "📋 Daily Audit", 
         "📥 Receiving", 
@@ -253,9 +221,11 @@ def store_dashboard():
         "🗑️ Wastage"
     ])
     
-    # --- TAB 1: DAILY FSSAI & NSF CHECKLIST ---
+    # ==========================================
+    # TAB 1: DAILY AUDIT & OUTLET READINESS
+    # ==========================================
     with tab1:
-        st.markdown("#### FSSAI & NSF Operational Checklist")
+        st.subheader("☀️ Daily Opening Checklist & Readiness")
         st.caption("Auto-save is enabled. Click 'Save Draft' to preserve your progress.")
         
         draft_key = get_draft_key(st.session_state['store_id'])
@@ -273,43 +243,35 @@ def store_dashboard():
 
         draft = st.session_state[draft_key]
         status_msg = st.empty()
-        # ==========================================
-# TAB 1: DAILY AUDIT & OUTLET READINESS
-# ==========================================
-with tab1:
-    st.subheader("☀️ Daily Opening Checklist & Readiness")
-    st.caption("Verify essential hygiene and station setup before opening operations.")
-    
-    # === PLACE THE NEW READINESS SECTION HERE (At the top of Tab 1) ===
-    with st.expander("📸 Opening Hygiene & Readiness Proofs", expanded=True):
-        st.markdown("Upload required photo verification for morning setup compliance:")
         
-        if "enable_readiness_cam" not in st.session_state:
-            st.session_state["enable_readiness_cam"] = False
+        # --- OUTLET READINESS PHOTO UPLOAD SECTION ---
+        with st.expander("📸 Opening Hygiene & Readiness Proofs", expanded=True):
+            st.markdown("Upload required photo verification for morning setup compliance:")
             
-        if st.button("📷 Open Readiness Camera", key="btn_toggle_readiness"):
-            st.session_state["enable_readiness_cam"] = not st.session_state["enable_readiness_cam"]
-            
-        readiness_photos = []
-        if st.session_state["enable_readiness_cam"]:
-            p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
-            p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
-            p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
-            p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
-            readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
-        else:
-            readiness_photos = st.file_uploader(
-                "Or Upload Readiness Photos (Multiple Allowed)", 
-                type=['png', 'jpg', 'jpeg'], 
-                accept_multiple_files=True,
-                key="proof_files"
-            )
-            
-    st.markdown("---")
+            if "enable_readiness_cam" not in st.session_state:
+                st.session_state["enable_readiness_cam"] = False
+                
+            if st.button("📷 Open Readiness Camera", key="btn_toggle_readiness"):
+                st.session_state["enable_readiness_cam"] = not st.session_state["enable_readiness_cam"]
+                
+            readiness_photos = []
+            if st.session_state["enable_readiness_cam"]:
+                p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
+                p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
+                p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
+                p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
+                readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
+            else:
+                readiness_photos = st.file_uploader(
+                    "Or Upload Readiness Photos (Multiple Allowed)", 
+                    type=['png', 'jpg', 'jpeg'], 
+                    accept_multiple_files=True,
+                    key="proof_files"
+                )
+                
+        st.markdown("---")
 
-    # === THEN YOUR EXISTING DAILY CHECKLIST FORM FOLLOWS RIGHT BELOW ===
-    with st.form("daily_audit_form"):
-        # Your existing checklist questions and submit button go here...
+        # --- FSSAI & NSF CHECKLIST FORM ---
         with st.form("daily_checklist_form"):
             manager_name = st.text_input("Manager on Duty Name", value=draft["manager_name"])
             shift = st.selectbox("Shift", ["Morning", "Evening"], index=draft["shift_idx"])
@@ -360,16 +322,13 @@ with tab1:
             
             st.markdown("---")
             
-            # Action Buttons
             col_a, col_b = st.columns(2)
             with col_a:
                 btn_save_draft = st.form_submit_button("💾 Save Draft Progress")
             with col_b:
                 btn_submit = st.form_submit_button("🚀 Submit Final Audit")
 
-            # Handle Actions
             if btn_save_draft or btn_submit:
-                # Always update draft state on either button press
                 st.session_state[draft_key] = {
                     "manager_name": manager_name, "shift_idx": 0 if shift == "Morning" else 1,
                     "c_fssai": c_fssai, "c_med": c_med, "c_water": c_water,
@@ -405,17 +364,13 @@ with tab1:
                             }
                             try:
                                 supabase.table("daily_audits").insert(audit_data).execute()
-                                # Clear draft upon successful submission
                                 del st.session_state[draft_key]
                                 status_msg.success("🎉 Audit successfully locked in Central QA Vault!")
                                 st.balloons()
                             except Exception as e:
                                 st.error(f"Database error: {e}")
-                            
-   # (Your Tab 1 code remains exactly the same above this, just add this caption above your camera inputs)
-    # st.caption("📱 *Note: Mobile camera initialization may take a few seconds.*")
 
-# ==========================================
+    # ==========================================
     # TAB 2: RECEIVING & INVOICE LOG
     # ==========================================
     with tab2:
@@ -430,7 +385,6 @@ with tab1:
             st.markdown("### 📸 Invoice / Chalan Upload")
             st.caption("📱 *Click the button below to activate the camera on-demand.*")
             
-            # --- ON-DEMAND CAMERA TOGGLE ---
             if "enable_recv_cam" not in st.session_state:
                 st.session_state["enable_recv_cam"] = False
                 
@@ -447,7 +401,6 @@ with tab1:
             
             remarks = st.text_area("Receiving Remarks / Quality Check Notes")
             
-            # --- SUBMIT & CLOUD SAVE LOGIC ---
             if st.form_submit_button("✅ Save Receiving Log", type="primary"):
                 if not vendor_name or not invoice_number:
                     st.error("❌ Please fill in the Vendor Name and Invoice Number.")
@@ -455,7 +408,6 @@ with tab1:
                     with st.spinner("Uploading proof and saving receiving log..."):
                         try:
                             image_url = ""
-                            # Upload to Cloudinary if photo/file is attached
                             if invoice_photo is not None and cloudinary_configured:
                                 upload_result = cloudinary.uploader.upload(
                                     invoice_photo, 
@@ -481,7 +433,7 @@ with tab1:
                         except Exception as e:
                             st.error(f"❌ Failed to save receiving log: {e}")
     
-   # ==========================================
+    # ==========================================
     # TAB 3: STOCK & INTERNAL TRANSFERS
     # ==========================================
     with tab3:
@@ -491,10 +443,8 @@ with tab1:
         transfer_type = st.radio("Select Transfer Protocol", ["Freezer to FDU Chiller (Internal Thaw)", "Inter-Store Dispatch (External)"])
         
         if transfer_type == "Freezer to FDU Chiller (Internal Thaw)":
-            # 1. Fetch live data from Supabase
             master_data = load_master_reference()
             
-            # 2. Build dictionaries dynamically using the generic column names
             ITEM_MAPPING = {item['warehouse_item_name']: item['store_retail_name'] for item in master_data}
             SHELF_LIFE_HOURS = {item['store_retail_name']: item['shelf_life_hours'] for item in master_data}
             TEMP_ZONES = {item['store_retail_name']: item['temperature_zone'] for item in master_data}
@@ -502,7 +452,6 @@ with tab1:
             with st.form("fdu_transfer_form"):
                 wh_item = st.selectbox("Select Warehouse Item (Invoice Name)", ["Select Item..."] + list(ITEM_MAPPING.keys()))
                 
-                # Auto-calculate and display Name B, Shelf Life, and Temp Zone
                 if wh_item != "Select Item...":
                     store_name = ITEM_MAPPING[wh_item]
                     shelf_life = SHELF_LIFE_HOURS.get(store_name, 24)
@@ -550,7 +499,6 @@ with tab1:
                                 
         elif transfer_type == "Inter-Store Dispatch (External)":
             with st.form("transfer_form"):
-                # Removed "FDU Chiller" from this list as it is now handled above
                 destination = st.selectbox("Destination", ["DLF Mid Town Plaza", "Janakpuri, Delhi", "GK1, Delhi"])
                 transfer_items = st.text_area("Items Transferred (Include Quantities)")
                 dispatch_temp = st.number_input("Dispatch Core Temp (°C)", step=0.1, format="%.1f")
@@ -574,6 +522,7 @@ with tab1:
                                     st.success("✅ Dispatch logged successfully!")
                             except Exception as e:
                                 st.error(f"Database error: {e}")
+
     # ==========================================
     # TAB 4: WASTAGE & DISCARD
     # ==========================================
