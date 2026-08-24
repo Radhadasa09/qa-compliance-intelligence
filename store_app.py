@@ -14,6 +14,15 @@ st.set_page_config(
 import streamlit as st
 import cloudinary
 import cloudinary.uploader
+@st.cache_data(ttl=3600)
+def load_master_reference():
+    try:
+        if supabase:
+            response = supabase.table("master_item_reference").select("*").eq("is_active", True).execute()
+            return response.data
+    except Exception as e:
+        st.error(f"Failed to load master reference: {e}")
+    return []
 
 # --- SECURE CLOUDINARY INIT ---
 cloudinary.config(
