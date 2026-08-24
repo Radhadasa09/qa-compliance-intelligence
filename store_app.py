@@ -379,57 +379,72 @@ def store_dashboard():
    # (Your Tab 1 code remains exactly the same above this, just add this caption above your camera inputs)
     # st.caption("📱 *Note: Mobile camera initialization may take a few seconds.*")
 
-    # ==========================================
-    # TAB 2: RECEIVING (INWARD GOODS)
+# ==========================================
+    # TAB 2: RECEIVING & INVOICE LOG
     # ==========================================
     with tab2:
-        st.subheader("📥 Goods Receiving & QA Check")
-        st.caption("Log temperature and quality parameters for incoming deliveries.")
+        st.subheader("📦 Goods Receiving & Verification")
+        st.caption("Log incoming deliveries, verify core temperatures, and archive vendor challans.")
         
         with st.form("receiving_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                # Pre-configured routing based on your supply chain logistics
-                supply_route = st.selectbox("Delivery Origin", [
-                    "Primary Warehouse (Haryana)", 
-                    "Direct Vendor (Delhi)", 
-                    "Inter-Store Transfer",
-                    "Other"
-                ])
-                invoice_no = st.text_input("Invoice / Chalan Number")
-            with col2:
-                receiving_temp = st.number_input("Product Receiving Temp (°C)", step=0.1, format="%.1f")
-                vehicle_hygiene = st.selectbox("Vehicle Hygiene Status", ["Acceptable", "Poor / Rejected"])
+            vendor_name = st.text_input("Vendor Name / Supplier")
+            invoice_number = st.text_input("Invoice / Chalan Number")
+            received_temp = st.number_input("Delivery Core Temperature (°C)", step=0.1, format="%.1f")
             
             st.markdown("### 📸 Invoice / Chalan Upload")
-            st.caption("📱 *Note: Camera may take a moment to focus on text documents.*")
-            invoice_photo = st.camera_input("Capture Invoice Image", key="recv_photo")
+            st.caption("📱 *Click the button below to activate the camera on-demand.*")
             
-            if st.form_submit_button("📥 Log Receiving Entry", type="primary"):
-                if not invoice_no:
-                    st.error("❌ Invoice Number is required.")
+            # --- ON-DEMAND CAMERA TOGGLE ---
+            if "enable_recv_cam" not in st.session_state:
+                st.session_state["enable_recv_cam"] = False
+                
+            col_cam1, col_cam2 = st.columns([1, 2])
+            with col_cam1:
+                if st.form_submit_button("📷 Open/Close Camera"):
+                    st.session_state["enable_recv_cam"] = not st.session_state["enable_recv_cam"]
+            
+            invoice_photo = None
+            if st.session_state["enable_recv_cam"]:
+                invoice_photo = st.camera_input("Capture Invoice Image", key="recv_photo")
+            else:
+                invoice_photo = st.file_uploader("Or Upload Image File", type=['png', 'jpg', 'jpeg'], key="recv_file")
+            
+            remarks = st.text_area("Receiving Remarks / Quality Check Notes")
+            
+            # --- SUBMIT & CLOUD SAVE LOGIC ---
+            if st.form_submit_button("✅ Save Receiving Log", type="primary"):
+                if not vendor_name or not invoice_number:
+                    st.error("❌ Please fill in the Vendor Name and Invoice Number.")
                 else:
-                    with st.spinner("Processing delivery log..."):
-                        recv_url = upload_photo(invoice_photo, st.session_state["store_id"], "receiving") if invoice_photo else None
-                        
-                        recv_data = {
-                            "store_id": st.session_state["store_id"],
-                            "supply_route": supply_route,
-                            "invoice_no": invoice_no,
-                            "receiving_temp": receiving_temp,
-                            "vehicle_hygiene": vehicle_hygiene,
-                            "invoice_proof_url": recv_url
-                        }
-                        
+                    with st.spinner("Uploading proof and saving receiving log..."):
                         try:
-                            if supabase:
-                                supabase.table("store_receiving").insert(recv_data).execute()
-                                st.success("✅ Receiving data saved successfully to the cloud!")
+                            image_url = ""
+                            # Upload to Cloudinary if photo/file is attached
+                            if invoice_photo is not None and cloudinary_configured:
+                                upload_result = cloudinary.uploader.upload(
+                                    invoice_photo, 
+                                    folder=f"cbtl/{st.session_state.get('store_id', 'store')}/receiving"
+                                )
+                                image_url = upload_result.get("secure_url", "")
+                            
+                            receiving_data = {
+                                "store_id": st.session_state.get("store_id", "Default Store"),
+                                "vendor_name": vendor_name,
+                                "invoice_number": invoice_number,
+                                "received_temp": received_temp,
+                                "image_url": image_url,
+                                "remarks": remarks
+                            }
+                            
+                            if supabase is not None:
+                                supabase.table("store_receiving_logs").insert(receiving_data).execute()
+                                st.success("✅ Receiving log saved successfully with secure cloud archive!")
                             else:
-                                st.error("Database disconnected.")
+                                st.error("Database connection is not active.")
+                                
                         except Exception as e:
-                            st.error(f"Database error: {e}")
-
+                            st.error(f"❌ Failed to save receiving log: {e}")
+    
    # ==========================================
     # TAB 3: STOCK & INTERNAL TRANSFERS
     # ==========================================
