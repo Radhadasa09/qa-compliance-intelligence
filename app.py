@@ -340,11 +340,18 @@ with tab_ops:
                 top_store_id = submission_counts.idxmax()
                 top_score = submission_counts.max()
                 
+                # Fetch the actual store name from the database
+                store_info = supabase.table("stores").select("store_name").eq("store_id", top_store_id).execute()
+                if store_info.data:
+                    champion_name = store_info.data[0]['store_name']
+                else:
+                    champion_name = f"Store {top_store_id}"
+                
                 st.markdown(
                     f"""
                     <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
                         <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
-                        <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>Store {top_store_id}</b></h4>
+                        <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>{champion_name}</b></h4>
                         <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Submissions: <b>{top_score}</b></p>
                     </div>
                     """, 
@@ -352,7 +359,6 @@ with tab_ops:
                 )
     except Exception as e:
         st.caption("Leaderboard calculating...")
-
     # ==========================================
     # --- 📊 LIVE ANALYTICS & DATA FEED ---
     # ==========================================
