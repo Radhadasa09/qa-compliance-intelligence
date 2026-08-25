@@ -184,8 +184,10 @@ def login_screen():
 
         store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
         
+        # --- FIX: Moved selectbox outside the form so it updates instantly ---
+        selected_display = st.selectbox("Select Your Location", options=list(store_dict.keys()))
+        
         with st.form("login_form"):
-            selected_display = st.selectbox("Select Your Location", options=list(store_dict.keys()))
             confirm_store = st.checkbox(f"I confirm I am logging in for {selected_display}")
             entered_pin = st.text_input("Enter 4-Digit Secure PIN", type="password", max_chars=4)
             
@@ -204,7 +206,6 @@ def login_screen():
                     
     except Exception as e:
         st.error(f"Database connection error: {e}")
-
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     col1, col2 = st.columns([3, 1])
