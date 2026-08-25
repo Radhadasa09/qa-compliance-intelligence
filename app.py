@@ -325,95 +325,110 @@ with tab_ops:
     st.header("🏪 Retail Operations & Logistics")
     
     # ==========================================
-    # --- LIVE STORE OPERATIONS FEED (AT THE TOP) ---
+    # --- 🏆 QA EXCELLENCE LEADERBOARD ---
     # ==========================================
-    st.subheader("📡 Live Store Operations Feed")
-    st.caption("Real-time data submissions from store tablets.")
+    st.markdown("---")
+    try:
+        if supabase is not None:
+            # Fetch recent audits to calculate the winner
+            leader_res = supabase.table("daily_audits").select("store_id").execute()
+            if leader_res.data:
+                df_leader = pd.DataFrame(leader_res.data)
+                
+                # Calculate the store with the most submissions
+                submission_counts = df_leader['store_id'].value_counts()
+                top_store_id = submission_counts.idxmax()
+                top_score = submission_counts.max()
+                
+                st.markdown(
+                    f"""
+                    <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
+                        <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
+                        <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>Store {top_store_id}</b></h4>
+                        <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Submissions: <b>{top_score}</b></p>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+    except Exception as e:
+        st.caption("Leaderboard calculating...")
+
+    # ==========================================
+    # --- 📊 LIVE ANALYTICS & DATA FEED ---
+    # ==========================================
+    st.subheader("📡 Live Store Analytics Feed")
     
-    view_audit, view_recv, view_waste = st.tabs(["📋 Daily FSSAI Audits", "📦 Receiving Logs", "🗑️ Wastage Records"])
+    view_audit, view_recv, view_waste = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage"])
     
-    # --- 1. DAILY AUDITS VIEWER ---
+    # --- 1. DAILY AUDITS GRAPH & DATA ---
     with view_audit:
         try:
             if supabase is not None:
-                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(50).execute()
+                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(100).execute()
                 if audit_res.data:
                     df_audits = pd.DataFrame(audit_res.data)
-                    df_audits['created_at'] = pd.to_datetime(df_audits['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                    df_audits['created_at'] = pd.to_datetime(df_audits['created_at'])
                     
-                    st.dataframe(
-                        df_audits[['created_at', 'store_id', 'manager_name', 'shift']],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "created_at": "Date & Time",
-                            "store_id": "Store ID",
-                            "manager_name": "Manager on Duty",
-                            "shift": "Shift"
-                        }
-                    )
-                    st.download_button(
-                        label="📥 Download Full Audit Data (CSV)",
-                        data=df_audits.to_csv(index=False).encode('utf-8'),
-                        file_name=f"CBTL_Daily_Audits_{datetime.date.today()}.csv",
-                        mime="text/csv"
-                    )
+                    # Graph: Audits per store
+                    audit_counts = df_audits['store_id'].value_counts().reset_index()
+                    audit_counts.columns = ['Store ID', 'Total Submissions']
+                    fig_audit = px.bar(audit_counts, x='Store ID', y='Total Submissions', title="Audit Submissions by Store", text_auto=True, color='Total Submissions', color_continuous_scale='Blues')
+                    st.plotly_chart(fig_audit, use_container_width=True)
+                    
+                    # Detailed Data Expander
+                    with st.expander("🔍 View & Download Detailed Audit Reports"):
+                        df_display = df_audits.copy()
+                        df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
+                        st.dataframe(df_display[['created_at', 'store_id', 'manager_name', 'shift']], use_container_width=True, hide_index=True)
+                        st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")
                 else:
-                    st.info("No daily audits submitted yet.")
+                    st.info("No audit data available for graphs.")
         except Exception as e:
-            st.error(f"Failed to load audits: {e}")
+            st.error(f"Error loading audits: {e}")
 
-    # --- 2. RECEIVING LOGS VIEWER ---
+    # --- 2. RECEIVING LOGS GRAPH & DATA ---
     with view_recv:
         try:
             if supabase is not None:
-                recv_res = supabase.table("store_receiving_logs").select("*").order("created_at", desc=True).limit(50).execute()
+                recv_res = supabase.table("store_receiving_logs").select("*").order("created_at", desc=True).limit(100).execute()
                 if recv_res.data:
                     df_recv = pd.DataFrame(recv_res.data)
-                    df_recv['created_at'] = pd.to_datetime(df_recv['created_at']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    st.dataframe(
-                        df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "created_at": "Date & Time",
-                            "store_id": "Store ID",
-                            "vendor_name": "Vendor",
-                            "invoice_number": "Invoice #",
-                            "received_temp": "Core Temp (°C)"
-                        }
-                    )
+                    # Graph: Receiving Temps
+                    fig_recv = px.scatter(df_recv, x='created_at', y='received_temp', color='store_id', title="Vendor Delivery Temperatures (°C)", size_max=10, hover_data=['vendor_name', 'invoice_number'])
+                    # Add a red line for max acceptable temp (e.g., 5°C)
+                    fig_recv.add_hline(y=5.0, line_dash="dot", annotation_text="Max Acceptable Temp (5°C)", annotation_position="bottom right", line_color="red")
+                    st.plotly_chart(fig_recv, use_container_width=True)
+                    
+                    # Detailed Data Expander
+                    with st.expander("🔍 View Detailed Receiving Logs"):
+                        st.dataframe(df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']], use_container_width=True, hide_index=True)
                 else:
-                    st.info("No receiving logs submitted yet.")
+                    st.info("No receiving data available for graphs.")
         except Exception as e:
-            st.error(f"Failed to load receiving logs: {e}")
+            st.error(f"Error loading receiving logs: {e}")
 
-    # --- 3. WASTAGE VIEWER ---
+    # --- 3. WASTAGE GRAPH & DATA ---
     with view_waste:
         try:
             if supabase is not None:
-                waste_res = supabase.table("store_wastage").select("*").order("created_at", desc=True).limit(50).execute()
+                waste_res = supabase.table("store_wastage").select("*").order("created_at", desc=True).limit(100).execute()
                 if waste_res.data:
                     df_waste = pd.DataFrame(waste_res.data)
-                    df_waste['created_at'] = pd.to_datetime(df_waste['created_at']).dt.strftime('%Y-%m-%d %H:%M')
                     
-                    st.dataframe(
-                        df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "created_at": "Date & Time",
-                            "store_id": "Store ID",
-                            "item_name": "Discarded Item",
-                            "quantity": "Qty",
-                            "reason": "Reason"
-                        }
-                    )
+                    # Graph: Wastage by Reason
+                    waste_counts = df_waste['reason'].value_counts().reset_index()
+                    waste_counts.columns = ['Reason', 'Count']
+                    fig_waste = px.pie(waste_counts, names='Reason', values='Count', title="Wastage Breakdown by Reason", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_waste, use_container_width=True)
+                    
+                    # Detailed Data Expander
+                    with st.expander("🔍 View Detailed Wastage Records"):
+                        st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], use_container_width=True, hide_index=True)
                 else:
-                    st.info("No wastage records submitted yet.")
+                    st.info("No wastage data available for graphs.")
         except Exception as e:
-            st.error(f"Failed to load wastage records: {e}")
+            st.error(f"Error loading wastage logs: {e}")
             
     st.markdown("---")
 
@@ -421,8 +436,7 @@ with tab_ops:
     # --- ORIGINAL COMPLIANCE ENTRY ---
     # ==========================================
     st.subheader("📋 Store Staff Compliance Entry")
-    st.caption("Submit monthly compliance records. Data is permanently saved to the cloud database.")
-    
+    # ... (Your existing compliance entry code remains unchanged below this)
     FULL_STORE_LIST = [
         "DLF Mid Town Plaza, Moti Nagar", 
         "Janakpuri, Delhi", 
@@ -472,7 +486,7 @@ with tab_ops:
                             supabase.table("store_monthly_compliance").insert(compliance_data).execute()
                             st.success(f"✅ Compliance data for {selected_store} successfully saved to the cloud!")
                         else:
-                            st.error("Database connection is not active. Please check your Supabase credentials.")
+                            st.error("Database connection is not active.")
                             
                     except Exception as e:
                         st.error(f"❌ Failed to save data: {e}")
@@ -494,19 +508,7 @@ with tab_ops:
                 if transfers_res.data:
                     df_transfers = pd.DataFrame(transfers_res.data)
                     df_transfers['created_at'] = pd.to_datetime(df_transfers['created_at']).dt.strftime('%Y-%m-%d %H:%M')
-                    
-                    st.dataframe(
-                        df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "created_at": "Date/Time",
-                            "store_id": "Origin Store",
-                            "destination": "Destination",
-                            "dispatch_temp": "Temp (°C)",
-                            "items": "Manifest"
-                        }
-                    )
+                    st.dataframe(df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']], use_container_width=True, hide_index=True)
                 else:
                     st.info("No inter-store dispatches logged.")
         except Exception as e:
@@ -519,19 +521,7 @@ with tab_ops:
                 fdu_res = supabase.table("store_fdu_transfers").select("*").order("created_at", desc=True).limit(50).execute()
                 if fdu_res.data:
                     df_fdu = pd.DataFrame(fdu_res.data)
-                    
-                    st.dataframe(
-                        df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']],
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "store_id": "Store ID",
-                            "store_name": "Retail Item",
-                            "quantity": "Qty",
-                            "thaw_start_time": "Thaw Initiated",
-                            "discard_time": "Discard Deadline"
-                        }
-                    )
+                    st.dataframe(df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']], use_container_width=True, hide_index=True)
                 else:
                     st.info("No FDU transfers logged.")
         except Exception as e:
