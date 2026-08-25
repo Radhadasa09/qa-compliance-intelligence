@@ -325,12 +325,104 @@ with tab_ops:
     st.header("🏪 Retail Operations & Logistics")
     
     # ==========================================
-    # --- PART 1: ORIGINAL COMPLIANCE ENTRY ---
+    # --- LIVE STORE OPERATIONS FEED (AT THE TOP) ---
+    # ==========================================
+    st.subheader("📡 Live Store Operations Feed")
+    st.caption("Real-time data submissions from store tablets.")
+    
+    view_audit, view_recv, view_waste = st.tabs(["📋 Daily FSSAI Audits", "📦 Receiving Logs", "🗑️ Wastage Records"])
+    
+    # --- 1. DAILY AUDITS VIEWER ---
+    with view_audit:
+        try:
+            if supabase is not None:
+                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(50).execute()
+                if audit_res.data:
+                    df_audits = pd.DataFrame(audit_res.data)
+                    df_audits['created_at'] = pd.to_datetime(df_audits['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                    
+                    st.dataframe(
+                        df_audits[['created_at', 'store_id', 'manager_name', 'shift']],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "created_at": "Date & Time",
+                            "store_id": "Store ID",
+                            "manager_name": "Manager on Duty",
+                            "shift": "Shift"
+                        }
+                    )
+                    st.download_button(
+                        label="📥 Download Full Audit Data (CSV)",
+                        data=df_audits.to_csv(index=False).encode('utf-8'),
+                        file_name=f"CBTL_Daily_Audits_{datetime.date.today()}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("No daily audits submitted yet.")
+        except Exception as e:
+            st.error(f"Failed to load audits: {e}")
+
+    # --- 2. RECEIVING LOGS VIEWER ---
+    with view_recv:
+        try:
+            if supabase is not None:
+                recv_res = supabase.table("store_receiving_logs").select("*").order("created_at", desc=True).limit(50).execute()
+                if recv_res.data:
+                    df_recv = pd.DataFrame(recv_res.data)
+                    df_recv['created_at'] = pd.to_datetime(df_recv['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                    
+                    st.dataframe(
+                        df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "created_at": "Date & Time",
+                            "store_id": "Store ID",
+                            "vendor_name": "Vendor",
+                            "invoice_number": "Invoice #",
+                            "received_temp": "Core Temp (°C)"
+                        }
+                    )
+                else:
+                    st.info("No receiving logs submitted yet.")
+        except Exception as e:
+            st.error(f"Failed to load receiving logs: {e}")
+
+    # --- 3. WASTAGE VIEWER ---
+    with view_waste:
+        try:
+            if supabase is not None:
+                waste_res = supabase.table("store_wastage").select("*").order("created_at", desc=True).limit(50).execute()
+                if waste_res.data:
+                    df_waste = pd.DataFrame(waste_res.data)
+                    df_waste['created_at'] = pd.to_datetime(df_waste['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                    
+                    st.dataframe(
+                        df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "created_at": "Date & Time",
+                            "store_id": "Store ID",
+                            "item_name": "Discarded Item",
+                            "quantity": "Qty",
+                            "reason": "Reason"
+                        }
+                    )
+                else:
+                    st.info("No wastage records submitted yet.")
+        except Exception as e:
+            st.error(f"Failed to load wastage records: {e}")
+            
+    st.markdown("---")
+
+    # ==========================================
+    # --- ORIGINAL COMPLIANCE ENTRY ---
     # ==========================================
     st.subheader("📋 Store Staff Compliance Entry")
     st.caption("Submit monthly compliance records. Data is permanently saved to the cloud database.")
     
-    # --- 1. CONFIGURATION ---
     FULL_STORE_LIST = [
         "DLF Mid Town Plaza, Moti Nagar", 
         "Janakpuri, Delhi", 
@@ -346,7 +438,6 @@ with tab_ops:
     
     with st.expander("📝 Enter New Compliance Record", expanded=False):
         with st.form("compliance_entry_form"):
-            # --- 2. INPUT FORM ---
             selected_store = st.selectbox("Select Store Location", FULL_STORE_LIST)
             current_month = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
             
@@ -363,7 +454,6 @@ with tab_ops:
             is_compliant = st.checkbox("✅ Mark as Fully Compliant (No pending FoSTaC/Medical)")
             remark = st.text_area("Additional Remarks / Action Plan")
 
-            # --- 3. CLOUD SAVE LOGIC ---
             if st.form_submit_button("🚀 Save Store Compliance Data", type="primary"):
                 with st.spinner("Saving to cloud database..."):
                     try:
@@ -390,7 +480,7 @@ with tab_ops:
     st.markdown("---")
     
     # ==========================================
-    # --- PART 2: NEW LOGISTICS & FDU MONITORING ---
+    # --- LOGISTICS & FDU MONITORING ---
     # ==========================================
     st.subheader("🔄 Real-Time Logistics & FDU Compliance")
     
@@ -403,7 +493,6 @@ with tab_ops:
                 transfers_res = supabase.table("store_transfers").select("*").order("created_at", desc=True).limit(50).execute()
                 if transfers_res.data:
                     df_transfers = pd.DataFrame(transfers_res.data)
-                    # Format timestamp
                     df_transfers['created_at'] = pd.to_datetime(df_transfers['created_at']).dt.strftime('%Y-%m-%d %H:%M')
                     
                     st.dataframe(
