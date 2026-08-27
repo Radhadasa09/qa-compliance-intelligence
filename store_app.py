@@ -4,8 +4,9 @@ import pandas as pd
 from supabase import create_client, Client
 import cloudinary
 import cloudinary.uploader
+import json
 
-# --- PAGE CONFIGURATION (Must be the first Streamlit command) ---
+# --- PAGE CONFIGURATION (Must be first) ---
 st.set_page_config(
     page_title="CBTL Store Operations", 
     layout="centered", 
@@ -14,13 +15,17 @@ st.set_page_config(
 )
 
 # --- SECURE CLOUDINARY INIT ---
-cloudinary.config(
-    cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
-    api_key = st.secrets["CLOUDINARY_API_KEY"],
-    api_secret = st.secrets["CLOUDINARY_API_SECRET"],
-    secure = True
-)
-cloudinary_configured = True
+try:
+    cloudinary.config(
+        cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+        api_key = st.secrets["CLOUDINARY_API_KEY"],
+        api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+        secure = True
+    )
+    cloudinary_configured = True
+except Exception:
+    cloudinary_configured = False
+    st.warning("Cloudinary configuration missing. Photo uploads will be disabled.")
 
 # --- INITIALIZATION (DB) ---
 @st.cache_resource
@@ -54,7 +59,6 @@ def upload_photo(file_buffer, store_id, folder_name):
         st.error(f"Upload failed: {e}")
         return None
 
-# --- AUTO-SAVE HELPER ---
 def get_draft_key(store_id):
     return f"draft_{store_id}_daily"
 
@@ -184,7 +188,7 @@ def login_screen():
 
         store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
         
-        # --- FIX: Moved selectbox outside the form so it updates instantly ---
+        # FIX: Selectbox is OUTSIDE the form so it updates instantly
         selected_display = st.selectbox("Select Your Location", options=list(store_dict.keys()))
         
         with st.form("login_form"):
@@ -206,6 +210,7 @@ def login_screen():
                     
     except Exception as e:
         st.error(f"Database connection error: {e}")
+
 # --- MAIN OUTLET DASHBOARD ---
 def store_dashboard():
     col1, col2 = st.columns([3, 1])
@@ -214,19 +219,71 @@ def store_dashboard():
     with col2:
         st.button("🔒 Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
     
-    # Initialize tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    st.markdown("---")
+    
+    # ==========================================
+    # --- 🎯 DAILY PROGRESS TRACKER (STAGE 1) ---
+    # ==========================================
+    st.markdown("### 🎯 Today's Morning Mission")
+    
+    audit_done = False
+    readiness_done = False
+    
+    try:
+        if supabase:
+            # Check for today's submissions
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            audit_res = supabase.table("daily_audits").select("id").eq("store_id", st.session_state["store_id"]).gte("created_at", today_str).execute()
+            if len(audit_res.data) > 0:
+                audit_done = True
+                
+            read_res = supabase.table("store_readiness_logs").select("id").eq("store_id", st.session_state["store_id"]).gte("created_at", today_str).execute()
+            if len(read_res.data) > 0:
+                readiness_done = True
+    except Exception:
+        pass # Fail silently if DB check pauses
+        
+    # Calculate & Display Progress
+    progress = 0
+    if audit_done: progress += 50
+    if readiness_done: progress += 50
+    
+    st.progress(progress / 100.0)
+    
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        if audit_done:
+            st.success("✅ Daily Audit (Completed)")
+        else:
+            st.warning("⏳ Daily Audit (Pending)")
+    with col_t2:
+        if readiness_done:
+            st.success("✅ Readiness Proofs (Completed)")
+        else:
+            st.warning("⏳ Readiness Proofs (Pending)")
+            
+    if progress == 100:
+        st.info("🌟 100% Compliant Today! Your morning data is locked in the Central QA Vault.")
+    else:
+        st.caption("⚠️ Complete your Morning Mission to secure your store's daily QA score.")
+        
+    st.markdown("---")
+    
+    # Initialize 5 tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📋 Daily Audit", 
+        "📸 Readiness Proofs",
         "📥 Receiving", 
         "🔄 Transfer", 
         "🗑️ Wastage"
     ])
     
     # ==========================================
-    # TAB 1: DAILY AUDIT & OUTLET READINESS
+    # TAB 1: DAILY AUDIT (Checklists Only)
     # ==========================================
     with tab1:
-        st.subheader("☀️ Daily Opening Checklist & Readiness")
+        st.subheader("☀️ Daily Opening Checklist")
         st.caption("Auto-save is enabled. Click 'Save Draft' to preserve your progress.")
         
         draft_key = get_draft_key(st.session_state['store_id'])
@@ -244,35 +301,7 @@ def store_dashboard():
 
         draft = st.session_state[draft_key]
         status_msg = st.empty()
-        
-        # --- OUTLET READINESS PHOTO UPLOAD SECTION ---
-        with st.expander("📸 Opening Hygiene & Readiness Proofs", expanded=True):
-            st.markdown("Upload required photo verification for morning setup compliance:")
-            
-            if "enable_readiness_cam" not in st.session_state:
-                st.session_state["enable_readiness_cam"] = False
-                
-            if st.button("📷 Open Readiness Camera", key="btn_toggle_readiness"):
-                st.session_state["enable_readiness_cam"] = not st.session_state["enable_readiness_cam"]
-                
-            readiness_photos = []
-            if st.session_state["enable_readiness_cam"]:
-                p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
-                p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
-                p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
-                p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
-                readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
-            else:
-                readiness_photos = st.file_uploader(
-                    "Or Upload Readiness Photos (Multiple Allowed)", 
-                    type=['png', 'jpg', 'jpeg'], 
-                    accept_multiple_files=True,
-                    key="proof_files"
-                )
-                
-        st.markdown("---")
 
-        # --- FSSAI & NSF CHECKLIST FORM ---
         with st.form("daily_checklist_form"):
             manager_name = st.text_input("Manager on Duty Name", value=draft["manager_name"])
             shift = st.selectbox("Shift", ["Morning", "Evening"], index=draft["shift_idx"])
@@ -368,13 +397,55 @@ def store_dashboard():
                                 del st.session_state[draft_key]
                                 status_msg.success("🎉 Audit successfully locked in Central QA Vault!")
                                 st.balloons()
+                                st.rerun() # Refresh to update the progress tracker
                             except Exception as e:
                                 st.error(f"Database error: {e}")
 
     # ==========================================
-    # TAB 2: RECEIVING & INVOICE LOG
+    # TAB 2: STORE READINESS PROOFS (Photos Only)
     # ==========================================
     with tab2:
+        st.subheader("📸 Opening Hygiene & Readiness Proofs")
+        st.caption("Upload required photo verification for morning setup compliance.")
+        
+        with st.form("readiness_form"):
+            st.markdown("Ensure stations are set up before submitting.")
+            
+            p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
+            p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
+            p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
+            p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
+            
+            readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
+            
+            st.markdown("---")
+            if st.form_submit_button("🚀 Submit Readiness Proofs", type="primary"):
+                if not readiness_photos:
+                    st.error("❌ Please capture at least one readiness photo.")
+                else:
+                    with st.spinner("Uploading proofs securely..."):
+                        image_urls = []
+                        if cloudinary_configured:
+                            for photo in readiness_photos:
+                                url = upload_photo(photo, st.session_state["store_id"], "readiness")
+                                if url:
+                                    image_urls.append(url)
+                        
+                        try:
+                            if supabase:
+                                supabase.table("store_readiness_logs").insert({
+                                    "store_id": st.session_state["store_id"],
+                                    "photo_urls": json.dumps(image_urls)
+                                }).execute()
+                            st.success("✅ Readiness proofs successfully uploaded to the vault!")
+                            st.rerun() # Refresh to update the progress tracker
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 3: RECEIVING & INVOICE LOG
+    # ==========================================
+    with tab3:
         st.subheader("📦 Goods Receiving & Verification")
         st.caption("Log incoming deliveries, verify core temperatures, and archive vendor challans.")
         
@@ -384,7 +455,6 @@ def store_dashboard():
             received_temp = st.number_input("Delivery Core Temperature (°C)", step=0.1, format="%.1f")
             
             st.markdown("### 📸 Invoice / Chalan Upload")
-            st.caption("📱 *Click the button below to activate the camera on-demand.*")
             
             if "enable_recv_cam" not in st.session_state:
                 st.session_state["enable_recv_cam"] = False
@@ -435,9 +505,9 @@ def store_dashboard():
                             st.error(f"❌ Failed to save receiving log: {e}")
     
     # ==========================================
-    # TAB 3: STOCK & INTERNAL TRANSFERS
+    # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
-    with tab3:
+    with tab4:
         st.subheader("🔄 Stock Transfer & Thaw Log")
         st.caption("Manage Inter-Store dispatch and strict FDU Chiller shelf-life protocols.")
         
@@ -461,11 +531,7 @@ def store_dashboard():
                     now = datetime.datetime.now()
                     expiry_time = now + datetime.timedelta(hours=shelf_life)
                     
-                    st.info(f"""
-                    🏷️ **Store Retail Name:** {store_name}
-                    ⏳ **FSSAI Shelf Life:** {shelf_life} hours
-                    🌡️ **Storage Requirement:** {temp_zone}
-                    """)
+                    st.info(f"🏷️ **Store Retail Name:** {store_name}\n⏳ **FSSAI Shelf Life:** {shelf_life} hours\n🌡️ **Storage Requirement:** {temp_zone}")
                     
                     if shelf_life == 0:
                         st.error("🚨 **RED-LINE PROTOCOL:** Do not thaw. Cook directly from Freezer Zone (<-18°C).")
@@ -525,9 +591,9 @@ def store_dashboard():
                                 st.error(f"Database error: {e}")
 
     # ==========================================
-    # TAB 4: WASTAGE & DISCARD
+    # TAB 5: WASTAGE & DISCARD
     # ==========================================
-    with tab4:
+    with tab5:
         st.subheader("🗑️ Wastage & Quality Discard Log")
         st.caption("Record expired or damaged goods strictly per NSF standards.")
         
@@ -538,14 +604,10 @@ def store_dashboard():
                 waste_qty = st.number_input("Quantity Discarded", min_value=0.0, step=0.5)
             with col_w2:
                 waste_reason = st.selectbox("Reason for Discard", [
-                    "Expired / Out of Date", 
-                    "Temperature Abuse", 
-                    "Physical Damage", 
-                    "Quality Standard Failure"
+                    "Expired / Out of Date", "Temperature Abuse", "Physical Damage", "Quality Standard Failure"
                 ])
             
             st.markdown("### 📸 Wastage Evidence")
-            st.caption("📱 *Note: Please capture a clear photo of the discarded items.*")
             waste_photo = st.camera_input("Capture Discard Photo", key="waste_photo")
             
             if st.form_submit_button("🗑️ Log Wastage", type="primary"):
