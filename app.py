@@ -944,19 +944,32 @@ with tab_lic_summary:
                 else:
                     st.caption("No physical certificate files uploaded for this location yet.")
                 
-                # Expandable upload form for individual store files
+                # Expandable upload form for individual store files (Zero Manual Typing)
                 with st.form(key=f"upload_form_{loc_name}"):
                     st.markdown("##### Upload New Certificate Copy")
-                    up_type = st.selectbox("Certificate Type", ["Central FSSAI", "State FSSAI", "Trade License", "Fire NOC", "Pollution CTO", "Signage Permit"], key=f"type_{loc_name}")
-                    up_num = st.text_input("Certificate Number Reference", key=f"num_{loc_name}")
+                    
+                    # 1. Select Category & File (No text box needed for certificate number)
+                    up_type = st.selectbox("Certificate Type", [
+                        "Central FSSAI", 
+                        "State FSSAI", 
+                        "Trade License", 
+                        "Fire NOC", 
+                        "Pollution CTO", 
+                        "Signage Permit"
+                    ], key=f"type_{loc_name}")
+                    
                     up_file = st.file_uploader("Upload PDF or Image", type=["pdf", "jpg", "jpeg", "png"], key=f"file_{loc_name}")
                     
                     if st.form_submit_button("🔒 Upload to Cloud Vault"):
-                        if not up_num or not up_file:
-                            st.error("❌ Please enter the certificate number and select a file.")
+                        if not up_file:
+                            st.error("❌ Please select a file to upload.")
                         else:
-                            with st.spinner("Uploading and encrypting document..."):
+                            with st.spinner("Encrypting and syncing document..."):
                                 try:
+                                    # 2. Automatically generate a clean, uniform reference number
+                                    current_year = datetime.datetime.now().strftime("%Y")
+                                    auto_cert_number = f"{up_type} - {loc_name} ({current_year})"
+                                    
                                     file_url = ""
                                     if cloudinary_configured:
                                         upload_res = cloudinary.uploader.upload(
@@ -968,8 +981,8 @@ with tab_lic_summary:
                                     payload = {
                                         "store_id": loc_name,
                                         "license_type": up_type,
-                                        "license_number": up_num,
-                                        "expiry_date": str(datetime.datetime.now().date()), # Fallback or parsed date
+                                        "license_number": auto_cert_number, # Automatically standardized!
+                                        "expiry_date": str(datetime.datetime.now().date()), 
                                         "file_url": file_url
                                     }
                                     if supabase is not None:
@@ -978,7 +991,6 @@ with tab_lic_summary:
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ Upload failed: {e}")
-
     # 3. PERMANENT CLOUD UPLOAD SECTION (EXCEL BULK SYNC)
     st.markdown("---")
     st.markdown("### 📂 Permanent Cloud License Excel Sync")
