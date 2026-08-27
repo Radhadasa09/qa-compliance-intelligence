@@ -39,6 +39,15 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
+# --- HIDE STREAMLIT BRANDING & GITHUB LINK ---
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- CBTL CORPORATE UI THEME ---
 st.markdown("""
     <style>
