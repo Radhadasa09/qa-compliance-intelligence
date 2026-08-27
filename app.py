@@ -971,7 +971,7 @@ with tab_lic_summary:
                                     auto_cert_number = f"{up_type} - {loc_name} ({current_year})"
                                     
                                     file_url = ""
-                                    if cloudinary_configured:
+                                    if cloudinary:
                                         upload_res = cloudinary.uploader.upload(
                                             up_file, 
                                             folder=f"cbtl/licenses/{loc_name.replace(' ', '_')}"
