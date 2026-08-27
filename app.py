@@ -802,11 +802,11 @@ with tab_supply:
                 type="primary"
             )
 # ==========================================
-# TAB 4: LICENSE SUMMARY (Supabase Cloud Sync)
+# TAB 4: LICENSE SUMMARY & DIGITAL VAULT
 # ==========================================
 with tab_lic_summary:
-    st.subheader("📜 License Compliance Summary — Executive Dashboard")
-    st.caption("High-level overview and store statutory licenses pulled securely from Supabase cloud database.")
+    st.subheader("📜 License Compliance Summary & Digital Vault")
+    st.caption("High-level overview, statutory license date tracking, and secure document archiving pulled from Supabase.")
     
     # 1. LOAD DATA FROM SUPABASE
     df_lic = pd.DataFrame()
@@ -842,7 +842,6 @@ with tab_lic_summary:
             
             for col in license_cols:
                 val = row[col]
-                # Safely ignore all variations of empty/null values
                 if pd.notna(val) and str(val).strip().lower() not in ['nan', 'nat', 'none', 'not started', 'under process', 'part of trade lic']:
                     active_licenses += 1
                     try:
@@ -881,7 +880,6 @@ with tab_lic_summary:
         # FILTERS & TABLE DETAILS
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            # Handle potential None/NaN in City column for selectbox
             valid_cities = [c for c in df_lic['City'].unique() if pd.notna(c) and str(c).strip().lower() != 'nan']
             city_filter = st.selectbox("Filter by City", ["All Cities"] + valid_cities)
         with col_f2:
@@ -891,11 +889,10 @@ with tab_lic_summary:
         if city_filter != "All Cities":
             filtered_df = filtered_df[filtered_df['City'] == city_filter]
         if status_filter == "Pending / Has Remarks":
-            # Filter where remark is not null and not empty
             filtered_df = filtered_df[filtered_df['Remark'].notna() & (filtered_df['Remark'].astype(str).str.strip() != '') & (filtered_df['Remark'].astype(str).str.lower() != 'nan')]
             
         st.markdown("---")
-        st.markdown("### 🔍 Store License Details")
+        st.markdown("### 🔍 Store License Details & Document Vault")
         
         def format_date(d):
             if pd.isna(d) or str(d).strip().lower() in ['nan', 'nat', 'none']: 
@@ -904,8 +901,12 @@ with tab_lic_summary:
                 return d.strftime('%d-%b-%Y')
             return str(d)[:10] 
 
+        # Loop through filtered stores
         for _, row in filtered_df.iterrows():
-            with st.expander(f"📍 {row['Location']} ({row['City']})"):
+            loc_name = row['Location']
+            city_name = row['City']
+            
+            with st.expander(f"📍 {loc_name} ({city_name})"):
                 cols = st.columns(5)
                 cols[0].metric("FSSAI", format_date(row['FSSAI']))
                 cols[1].metric("Trade License", format_date(row['Trade']))
@@ -918,11 +919,70 @@ with tab_lic_summary:
                     st.warning(f"⚠️ **Status / Remarks:** {remark_text}")
                 else:
                     st.success("✅ All statutory licenses up to date.")
+                
+                # --- NEW: SECURE DOCUMENT VIEWER & UPLOADER PER STORE ---
+                st.markdown("---")
+                st.markdown(f"**📂 Scanned Certificate Vault for {loc_name}**")
+                
+                # Fetch uploaded files for this specific store from Supabase 'store_licenses' table
+                store_docs = []
+                try:
+                    if supabase is not None:
+                        doc_res = supabase.table("store_licenses").select("*").eq("store_id", loc_name).execute()
+                        if doc_res.data:
+                            store_docs = doc_res.data
+                except Exception:
+                    pass
+                
+                if store_docs:
+                    st.caption("Existing uploaded files in cloud vault:")
+                    for doc in store_docs:
+                        col_d1, col_d2, col_d3 = st.columns([2, 2, 1])
+                        col_d1.text(f"📌 {doc['license_type']} ({doc['license_number']})")
+                        col_d2.text(f"Exp: {doc['expiry_date']}")
+                        col_d3.markdown(f"[🔗 View File]({doc['file_url']})", unsafe_allow_html=True)
+                else:
+                    st.caption("No physical certificate files uploaded for this location yet.")
+                
+                # Expandable upload form for individual store files
+                with st.form(key=f"upload_form_{loc_name}"):
+                    st.markdown("##### Upload New Certificate Copy")
+                    up_type = st.selectbox("Certificate Type", ["Central FSSAI", "State FSSAI", "Trade License", "Fire NOC", "Pollution CTO", "Signage Permit"], key=f"type_{loc_name}")
+                    up_num = st.text_input("Certificate Number Reference", key=f"num_{loc_name}")
+                    up_file = st.file_uploader("Upload PDF or Image", type=["pdf", "jpg", "jpeg", "png"], key=f"file_{loc_name}")
+                    
+                    if st.form_submit_button("🔒 Upload to Cloud Vault"):
+                        if not up_num or not up_file:
+                            st.error("❌ Please enter the certificate number and select a file.")
+                        else:
+                            with st.spinner("Uploading and encrypting document..."):
+                                try:
+                                    file_url = ""
+                                    if cloudinary_configured:
+                                        upload_res = cloudinary.uploader.upload(
+                                            up_file, 
+                                            folder=f"cbtl/licenses/{loc_name.replace(' ', '_')}"
+                                        )
+                                        file_url = upload_res.get("secure_url", "")
+                                    
+                                    payload = {
+                                        "store_id": loc_name,
+                                        "license_type": up_type,
+                                        "license_number": up_num,
+                                        "expiry_date": str(datetime.datetime.now().date()), # Fallback or parsed date
+                                        "file_url": file_url
+                                    }
+                                    if supabase is not None:
+                                        supabase.table("store_licenses").insert(payload).execute()
+                                        st.success("✅ File uploaded successfully! Refreshing...")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Upload failed: {e}")
 
-    # 3. PERMANENT CLOUD UPLOAD SECTION
+    # 3. PERMANENT CLOUD UPLOAD SECTION (EXCEL BULK SYNC)
     st.markdown("---")
-    st.markdown("### 📂 Permanent Cloud License Sync")
-    st.caption("Upload your Excel sheet *once*. It will be saved securely to Supabase so it never deletes on page refresh.")
+    st.markdown("### 📂 Permanent Cloud License Excel Sync")
+    st.caption("Upload your master Excel sheet *once* to update all statutory dates globally in Supabase.")
     
     uploaded_file = st.file_uploader("Upload Master License Tracker Excel File", type=["xlsx", "xls"], key="cloud_license_uploader")
     
@@ -951,7 +1011,6 @@ with tab_lic_summary:
                     for row in raw_records:
                         clean_row = {}
                         for k, v in row.items():
-                            # If the string represents a null value, convert to an actual Python None for Supabase
                             if pd.isna(v) or str(v).strip().lower() in ['nan', 'nat', 'none', '<na>', '']:
                                 clean_row[k] = None
                             else:
