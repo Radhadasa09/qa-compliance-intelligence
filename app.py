@@ -48,6 +48,22 @@ hide_streamlit_style = """
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# --- HIDE STREAMLIT BRANDING & FIX TOP SPACING ---
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Reduces the awkward top gap left by the hidden header */
+    .block-container {
+        padding-top: 1.5rem; 
+        padding-bottom: 2rem;
+        max-width: 1200px;
+    }
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- CBTL CORPORATE UI THEME ---
 st.markdown("""
     <style>
