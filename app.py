@@ -408,13 +408,32 @@ with tab_ops:
                     
                     # Detailed Data Expander
                     with st.expander("🔍 View & Download Detailed Audit Reports"):
-                        df_display = df_audits.copy()
-                        df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
-                        st.dataframe(df_display[['created_at', 'store_id', 'manager_name', 'shift']], use_container_width=True, hide_index=True)
-                        st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")
-                else:
-                    st.info("No audit data available for graphs.")
-        except Exception as e:
+            df_display = df_audits.copy()
+            df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
+            
+            cols_to_show = [
+                'created_at', 'store_id', 'manager_name', 'shift', 
+                'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 
+                'product_proof_url', 'facility_proof_url'
+            ]
+            
+            # Filters columns safely so it won't crash if a column is missing
+            valid_cols = [c for c in cols_to_show if c in df_display.columns]
+            
+            st.dataframe(
+                df_display[valid_cols], 
+                column_config={
+                    "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_url="🔗 View"),
+                    "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_url="🔗 View"),
+                    "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_url="🔗 View"),
+                    "product_proof_url": st.column_config.LinkColumn("Product Photo", display_url="🔗 View"),
+                    "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_url="🔗 View")
+                },
+                use_container_width=True, 
+                hide_index=True
+            )
+            
+            st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")        except Exception as e:
             st.error(f"Error loading audits: {e}")
 
     # --- 2. RECEIVING LOGS GRAPH & DATA ---
