@@ -407,7 +407,7 @@ with tab_ops:
                     st.plotly_chart(fig_audit, use_container_width=True)
                     
                     # Detailed Data Expander
-                    with st.expander("🔍 View & Download Detailed Audit Reports"):
+with st.expander("🔍 View & Download Detailed Audit Reports"):
             df_display = df_audits.copy()
             df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
             
@@ -417,7 +417,6 @@ with tab_ops:
                 'product_proof_url', 'facility_proof_url'
             ]
             
-            # Filters columns safely so it won't crash if a column is missing
             valid_cols = [c for c in cols_to_show if c in df_display.columns]
             
             st.dataframe(
@@ -433,7 +432,8 @@ with tab_ops:
                 hide_index=True
             )
             
-            st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")        except Exception as e:
+            st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")   
+        except Exception as e:
             st.error(f"Error loading audits: {e}")
 
     # --- 2. RECEIVING LOGS GRAPH & DATA ---
