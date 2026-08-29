@@ -343,6 +343,7 @@ with tab_exec:
                 st.info("📂 No compliance data found. Store Managers need to submit data in the Retail Operations tab.")
     except Exception as e:
         st.error(f"❌ Could not load compliance data from the cloud: {e}")
+
 # ==========================================
 # TAB 2: RETAIL OPERATIONS 
 # ==========================================
@@ -384,6 +385,7 @@ with tab_ops:
                 )
     except Exception as e:
         st.caption("Leaderboard calculating...")
+
     # ==========================================
     # --- 📊 LIVE ANALYTICS & DATA FEED ---
     # ==========================================
@@ -407,32 +409,34 @@ with tab_ops:
                     st.plotly_chart(fig_audit, use_container_width=True)
                     
                     # Detailed Data Expander
-    with st.expander("🔍 View & Download Detailed Audit Reports"):
-            df_display = df_audits.copy()
-            df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
-            
-            cols_to_show = [
-                'created_at', 'store_id', 'manager_name', 'shift', 
-                'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 
-                'product_proof_url', 'facility_proof_url'
-            ]
-            
-            valid_cols = [c for c in cols_to_show if c in df_display.columns]
-            
-            st.dataframe(
-                df_display[valid_cols], 
-                column_config={
-                    "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_url="🔗 View"),
-                    "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_url="🔗 View"),
-                    "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_url="🔗 View"),
-                    "product_proof_url": st.column_config.LinkColumn("Product Photo", display_url="🔗 View"),
-                    "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_url="🔗 View")
-                },
-                use_container_width=True, 
-                hide_index=True
-            )
-            
-            st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")   
+                    with st.expander("🔍 View & Download Detailed Audit Reports"):
+                        df_display = df_audits.copy()
+                        df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
+                        
+                        cols_to_show = [
+                            'created_at', 'store_id', 'manager_name', 'shift', 
+                            'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 
+                            'product_proof_url', 'facility_proof_url'
+                        ]
+                        
+                        valid_cols = [c for c in cols_to_show if c in df_display.columns]
+                        
+                        st.dataframe(
+                            df_display[valid_cols], 
+                            column_config={
+                                "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_url="🔗 View"),
+                                "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_url="🔗 View"),
+                                "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_url="🔗 View"),
+                                "product_proof_url": st.column_config.LinkColumn("Product Photo", display_url="🔗 View"),
+                                "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_url="🔗 View")
+                            },
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                        
+                        st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")
+                else:
+                    st.info("No audit data available for graphs.")
         except Exception as e:
             st.error(f"Error loading audits: {e}")
 
@@ -486,7 +490,7 @@ with tab_ops:
     # --- ORIGINAL COMPLIANCE ENTRY ---
     # ==========================================
     st.subheader("📋 Store Staff Compliance Entry")
-    # ... (Your existing compliance entry code remains unchanged below this)
+    
     FULL_STORE_LIST = [
         "DLF Mid Town Plaza, Moti Nagar", 
         "Janakpuri, Delhi", 
@@ -576,6 +580,7 @@ with tab_ops:
                     st.info("No FDU transfers logged.")
         except Exception as e:
             st.error(f"Error loading FDU compliance data: {e}")
+
 # ==========================================
 # TAB 3: VENDOR & SUPPLY CHAIN (Nested Sub-Tabs)
 # ==========================================
@@ -625,7 +630,7 @@ with tab_supply:
     # ------------------------------------------
     with sub_tab_create:
         st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
-        st.caption("Evaluate vendors across the 40-point checklist[cite: 2]. Point deduction comment boxes appear automatically when compliance is compromised.")
+        st.caption("Evaluate vendors across the 40-point checklist. Point deduction comment boxes appear automatically when compliance is compromised.")
         
         with st.form("manufacturing_audit_form"):
             col_v1, col_v2 = st.columns(2)
@@ -794,14 +799,16 @@ with tab_supply:
                             if supabase is not None:
                                 supabase.table("vendor_audits").insert(payload).execute()
                             
-                            pdf_report_bytes = generate_detailed_checklist_pdf(
-                                audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date,
-                                audit_responses, final_percentage, grade, audit_remarks, final_proof_url
-                            )
-                            st.session_state['latest_generated_audit_pdf'] = {
-                                "name": audit_vendor_name,
-                                "data": pdf_report_bytes
-                            }
+                            # Note: Ensure generate_detailed_checklist_pdf is defined elsewhere in your environment
+                            if 'generate_detailed_checklist_pdf' in globals():
+                                pdf_report_bytes = generate_detailed_checklist_pdf(
+                                    audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date,
+                                    audit_responses, final_percentage, grade, audit_remarks, final_proof_url
+                                )
+                                st.session_state['latest_generated_audit_pdf'] = {
+                                    "name": audit_vendor_name,
+                                    "data": pdf_report_bytes
+                                }
                             
                             st.success(f"✅ Audit Completed & Saved! Score: {final_percentage:.1f}% | Grade: {grade}")
                             st.balloons()
@@ -820,6 +827,7 @@ with tab_supply:
                 mime="application/pdf",
                 type="primary"
             )
+
 # ==========================================
 # TAB 4: LICENSE SUMMARY & DIGITAL VAULT
 # ==========================================
@@ -1010,6 +1018,7 @@ with tab_lic_summary:
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ Upload failed: {e}")
+
     # 3. PERMANENT CLOUD UPLOAD SECTION (EXCEL BULK SYNC)
     st.markdown("---")
     st.markdown("### 📂 Permanent Cloud License Excel Sync")
@@ -1059,6 +1068,7 @@ with tab_lic_summary:
                         st.rerun()
                 except Exception as e:
                     st.error(f"❌ Failed to sync to database: {e}")
+
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
@@ -1143,6 +1153,7 @@ with tab_nsf:
 
     else:
         st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")
+
 # ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
@@ -1262,6 +1273,7 @@ with tab_reports:
             file_name=f"CBTL_Executive_Report_{selected_month}.pdf", 
             mime="application/pdf"
         )
+
 # ==========================================
 # TAB 7: SYSTEM ADMINISTRATION
 # ==========================================
