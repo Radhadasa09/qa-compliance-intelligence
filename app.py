@@ -407,7 +407,7 @@ with tab_ops:
                     st.plotly_chart(fig_audit, use_container_width=True)
                     
                     # Detailed Data Expander
-with st.expander("🔍 View & Download Detailed Audit Reports"):
+    with st.expander("🔍 View & Download Detailed Audit Reports"):
             df_display = df_audits.copy()
             df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
             
