@@ -410,14 +410,34 @@ with tab_ops:
                     df_audits = pd.DataFrame(audit_res.data)
                     df_audits['created_at'] = pd.to_datetime(df_audits['created_at'])
                     
-                    # Graph: Audits per store
-                    # Convert to string so Plotly doesn't format it as '189.002k'
-                    df_audits['store_id_str'] = df_audits['store_id'].astype(str) 
-                    audit_counts = df_audits['store_id_str'].value_counts().reset_index()
-                    audit_counts.columns = ['Store ID', 'Total Submissions']
+                    # 1. Map raw IDs to actual Store Names based on your master list
+                    store_name_map = {
+                        "189001": "Janakpuri, Delhi",
+                        "189002": "GK1, Delhi",
+                        "189003": "Oberoi SkyCity, Mumbai",
+                        "189004": "M3M Atrium, Gurgaon",
+                        "189005": "Secor 50 Noida, Noida",
+                        "189006": "Malcha, Delhi",
+                        "189007": "Platina, Gurgaon",
+                        "189008": "Season Mall Pune, Pune",
+                        "189009": "BRS Nagar Ludhiana, Ludhiana",
+                        "189010": "DLF Moti Nagar, Delhi",
+                        "189011": "Goldust Patiala, Patiala",
+                        "189012": "Warehouse, Delhi",
+                        "189013": "Creek Side, Ludhiana",
+                        "189014": "Chembur, Mumbai"
+                    }
+                    
+                    # Convert ID to string and apply the translation map
+                    df_audits['store_id_str'] = df_audits['store_id'].astype(str)
+                    df_audits['Store Name'] = df_audits['store_id_str'].map(store_name_map).fillna(df_audits['store_id_str'])
+                    
+                    # 2. Graph: Group by the new 'Store Name' column
+                    audit_counts = df_audits['Store Name'].value_counts().reset_index()
+                    audit_counts.columns = ['Store Name', 'Total Submissions']
                     
                     fig_audit = px.bar(
-                        audit_counts, x='Store ID', y='Total Submissions', 
+                        audit_counts, x='Store Name', y='Total Submissions', 
                         title="Audit Submissions by Store", text_auto=True, 
                         color='Total Submissions', color_continuous_scale='Blues'
                     )
@@ -429,8 +449,9 @@ with tab_ops:
                         df_display = df_audits.copy()
                         df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
                         
+                        # Updated to show 'Store Name' instead of 'store_id'
                         cols_to_show = [
-                            'created_at', 'store_id', 'manager_name', 'shift', 
+                            'created_at', 'Store Name', 'manager_name', 'shift', 
                             'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 
                             'product_proof_url', 'facility_proof_url'
                         ]
@@ -455,7 +476,6 @@ with tab_ops:
                     st.info("No audit data available for graphs.")
         except Exception as e:
             st.error(f"Error loading audits: {e}")
-
     # --- 2. RECEIVING LOGS GRAPH & DATA ---
     with view_recv:
         try:
