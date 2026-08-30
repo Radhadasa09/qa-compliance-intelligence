@@ -356,19 +356,17 @@ with tab_ops:
     st.markdown("---")
     try:
         if supabase is not None:
-            # Fetch audits with their timestamps to calculate unique daily submissions
-            leader_res = supabase.table("daily_audits").select("store_id, created_at").execute()
+            # Fetch audits WITH timestamps, ordered newest first
+            leader_res = supabase.table("daily_audits").select("store_id, created_at").order("created_at", desc=True).execute()
             
             if leader_res.data:
                 df_leader = pd.DataFrame(leader_res.data)
+                df_leader['created_at'] = pd.to_datetime(df_leader['created_at'])
+                df_leader['date_only'] = df_leader['created_at'].dt.date
                 
-                # 1. Convert the timestamp to just a calendar date (ignores the time/shift)
-                df_leader['date_only'] = pd.to_datetime(df_leader['created_at']).dt.date
+                # KEEP='FIRST': Since it's ordered newest to oldest, this keeps the latest submission of the day
+                df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'], keep='first')
                 
-                # 2. Drop duplicates so each store only gets ONE row per date
-                df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'])
-                
-                # 3. Calculate the store with the most unique active days
                 submission_counts = df_unique_days['store_id'].value_counts()
                 
                 if not submission_counts.empty:
