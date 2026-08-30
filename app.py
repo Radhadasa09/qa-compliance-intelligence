@@ -403,12 +403,17 @@ with tab_ops:
     with view_audit:
         try:
             if supabase is not None:
-                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(100).execute()
+                # I increased the limit to 200 so it captures more history before filtering
+                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(200).execute()
                 if audit_res.data:
                     df_audits = pd.DataFrame(audit_res.data)
                     df_audits['created_at'] = pd.to_datetime(df_audits['created_at'])
                     
-                    # 1. Map raw IDs to actual Store Names based on your master list
+                    # 1. Filter for the LATEST submission per day per store
+                    df_audits['date_only'] = df_audits['created_at'].dt.date
+                    df_latest_audits = df_audits.drop_duplicates(subset=['store_id', 'date_only'], keep='first').copy()
+                    
+                    # 2. Map raw IDs to actual Store Names based on your master list
                     store_name_map = {
                         "189001": "Janakpuri, Delhi",
                         "189002": "GK1, Delhi",
@@ -426,28 +431,26 @@ with tab_ops:
                         "189014": "Chembur, Mumbai"
                     }
                     
-                    # Convert ID to string and apply the translation map
-                    df_audits['store_id_str'] = df_audits['store_id'].astype(str)
-                    df_audits['Store Name'] = df_audits['store_id_str'].map(store_name_map).fillna(df_audits['store_id_str'])
+                    df_latest_audits['store_id_str'] = df_latest_audits['store_id'].astype(str)
+                    df_latest_audits['Store Name'] = df_latest_audits['store_id_str'].map(store_name_map).fillna(df_latest_audits['store_id_str'])
                     
-                    # 2. Graph: Group by the new 'Store Name' column
-                    audit_counts = df_audits['Store Name'].value_counts().reset_index()
-                    audit_counts.columns = ['Store Name', 'Total Submissions']
+                    # 3. Graph: Group by the new 'Store Name' column using only latest daily data
+                    audit_counts = df_latest_audits['Store Name'].value_counts().reset_index()
+                    audit_counts.columns = ['Store Name', 'Total Valid Submissions']
                     
                     fig_audit = px.bar(
-                        audit_counts, x='Store Name', y='Total Submissions', 
-                        title="Audit Submissions by Store", text_auto=True, 
-                        color='Total Submissions', color_continuous_scale='Blues'
+                        audit_counts, x='Store Name', y='Total Valid Submissions', 
+                        title="Valid Daily Audits by Store", text_auto=True, 
+                        color='Total Valid Submissions', color_continuous_scale='Blues'
                     )
-                    fig_audit.update_layout(xaxis_type='category') # Forces distinct text labels
+                    fig_audit.update_layout(xaxis_type='category') 
                     st.plotly_chart(fig_audit, use_container_width=True)
                     
                     # Detailed Data Expander
                     with st.expander("🔍 View & Download Detailed Audit Reports"):
-                        df_display = df_audits.copy()
+                        df_display = df_latest_audits.copy()
                         df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
                         
-                        # Updated to show 'Store Name' instead of 'store_id'
                         cols_to_show = [
                             'created_at', 'Store Name', 'manager_name', 'shift', 
                             'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 
@@ -473,8 +476,7 @@ with tab_ops:
                 else:
                     st.info("No audit data available for graphs.")
         except Exception as e:
-            st.error(f"Error loading audits: {e}")
-    # --- 2. RECEIVING LOGS GRAPH & DATA ---
+            st.error(f"Error loading audits: {e}")    # --- 2. RECEIVING LOGS GRAPH & DATA ---
     with view_recv:
         try:
             if supabase is not None:
