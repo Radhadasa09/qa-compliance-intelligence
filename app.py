@@ -350,42 +350,50 @@ with tab_exec:
 with tab_ops:
     st.header("🏪 Retail Operations & Logistics")
     
-    # ==========================================
+  # ==========================================
     # --- 🏆 QA EXCELLENCE LEADERBOARD ---
     # ==========================================
     st.markdown("---")
     try:
         if supabase is not None:
-            # Fetch recent audits to calculate the winner
-            leader_res = supabase.table("daily_audits").select("store_id").execute()
+            # Fetch audits with their timestamps to calculate unique daily submissions
+            leader_res = supabase.table("daily_audits").select("store_id, created_at").execute()
+            
             if leader_res.data:
                 df_leader = pd.DataFrame(leader_res.data)
                 
-                # Calculate the store with the most submissions
-                submission_counts = df_leader['store_id'].value_counts()
-                top_store_id = submission_counts.idxmax()
-                top_score = submission_counts.max()
+                # 1. Convert the timestamp to just a calendar date (ignores the time/shift)
+                df_leader['date_only'] = pd.to_datetime(df_leader['created_at']).dt.date
                 
-                # Fetch the actual store name from the database
-                store_info = supabase.table("stores").select("store_name").eq("store_id", top_store_id).execute()
-                if store_info.data:
-                    champion_name = store_info.data[0]['store_name']
-                else:
-                    champion_name = f"Store {top_store_id}"
+                # 2. Drop duplicates so each store only gets ONE row per date
+                df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'])
                 
-                st.markdown(
-                    f"""
-                    <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
-                        <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
-                        <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>{champion_name}</b></h4>
-                        <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Submissions: <b>{top_score}</b></p>
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
+                # 3. Calculate the store with the most unique active days
+                submission_counts = df_unique_days['store_id'].value_counts()
+                
+                if not submission_counts.empty:
+                    top_store_id = submission_counts.idxmax()
+                    top_score = submission_counts.max()
+                    
+                    # Fetch the actual store name from the database
+                    store_info = supabase.table("stores").select("store_name").eq("store_id", top_store_id).execute()
+                    if store_info.data:
+                        champion_name = store_info.data[0]['store_name']
+                    else:
+                        champion_name = f"Store {top_store_id}"
+                    
+                    st.markdown(
+                        f"""
+                        <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
+                            <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
+                            <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>{champion_name}</b></h4>
+                            <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Days: <b>{top_score}</b></p>
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
     except Exception as e:
         st.caption("Leaderboard calculating...")
-
     # ==========================================
     # --- 📊 LIVE ANALYTICS & DATA FEED ---
     # ==========================================
