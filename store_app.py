@@ -5,6 +5,8 @@ from supabase import create_client, Client
 import cloudinary
 import cloudinary.uploader
 import json
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 # --- PAGE CONFIGURATION (Must be first) ---
 st.set_page_config(
@@ -188,7 +190,6 @@ def login_screen():
 
         store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
         
-        # FIX: Selectbox is OUTSIDE the form so it updates instantly
         selected_display = st.selectbox("Select Your Location", options=list(store_dict.keys()))
         
         with st.form("login_form"):
@@ -222,6 +223,27 @@ def store_dashboard():
     st.markdown("---")
     
     # ==========================================
+    # --- 🌟 STORE PROGRESS & MOTIVATION TRACKER ---
+    # ==========================================
+    st.markdown("### 🌟 Your QA Excellence Tracker")
+    try:
+        if supabase is not None:
+            my_audits = supabase.table("daily_audits").select("created_at").eq("store_id", st.session_state["store_id"]).execute()
+            if my_audits.data:
+                df_my = pd.DataFrame(my_audits.data)
+                df_my['created_at'] = pd.to_datetime(df_my['created_at'])
+                df_my['date_only'] = df_my['created_at'].dt.date
+                total_compliant_days = df_my['date_only'].nunique()
+                
+                st.info(f"🔥 **Keep it up!** Your store has successfully completed **{total_compliant_days} Days** of QA Compliance!")
+                st.progress(min(total_compliant_days / 30, 1.0), text="Monthly Goal Progress")
+            else:
+                st.info("👋 Welcome! Submit your first QA audit today to start your compliance streak!")
+    except Exception:
+        pass
+    st.markdown("---")
+    
+    # ==========================================
     # --- 🎯 DAILY PROGRESS TRACKER (STAGE 1) ---
     # ==========================================
     st.markdown("### 🎯 Today's Morning Mission")
@@ -230,8 +252,7 @@ def store_dashboard():
     readiness_done = False
     
     try:
-        if supabase:
-            # Check for today's submissions
+        if supabase is not None:
             today_str = datetime.datetime.now().strftime("%Y-%m-%d")
             
             audit_res = supabase.table("daily_audits").select("id").eq("store_id", st.session_state["store_id"]).gte("created_at", today_str).execute()
@@ -242,9 +263,8 @@ def store_dashboard():
             if len(read_res.data) > 0:
                 readiness_done = True
     except Exception:
-        pass # Fail silently if DB check pauses
+        pass
         
-    # Calculate & Display Progress
     progress = 0
     if audit_done: progress += 50
     if readiness_done: progress += 50
@@ -288,7 +308,6 @@ def store_dashboard():
         
         draft_key = get_draft_key(st.session_state['store_id'])
         
-        # Initialize Draft State if empty
         if draft_key not in st.session_state:
             st.session_state[draft_key] = {
                 "manager_name": "", "shift_idx": 0,
@@ -397,9 +416,62 @@ def store_dashboard():
                                 del st.session_state[draft_key]
                                 status_msg.success("🎉 Audit successfully locked in Central QA Vault!")
                                 st.balloons()
-                                st.rerun() # Refresh to update the progress tracker
+                                
+                                # Store uploaded files temporarily in session state for instant collage generation
+                                st.session_state["latest_audit_photos"] = [proof_a, proof_b, proof_c, proof_d, proof_e]
+                                st.session_state["latest_manager_name"] = manager_name
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Database error: {e}")
+
+        # --- QA HERO COLLAGE GENERATOR (Appears post-submission if photos exist) ---
+        if "latest_audit_photos" in st.session_state and st.session_state["latest_audit_photos"]:
+            st.markdown("---")
+            st.markdown("### 📸 Generate Your Daily QA Hero Collage!")
+            st.caption("Download a collage of today's audit to share with your team or regional manager.")
+            
+            qa_hero_name = st.text_input("Confirm Shift Manager / Hero Name:", value=st.session_state.get("latest_manager_name", ""))
+            
+            if st.button("🎨 Create Motivation Collage", type="primary"):
+                with st.spinner("Stitching your photos together..."):
+                    try:
+                        collage_width = 1200
+                        collage_height = 800
+                        collage = Image.new('RGB', (collage_width, collage_height), color=(245, 247, 250))
+                        
+                        valid_images = [img for img in st.session_state["latest_audit_photos"] if img is not None]
+                        
+                        for idx, img_file in enumerate(valid_images[:5]):
+                            img = Image.open(img_file).convert("RGB")
+                            img = img.resize((400, 400))
+                            x = (idx % 3) * 400
+                            y = (idx // 3) * 400
+                            collage.paste(img, (x, y))
+                            
+                        draw = ImageDraw.Draw(collage)
+                        text_x, text_y = 800, 400
+                        
+                        draw.rectangle([text_x, text_y, text_x + 400, text_y + 400], fill=(0, 51, 102))
+                        
+                        today_str = datetime.datetime.now().strftime('%d %b %Y')
+                        motivation_text = f"QA EXCELLENCE\n\nStore:\n{st.session_state['store_name']}\n\nQA Hero:\n{qa_hero_name}\n\nDate: {today_str}\nGreat Job Today!"
+                        
+                        draw.text((text_x + 30, text_y + 50), motivation_text, fill=(255, 255, 255), spacing=10)
+                        
+                        buf = io.BytesIO()
+                        collage.save(buf, format="JPEG", quality=90)
+                        collage_bytes = buf.getvalue()
+                        
+                        st.image(collage_bytes, caption=f"QA Hero Collage - {qa_hero_name}")
+                        
+                        st.download_button(
+                            label="📥 Download & Share Collage",
+                            data=collage_bytes,
+                            file_name=f"QA_Collage_{st.session_state['store_name'].replace(' ', '_')}.jpg",
+                            mime="image/jpeg"
+                        )
+                    except Exception as e:
+                        st.error(f"Could not generate collage: {e}")
 
     # ==========================================
     # TAB 2: STORE READINESS PROOFS (Photos Only)
@@ -438,7 +510,7 @@ def store_dashboard():
                                     "photo_urls": json.dumps(image_urls)
                                 }).execute()
                             st.success("✅ Readiness proofs successfully uploaded to the vault!")
-                            st.rerun() # Refresh to update the progress tracker
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
