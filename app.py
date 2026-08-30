@@ -401,7 +401,7 @@ with tab_ops:
     
     view_audit, view_recv, view_waste = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage"])
     
-    # --- 1. DAILY AUDITS GRAPH & DATA ---
+# --- 1. DAILY AUDITS GRAPH & DATA ---
     with view_audit:
         try:
             if supabase is not None:
@@ -411,9 +411,17 @@ with tab_ops:
                     df_audits['created_at'] = pd.to_datetime(df_audits['created_at'])
                     
                     # Graph: Audits per store
-                    audit_counts = df_audits['store_id'].value_counts().reset_index()
+                    # Convert to string so Plotly doesn't format it as '189.002k'
+                    df_audits['store_id_str'] = df_audits['store_id'].astype(str) 
+                    audit_counts = df_audits['store_id_str'].value_counts().reset_index()
                     audit_counts.columns = ['Store ID', 'Total Submissions']
-                    fig_audit = px.bar(audit_counts, x='Store ID', y='Total Submissions', title="Audit Submissions by Store", text_auto=True, color='Total Submissions', color_continuous_scale='Blues')
+                    
+                    fig_audit = px.bar(
+                        audit_counts, x='Store ID', y='Total Submissions', 
+                        title="Audit Submissions by Store", text_auto=True, 
+                        color='Total Submissions', color_continuous_scale='Blues'
+                    )
+                    fig_audit.update_layout(xaxis_type='category') # Forces distinct text labels
                     st.plotly_chart(fig_audit, use_container_width=True)
                     
                     # Detailed Data Expander
@@ -432,11 +440,11 @@ with tab_ops:
                         st.dataframe(
                             df_display[valid_cols], 
                             column_config={
-                                "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_url="🔗 View"),
-                                "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_url="🔗 View"),
-                                "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_url="🔗 View"),
-                                "product_proof_url": st.column_config.LinkColumn("Product Photo", display_url="🔗 View"),
-                                "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_url="🔗 View")
+                                "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_text="🔗 View"),
+                                "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_text="🔗 View"),
+                                "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_text="🔗 View"),
+                                "product_proof_url": st.column_config.LinkColumn("Product Photo", display_text="🔗 View"),
+                                "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_text="🔗 View")
                             },
                             use_container_width=True, 
                             hide_index=True
