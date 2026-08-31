@@ -290,13 +290,15 @@ def store_dashboard():
         
     st.markdown("---")
     
-    # Initialize 5 tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # Initialize 6 tabs
+    # Add "📚 Resources" to your existing tabs list:
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📋 Daily Audit", 
         "📸 Readiness Proofs",
         "📥 Receiving", 
         "🔄 Transfer", 
-        "🗑️ Wastage"
+        "🗑️ Wastage",
+        "📚 Resources"
     ])
     
     # ==========================================
@@ -703,6 +705,45 @@ def store_dashboard():
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
+# ==========================================
+    # TAB 6: RESOURCES & COMPLIANCE VAULT
+    # ==========================================
+    with tab6:
+        st.subheader("📚 Operational Resources & Vault")
+        st.caption("Access official SOPs, safety guides, and operational charts instantly.")
+        
+        # Nested sub-tabs for clean categorization
+        res_tab1, res_tab2, res_tab3, res_tab4 = st.tabs([
+            "🛡️ QA SOPs & Safety", 
+            "📋 Menu & Nutrition", 
+            "⏳ Shelf Life Chart", 
+            "🧪 Chemical Info Sheet"
+        ])
+        
+        with res_tab1:
+            st.markdown("### Quality Assurance SOPs")
+            st.markdown("Ensure adherence to standard operating procedures across all shifts.")
+            # Example document view/download block
+            st.info("📄 **Master QA Manual & Audit Guidelines (PDF)**")
+            st.download_button("📥 Download QA Manual", data=b"Dummy PDF Content", file_name="CBTL_QA_SOP.pdf", mime="application/pdf")
+            
+        with res_tab2:
+            st.markdown("### Menu & Nutrition Booklets")
+            st.markdown("Reference guides for beverage and food items.")
+            st.info("📄 **Latest Beverage & Pastry Menu Spec Sheet**")
+            st.download_button("📥 Download Menu Specs", data=b"Dummy PDF Content", file_name="CBTL_Latest_Menu.pdf", mime="application/pdf")
+            
+        with res_tab3:
+            st.markdown("### Shelf Life & Storage Charts")
+            st.markdown("Strict timelines for thawing, holding, and disposal.")
+            st.info("📄 **FDU & Chiller Shelf Life Matrix**")
+            st.download_button("📥 Download Shelf Life Chart", data=b"Dummy PDF Content", file_name="CBTL_Shelf_Life_Chart.pdf", mime="application/pdf")
+            
+        with res_tab4:
+            st.markdown("### Chemical Safety Information Sheets")
+            st.markdown("SDS sheets for sanitizers and cleaning agents used in-store.")
+            st.info("📄 **Sanitizer & Detergent Safety Data Sheet (SDS)**")
+            st.download_button("📥 Download Chemical Info", data=b"Dummy PDF Content", file_name="Chemical_Info_Sheet.pdf", mime="application/pdf")
 # --- APP ROUTING ---
 if st.session_state["logged_in"]:
     store_dashboard()
