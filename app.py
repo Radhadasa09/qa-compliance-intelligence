@@ -1323,10 +1323,11 @@ with tab_reports:
 # ==========================================
 with tab_res:
     st.subheader("📚 Central Resources & Document Management")
-    st.caption("Upload or update the master documents pushed out to all store locations.")
+    st.caption("Upload, view, and manage master documents pushed out to all store locations.")
     
-    # Allow admin to upload new master versions
+    # 1. Upload Section
     with st.form("upload_master_resource"):
+        st.markdown("##### 📤 Publish New Master Document")
         doc_category = st.selectbox("Document Category", [
             "QA SOPs & Safety", 
             "Menu & Nutrition Booklet", 
@@ -1337,16 +1338,59 @@ with tab_res:
         
         if st.form_submit_button("🚀 Publish to All Stores", type="primary"):
             if doc_file:
-                st.success(f"✅ Master document for '{doc_category}' successfully published to the store network!")
+                with st.spinner("Uploading to cloud storage..."):
+                    try:
+                        # Upload to Cloudinary under a dedicated central folder
+                        file_url = ""
+                        if cloudinary:
+                            upload_res = cloudinary.uploader.upload(
+                                doc_file, 
+                                folder="cbtl/central_resources",
+                                resource_type="auto"
+                            )
+                            file_url = upload_res.get("secure_url", "")
+                        
+                        # Save reference to Supabase 'central_resources' table
+                        payload = {
+                            "category": doc_category,
+                            "file_name": doc_file.name,
+                            "file_url": file_url,
+                            "updated_at": str(datetime.datetime.now().date())
+                        }
+                        if supabase is not None:
+                            supabase.table("central_resources").insert(payload).execute()
+                            st.success(f"✅ Master document for '{doc_category}' successfully published to the store network!")
+                            st.rerun()
+                        else:
+                            st.error("Database connection missing.")
+                    except Exception as e:
+                        st.error(f"❌ Upload failed: {e}")
             else:
                 st.error("❌ Please upload a PDF document.")
                 
     st.markdown("---")
-    st.markdown("### 📂 Currently Active Network Documents")
-    st.markdown("- 🛡️ **Master QA Manual v4.2** *(Active across all 14 stores)*")
-    st.markdown("- 📋 **Latest Menu & Nutrition Booklet** *(Active across all 14 stores)*")
-    st.markdown("- ⏳ **Shelf Life & Temperature Matrix** *(Active across all 14 stores)*")
-    st.markdown("- 🧪 **Chemical SDS & Dilution Guide** *(Active across all 14 stores)*")
+    
+    # 2. View and Download Section (Pulled live from Supabase)
+    st.markdown("### 📂 Active Network Documents Vault")
+    st.caption("Review or download the current active files accessible by store teams.")
+    
+    try:
+        if supabase is not None:
+            res_query = supabase.table("central_resources").select("*").execute()
+            if res_query.data:
+                df_resources = pd.DataFrame(res_query.data)
+                
+                for _, row in df_resources.iterrows():
+                    col_d1, col_d2, col_d3 = st.columns([2, 2, 1])
+                    col_d1.text(f"📌 {row['category']}")
+                    col_d2.text(f"File: {row['file_name']}")
+                    col_d3.markdown(f"[🔗 View / Download]({row['file_url']})", unsafe_allow_html=True)
+            else:
+                st.info("📂 No custom master documents uploaded yet. Default guidelines are currently active.")
+        else:
+            st.warning("Database connection inactive.")
+    except Exception as e:
+        st.info("Loading resource repository...")
 # ==========================================
 # TAB 8: SYSTEM ADMINISTRATION
 # ==========================================
