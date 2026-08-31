@@ -364,28 +364,34 @@ with tab_ops:
                 df_leader['created_at'] = pd.to_datetime(df_leader['created_at'])
                 df_leader['date_only'] = df_leader['created_at'].dt.date
                 
-                # KEEP='FIRST': Since it's ordered newest to oldest, this keeps the latest submission of the day
+                # Keep latest submission per store per day
                 df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'], keep='first')
                 
                 submission_counts = df_unique_days['store_id'].value_counts()
                 
                 if not submission_counts.empty:
-                    top_store_id = submission_counts.idxmax()
-                    top_score = submission_counts.max()
+                    max_score = submission_counts.max()
                     
-                    # Fetch the actual store name from the database
-                    store_info = supabase.table("stores").select("store_name").eq("store_id", top_store_id).execute()
-                    if store_info.data:
-                        champion_name = store_info.data[0]['store_name']
-                    else:
-                        champion_name = f"Store {top_store_id}"
+                    # Find ALL store IDs that share the top score (handles ties perfectly!)
+                    top_store_ids = submission_counts[submission_counts == max_score].index.tolist()
+                    
+                    champion_names = []
+                    for s_id in top_store_ids:
+                        store_info = supabase.table("stores").select("store_name").eq("store_id", s_id).execute()
+                        if store_info.data:
+                            champion_names.append(store_info.data[0]['store_name'])
+                        else:
+                            champion_names.append(f"Store {s_id}")
+                    
+                    # Format names nicely for the banner (e.g., "Store A & Store B")
+                    champions_display = " &amp; ".join(champion_names)
                     
                     st.markdown(
                         f"""
                         <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
                             <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
-                            <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champion: <b>{champion_name}</b></h4>
-                            <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Days: <b>{top_score}</b></p>
+                            <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champions: <b>{champions_display}</b></h4>
+                            <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Days: <b>{max_score}</b></p>
                         </div>
                         """, 
                         unsafe_allow_html=True
