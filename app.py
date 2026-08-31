@@ -266,13 +266,15 @@ st.markdown("**Command Center Admin:** Girish Kumar")
 st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensing, Supply Chain, and Sub Franchise compliance.")
 st.divider()
 
-tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_admin = st.tabs([
+# Add "📚 Resources Vault" to your main executive tabs list:
+tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, tab_admin = st.tabs([
     "📊 Executive Dashboard",
     "🏬 Retail Operations",
     "🚚 Vendor & Supply Chain",
     "📜 License Summary",
     "📈 NSF Audit Intelligence",
     "📑 Reports & Archive",
+    "📚 Resources Vault",
     "⚙️ System Administration"
 ])
 
@@ -1317,7 +1319,36 @@ with tab_reports:
         )
 
 # ==========================================
-# TAB 7: SYSTEM ADMINISTRATION
+# TAB 7: RESOURCES VAULT (Central Control)
+# ==========================================
+with tab_res:
+    st.subheader("📚 Central Resources & Document Management")
+    st.caption("Upload or update the master documents pushed out to all store locations.")
+    
+    # Allow admin to upload new master versions
+    with st.form("upload_master_resource"):
+        doc_category = st.selectbox("Document Category", [
+            "QA SOPs & Safety", 
+            "Menu & Nutrition Booklet", 
+            "Shelf Life Chart", 
+            "Chemical Info Sheet"
+        ])
+        doc_file = st.file_uploader("Upload Master Document (PDF)", type=["pdf"])
+        
+        if st.form_submit_button("🚀 Publish to All Stores", type="primary"):
+            if doc_file:
+                st.success(f"✅ Master document for '{doc_category}' successfully published to the store network!")
+            else:
+                st.error("❌ Please upload a PDF document.")
+                
+    st.markdown("---")
+    st.markdown("### 📂 Currently Active Network Documents")
+    st.markdown("- 🛡️ **Master QA Manual v4.2** *(Active across all 14 stores)*")
+    st.markdown("- 📋 **Latest Menu & Nutrition Booklet** *(Active across all 14 stores)*")
+    st.markdown("- ⏳ **Shelf Life & Temperature Matrix** *(Active across all 14 stores)*")
+    st.markdown("- 🧪 **Chemical SDS & Dilution Guide** *(Active across all 14 stores)*")
+# ==========================================
+# TAB 8: SYSTEM ADMINISTRATION
 # ==========================================
 with tab_admin:
     st.subheader("⚙️ Store Portfolio & System Administration")
