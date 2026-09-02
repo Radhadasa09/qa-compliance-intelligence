@@ -5,7 +5,7 @@ from supabase import create_client, Client
 import cloudinary
 import cloudinary.uploader
 import json
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import io
 
 # --- PAGE CONFIGURATION (Must be first) ---
@@ -148,7 +148,7 @@ premium_style = """
         background-color: #ffffff;
         border: 2px dashed #63B3ED;
         border-radius: 10px;
-        padding: 20px;
+        padding: 15px;
     }
     </style>
 """
@@ -244,7 +244,7 @@ def store_dashboard():
     st.markdown("---")
     
     # ==========================================
-    # --- 🎯 DAILY PROGRESS TRACKER (STAGE 1) ---
+    # --- 🎯 DAILY PROGRESS TRACKER ---
     # ==========================================
     st.markdown("### 🎯 Today's Morning Mission")
     
@@ -283,15 +283,9 @@ def store_dashboard():
         else:
             st.warning("⏳ Readiness Proofs (Pending)")
             
-    if progress == 100:
-        st.info("🌟 100% Compliant Today! Your morning data is locked in the Central QA Vault.")
-    else:
-        st.caption("⚠️ Complete your Morning Mission to secure your store's daily QA score.")
-        
     st.markdown("---")
     
     # Initialize 6 tabs
-    # Add "📚 Resources" to your existing tabs list:
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📋 Daily Audit", 
         "📸 Readiness Proofs",
@@ -302,11 +296,11 @@ def store_dashboard():
     ])
     
     # ==========================================
-    # TAB 1: DAILY AUDIT (Checklists Only)
+    # TAB 1: DAILY AUDIT (Gallery/File Uploader Enabled)
     # ==========================================
     with tab1:
         st.subheader("☀️ Daily Opening Checklist")
-        st.caption("Auto-save is enabled. Click 'Save Draft' to preserve your progress.")
+        st.caption("Upload clear photos from your phone camera or gallery as proof.")
         
         draft_key = get_draft_key(st.session_state['store_id'])
         
@@ -331,8 +325,7 @@ def store_dashboard():
             c_fssai = st.checkbox("FSSAI License & Display Board prominently visible", value=draft["c_fssai"])
             c_med = st.checkbox("Current medical certificates available on-site", value=draft["c_med"])
             c_water = st.checkbox("IS-10500:2012 Water Analysis report on file", value=draft["c_water"])
-            with st.expander("📸 Attach Proof: Documents / Board"):
-                proof_a = st.camera_input("Capture Admin Proof", key="cam_a")
+            proof_a = st.file_uploader("📂 Upload Admin Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_a")
             
             st.markdown("### B. Team Hygiene")
             c_soap = st.checkbox("Handwash sinks fully stocked with paper towels & soap", value=draft["c_soap"])
@@ -340,8 +333,7 @@ def store_dashboard():
             c_uni = st.checkbox("Staff in clean, approved uniforms with aprons tied", value=draft["c_uni"])
             c_jewel = st.checkbox("Zero Jewellery policy strictly enforced", value=draft["c_jewel"])
             c_glove = st.checkbox("Gloves and bright bandages stocked and used", value=draft["c_glove"])
-            with st.expander("📸 Attach Proof: Handwash Station"):
-                proof_b = st.camera_input("Capture Hygiene Proof", key="cam_b")
+            proof_b = st.file_uploader("📂 Upload Hygiene Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_b")
             
             st.markdown("### C. Sanitation")
             c_sink = st.checkbox("3-Compartment sink set up correctly", value=draft["c_sink"])
@@ -350,8 +342,7 @@ def store_dashboard():
             c_mop = st.checkbox("Mops stored clean and elevated", value=draft["c_mop"])
             c_trash = st.checkbox("Trash bins covered and foot-operated", value=draft["c_trash"])
             c_chem = st.checkbox("Chemical spray bottles clearly labeled", value=draft["c_chem"])
-            with st.expander("📸 Attach Proof: Sanitizer Test Strip"):
-                proof_c = st.camera_input("Capture Sanitation Proof", key="cam_c")
+            proof_c = st.file_uploader("📂 Upload Sanitation Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_c")
             
             st.markdown("### D. Product & Equipment")
             c_cold = st.checkbox("Cold holding maintained < 5°C / 41°F", value=draft["c_cold"])
@@ -360,16 +351,14 @@ def store_dashboard():
             c_ice = st.checkbox("Ice machine 100% mold-free", value=draft["c_ice"])
             c_tool = st.checkbox("Thermometers calibrated & scoops available", value=draft["c_tool"])
             c_esp = st.checkbox("Espresso calibrated 18-26s (14g dose)", value=draft["c_esp"])
-            with st.expander("📸 Attach Proof: MRD Labels"):
-                proof_d = st.camera_input("Capture Product Proof", key="cam_d")
+            proof_d = st.file_uploader("📂 Upload Product Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_d")
             
             st.markdown("### E. Facility Integrity")
             c_pest = st.checkbox("Zero pests; fly catchers ON", value=draft["c_pest"])
             c_gask = st.checkbox("Refrigeration gaskets clean/untorn", value=draft["c_gask"])
             c_drain = st.checkbox("Drains unclogged and odor-free", value=draft["c_drain"])
             c_struct = st.checkbox("No structural seepage or peeling paint", value=draft["c_struct"])
-            with st.expander("📸 Attach Proof: Clean Gaskets"):
-                proof_e = st.camera_input("Capture Facility Proof", key="cam_e")
+            proof_e = st.file_uploader("📂 Upload Facility Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_e")
             
             st.markdown("---")
             
@@ -390,7 +379,7 @@ def store_dashboard():
                 }
                 
                 if btn_save_draft:
-                    status_msg.success("✅ Progress saved locally. You can safely close or refresh.")
+                    status_msg.success("✅ Progress saved locally.")
 
                 if btn_submit:
                     if not manager_name:
@@ -419,15 +408,14 @@ def store_dashboard():
                                 status_msg.success("🎉 Audit successfully locked in Central QA Vault!")
                                 st.balloons()
                                 
-                                # Store uploaded files temporarily in session state for instant collage generation
                                 st.session_state["latest_audit_photos"] = [proof_a, proof_b, proof_c, proof_d, proof_e]
                                 st.session_state["latest_manager_name"] = manager_name
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Database error: {e}")
 
-        # --- QA HERO COLLAGE GENERATOR (Appears post-submission if photos exist) ---
-        if "latest_audit_photos" in st.session_state and st.session_state["latest_audit_photos"]:
+        # --- QA HERO COLLAGE GENERATOR ---
+        if "latest_audit_photos" in st.session_state and any(st.session_state["latest_audit_photos"]):
             st.markdown("---")
             st.markdown("### 📸 Generate Your Daily QA Hero Collage!")
             st.caption("Download a collage of today's audit to share with your team or regional manager.")
@@ -476,26 +464,24 @@ def store_dashboard():
                         st.error(f"Could not generate collage: {e}")
 
     # ==========================================
-    # TAB 2: STORE READINESS PROOFS (Photos Only)
+    # TAB 2: STORE READINESS PROOFS (Gallery Enabled)
     # ==========================================
     with tab2:
         st.subheader("📸 Opening Hygiene & Readiness Proofs")
-        st.caption("Upload required photo verification for morning setup compliance.")
+        st.caption("Upload required photo verification from camera or gallery.")
         
         with st.form("readiness_form"):
-            st.markdown("Ensure stations are set up before submitting.")
-            
-            p1 = st.camera_input("Sanitizer Prepared & Metered", key="proof_sanitizer")
-            p2 = st.camera_input("Dusters Dipped in Sanitizer Solution", key="proof_dusters")
-            p3 = st.camera_input("Wash Sink Loaded with Soap Solution", key="proof_sink")
-            p4 = st.camera_input("General Station Readiness / Counter Setup", key="proof_general")
+            p1 = st.file_uploader("Sanitizer Prepared & Metered", type=["jpg", "jpeg", "png"], key="proof_sanitizer")
+            p2 = st.file_uploader("Dusters Dipped in Sanitizer Solution", type=["jpg", "jpeg", "png"], key="proof_dusters")
+            p3 = st.file_uploader("Wash Sink Loaded with Soap Solution", type=["jpg", "jpeg", "png"], key="proof_sink")
+            p4 = st.file_uploader("General Station Readiness / Counter Setup", type=["jpg", "jpeg", "png"], key="proof_general")
             
             readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
             
             st.markdown("---")
             if st.form_submit_button("🚀 Submit Readiness Proofs", type="primary"):
                 if not readiness_photos:
-                    st.error("❌ Please capture at least one readiness photo.")
+                    st.error("❌ Please upload at least one readiness photo.")
                 else:
                     with st.spinner("Uploading proofs securely..."):
                         image_urls = []
@@ -521,29 +507,14 @@ def store_dashboard():
     # ==========================================
     with tab3:
         st.subheader("📦 Goods Receiving & Verification")
-        st.caption("Log incoming deliveries, verify core temperatures, and archive vendor challans.")
+        st.caption("Log incoming deliveries, temperatures, and vendor challans.")
         
         with st.form("receiving_form"):
             vendor_name = st.text_input("Vendor Name / Supplier")
             invoice_number = st.text_input("Invoice / Chalan Number")
             received_temp = st.number_input("Delivery Core Temperature (°C)", step=0.1, format="%.1f")
             
-            st.markdown("### 📸 Invoice / Chalan Upload")
-            
-            if "enable_recv_cam" not in st.session_state:
-                st.session_state["enable_recv_cam"] = False
-                
-            col_cam1, col_cam2 = st.columns([1, 2])
-            with col_cam1:
-                if st.form_submit_button("📷 Open/Close Camera"):
-                    st.session_state["enable_recv_cam"] = not st.session_state["enable_recv_cam"]
-            
-            invoice_photo = None
-            if st.session_state["enable_recv_cam"]:
-                invoice_photo = st.camera_input("Capture Invoice Image", key="recv_photo")
-            else:
-                invoice_photo = st.file_uploader("Or Upload Image File", type=['png', 'jpg', 'jpeg'], key="recv_file")
-            
+            invoice_photo = st.file_uploader("📂 Upload Invoice / Chalan Image (Camera or Gallery)", type=['png', 'jpg', 'jpeg'], key="recv_file")
             remarks = st.text_area("Receiving Remarks / Quality Check Notes")
             
             if st.form_submit_button("✅ Save Receiving Log", type="primary"):
@@ -571,10 +542,9 @@ def store_dashboard():
                             
                             if supabase is not None:
                                 supabase.table("store_receiving_logs").insert(receiving_data).execute()
-                                st.success("✅ Receiving log saved successfully with secure cloud archive!")
+                                st.success("✅ Receiving log saved successfully!")
                             else:
                                 st.error("Database connection is not active.")
-                                
                         except Exception as e:
                             st.error(f"❌ Failed to save receiving log: {e}")
     
@@ -583,13 +553,10 @@ def store_dashboard():
     # ==========================================
     with tab4:
         st.subheader("🔄 Stock Transfer & Thaw Log")
-        st.caption("Manage Inter-Store dispatch and strict FDU Chiller shelf-life protocols.")
-        
         transfer_type = st.radio("Select Transfer Protocol", ["Freezer to FDU Chiller (Internal Thaw)", "Inter-Store Dispatch (External)"])
         
         if transfer_type == "Freezer to FDU Chiller (Internal Thaw)":
             master_data = load_master_reference()
-            
             ITEM_MAPPING = {item['warehouse_item_name']: item['store_retail_name'] for item in master_data}
             SHELF_LIFE_HOURS = {item['store_retail_name']: item['shelf_life_hours'] for item in master_data}
             TEMP_ZONES = {item['store_retail_name']: item['temperature_zone'] for item in master_data}
@@ -619,9 +586,9 @@ def store_dashboard():
                     if wh_item == "Select Item...":
                         st.error("❌ Please select an item to transfer.")
                     elif shelf_life == 0:
-                        st.error("❌ Item cannot be transferred to FDU. Red-Line protocol enforced.")
+                        st.error("❌ Item cannot be transferred to FDU.")
                     else:
-                        with st.spinner("Logging FDU transfer and locking shelf life..."):
+                        with st.spinner("Logging FDU transfer..."):
                             fdu_data = {
                                 "store_id": st.session_state["store_id"],
                                 "warehouse_name": wh_item,
@@ -634,7 +601,7 @@ def store_dashboard():
                             try:
                                 if supabase:
                                     supabase.table("store_fdu_transfers").insert(fdu_data).execute()
-                                    st.success(f"✅ Transfer logged! Ensure {store_name} is labelled.")
+                                    st.success(f"✅ Transfer logged!")
                             except Exception as e:
                                 st.error(f"Database error: {e}")
                                 
@@ -647,7 +614,7 @@ def store_dashboard():
                 
                 if st.form_submit_button("🔄 Initiate Dispatch", type="primary"):
                     if not transfer_items:
-                        st.error("❌ Please list the items being transferred.")
+                        st.error("❌ Please list items.")
                     else:
                         with st.spinner("Logging transfer..."):
                             transfer_data = {
@@ -669,7 +636,6 @@ def store_dashboard():
     # ==========================================
     with tab5:
         st.subheader("🗑️ Wastage & Quality Discard Log")
-        st.caption("Record expired or damaged goods strictly per NSF standards.")
         
         with st.form("wastage_form"):
             waste_item = st.text_input("Item Name")
@@ -681,8 +647,7 @@ def store_dashboard():
                     "Expired / Out of Date", "Temperature Abuse", "Physical Damage", "Quality Standard Failure"
                 ])
             
-            st.markdown("### 📸 Wastage Evidence")
-            waste_photo = st.camera_input("Capture Discard Photo", key="waste_photo")
+            waste_photo = st.file_uploader("📂 Upload Wastage Evidence (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="waste_photo")
             
             if st.form_submit_button("🗑️ Log Wastage", type="primary"):
                 if not waste_item or waste_qty <= 0:
@@ -701,49 +666,56 @@ def store_dashboard():
                         try:
                             if supabase:
                                 supabase.table("store_wastage").insert(waste_data).execute()
-                                st.success("✅ Wastage record permanently saved to the vault!")
+                                st.success("✅ Wastage record saved!")
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
-# ==========================================
-    # TAB 6: RESOURCES & COMPLIANCE VAULT
+    # ==========================================
+    # TAB 6: RESOURCES (Active Network Vault)
     # ==========================================
     with tab6:
         st.subheader("📚 Operational Resources & Vault")
-        st.caption("Access official SOPs, safety guides, and operational charts instantly.")
+        st.caption("Access official SOPs, safety guides, and operational charts.")
         
-        # Nested sub-tabs for clean categorization
-        res_tab1, res_tab2, res_tab3, res_tab4 = st.tabs([
-            "🛡️ QA SOPs & Safety", 
-            "📋 Menu & Nutrition", 
-            "⏳ Shelf Life Chart", 
-            "🧪 Chemical Info Sheet"
-        ])
-        
-        with res_tab1:
-            st.markdown("### Quality Assurance SOPs")
-            st.markdown("Ensure adherence to standard operating procedures across all shifts.")
-            # Example document view/download block
-            st.info("📄 **Master QA Manual & Audit Guidelines (PDF)**")
-            st.download_button("📥 Download QA Manual", data=b"Dummy PDF Content", file_name="CBTL_QA_SOP.pdf", mime="application/pdf")
+        try:
+            if supabase is not None:
+                res_query = supabase.table("central_resources").select("*").execute()
+                if res_query.data:
+                    for row in res_query.data:
+                        col_r1, col_r2 = st.columns([3, 1])
+                        col_r1.markdown(f"**📌 {row['category']}**: {row['file_name']}")
+                        col_r2.markdown(f"[🔗 View / Download]({row['file_url']})", unsafe_allow_html=True)
+                else:
+                    st.info("📂 No master documents uploaded by central admin yet.")
+        except Exception:
+            st.info("Resource repository loading...")
+
+    # ==========================================
+    # OPTIONAL FEEDBACK SECTION AT BOTTOM
+    # ==========================================
+    st.markdown("---")
+    with st.expander("💬 Share Feedback / Report an Issue (Optional)", expanded=False):
+        with st.form("feedback_form"):
+            st.caption("Have suggestions or facing an app issue? Let management know.")
+            user_feedback = st.text_area("Your Feedback / Comments", placeholder="Type your message here...")
+            manager_tag = st.text_input("Your Name (Optional)")
             
-        with res_tab2:
-            st.markdown("### Menu & Nutrition Booklets")
-            st.markdown("Reference guides for beverage and food items.")
-            st.info("📄 **Latest Beverage & Pastry Menu Spec Sheet**")
-            st.download_button("📥 Download Menu Specs", data=b"Dummy PDF Content", file_name="CBTL_Latest_Menu.pdf", mime="application/pdf")
-            
-        with res_tab3:
-            st.markdown("### Shelf Life & Storage Charts")
-            st.markdown("Strict timelines for thawing, holding, and disposal.")
-            st.info("📄 **FDU & Chiller Shelf Life Matrix**")
-            st.download_button("📥 Download Shelf Life Chart", data=b"Dummy PDF Content", file_name="CBTL_Shelf_Life_Chart.pdf", mime="application/pdf")
-            
-        with res_tab4:
-            st.markdown("### Chemical Safety Information Sheets")
-            st.markdown("SDS sheets for sanitizers and cleaning agents used in-store.")
-            st.info("📄 **Sanitizer & Detergent Safety Data Sheet (SDS)**")
-            st.download_button("📥 Download Chemical Info", data=b"Dummy PDF Content", file_name="Chemical_Info_Sheet.pdf", mime="application/pdf")
+            if st.form_submit_button("📤 Submit Feedback"):
+                if not user_feedback.strip():
+                    st.error("❌ Please write some feedback before submitting.")
+                else:
+                    try:
+                        if supabase is not None:
+                            supabase.table("store_feedback").insert({
+                                "store_id": st.session_state["store_id"],
+                                "store_name": st.session_state["store_name"],
+                                "manager_name": manager_tag if manager_tag else "Anonymous",
+                                "feedback_text": user_feedback
+                            }).execute()
+                            st.success("✅ Thank you! Your feedback has been sent to central management.")
+                    except Exception as e:
+                        st.error(f"Failed to submit feedback: {e}")
+
 # --- APP ROUTING ---
 if st.session_state["logged_in"]:
     store_dashboard()
