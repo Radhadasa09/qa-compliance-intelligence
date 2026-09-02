@@ -11,7 +11,7 @@ import cloudinary.uploader
 import cloudinary.api
 
 @st.cache_data(ttl=14400) # Caches the result for 4 hours to keep the dashboard fast
-get_cloudinary_usage():
+def get_cloudinary_usage():
     try:
         if cloudinary_configured:
             return cloudinary.api.usage()
