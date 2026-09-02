@@ -1473,3 +1473,14 @@ with tab_admin:
                 st.warning("No items found in the master reference table. Please add items via Supabase.")
     except Exception as e:
         st.error(f"Failed to load terminology data: {e}")
+st.markdown("### 💬 Store Feedback & Support Tickets")
+try:
+    if supabase is not None:
+        fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
+        if fb_res.data:
+            df_fb = pd.DataFrame(fb_res.data)
+            st.dataframe(df_fb[['created_at', 'store_name', 'manager_name', 'feedback_text']], use_container_width=True, hide_index=True)
+        else:
+            st.info("No feedback submitted by stores yet.")
+except Exception:
+    st.info("Feedback table initializing...")
