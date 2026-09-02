@@ -267,7 +267,7 @@ st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensi
 st.divider()
 
 # Add "📚 Resources Vault" to your main executive tabs list:
-tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, tab_admin = st.tabs([
+tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, tab_admin, tab_finance = st.tabs([
     "📊 Executive Dashboard",
     "🏬 Retail Operations",
     "🚚 Vendor & Supply Chain",
@@ -276,6 +276,7 @@ tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, t
     "📑 Reports & Archive",
     "📚 Resources Vault",
     "⚙️ System Administration"
+    "💳 Finance Invoices"
 ])
 
 # ==========================================
@@ -1484,3 +1485,125 @@ try:
             st.info("No feedback submitted by stores yet.")
 except Exception:
     st.info("Feedback table initializing...")
+# ==========================================
+# TAB: CENTRAL INVOICES & FINANCE CLEARANCE
+# ==========================================
+with tab_finance:
+    st.subheader("💳 Central Invoices & Finance Clearance")
+    st.caption("Log, categorize, and track compliance and administrative invoices for finance clearance.")
+    
+    # 1. Form to Upload/Log New Central Invoice
+    with st.expander("➕ Add New Central Invoice", expanded=False):
+        with st.form("central_invoice_form"):
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+                inv_category = st.selectbox("Invoice Category", [
+                    "Medical (Health Certs)",
+                    "Pest Control",
+                    "FOSTAC (Training)",
+                    "Liasoning / Licensing",
+                    "Utilities & Maintenance",
+                    "Other"
+                ])
+                vendor_name = st.text_input("Vendor / Agency Name")
+            with col_u2:
+                invoice_number = st.text_input("Invoice Number")
+                invoice_amount = st.number_input("Invoice Amount (INR)", min_value=0.0, step=100.0)
+                
+            invoice_file = st.file_uploader("Upload Invoice Document (PDF or Image)", type=["pdf", "jpg", "jpeg", "png"])
+            remarks = st.text_area("Remarks / Description")
+            
+            if st.form_submit_button("🚀 Submit to Central Ledger", type="primary"):
+                if not vendor_name or not invoice_number:
+                    st.error("❌ Vendor Name and Invoice Number are required.")
+                else:
+                    with st.spinner("Uploading and recording invoice..."):
+                        try:
+                            file_url = ""
+                            if invoice_file is not None and cloudinary_configured:
+                                upload_res = cloudinary.uploader.upload(
+                                    invoice_file, 
+                                    folder="cbtl/central_finance_invoices",
+                                    resource_type="auto"
+                                )
+                                file_url = upload_res.get("secure_url", "")
+                            
+                            payload = {
+                                "invoice_category": inv_category,
+                                "vendor_name": vendor_name,
+                                "invoice_number": invoice_number,
+                                "invoice_amount": invoice_amount,
+                                "invoice_url": file_url,
+                                "remarks": remarks,
+                                "submitted_to_finance": False,
+                                "payment_done": False
+                            }
+                            
+                            if supabase is not None:
+                                supabase.table("central_finance_invoices").insert(payload).execute()
+                                st.success("✅ Central invoice successfully logged!")
+                                st.rerun()
+                            else:
+                                st.error("Database connection missing.")
+                        except Exception as e:
+                            st.error(f"❌ Failed to log invoice: {e}")
+                            
+    st.markdown("---")
+    
+    # 2. Invoice Tracking & Clearance Management
+    st.markdown("### 📋 Active Clearance Ledger")
+    
+    try:
+        if supabase is not None:
+            query = supabase.table("central_finance_invoices").select("*").order("created_at", desc=True).execute()
+            
+            if query.data:
+                df_cent_inv = pd.DataFrame(query.data)
+                
+                # Category Filter
+                cat_filter = st.selectbox(
+                    "Filter by Category", 
+                    ["All Categories", "Medical (Health Certs)", "Pest Control", "FOSTAC (Training)", "Liasoning / Licensing", "Utilities & Maintenance", "Other"]
+                )
+                
+                if cat_filter != "All Categories":
+                    df_filtered = df_cent_inv[df_cent_inv['invoice_category'] == cat_filter]
+                else:
+                    df_filtered = df_cent_inv
+                
+                st.markdown(f"Showing {len(df_filtered)} records")
+                
+                for _, row in df_filtered.iterrows():
+                    status_badge = "🟢 Paid" if row['payment_done'] else ("🟡 Submitted to Finance" if row['submitted_to_finance'] else "🔴 Pending Action")
+                    
+                    with st.expander(f"[{row['invoice_category']}] Vendor: {row['vendor_name']} | Inv #: {row['invoice_number']} | ₹{row.get('invoice_amount', 0)} ({status_badge})"):
+                        col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+                        
+                        with col_f1:
+                            st.text(f"Logged Date: {row.get('created_at', '')[:10]}")
+                            if row.get('invoice_url'):
+                                st.markdown(f"[🔗 View Invoice Document]({row['invoice_url']})", unsafe_allow_html=True)
+                            if row.get('remarks'):
+                                st.caption(f"Remarks: {row['remarks']}")
+                                
+                        with col_f2:
+                            sub_status = st.checkbox("Submitted to Finance", value=row.get('submitted_to_finance', False), key=f"c_sub_{row['id']}")
+                            
+                        with col_f3:
+                            pay_status = st.checkbox("Payment Done", value=row.get('payment_done', False), key=f"c_pay_{row['id']}")
+                            
+                        if sub_status != row.get('submitted_to_finance', False) or pay_status != row.get('payment_done', False):
+                            try:
+                                supabase.table("central_finance_invoices").update({
+                                    "submitted_to_finance": sub_status,
+                                    "payment_done": pay_status
+                                }).eq("id", row['id']).execute()
+                                st.toast(f"✅ Updated invoice #{row['invoice_number']}")
+                            except Exception as e:
+                                st.error(f"Failed to update status: {e}")
+            else:
+                st.info("📂 No central invoices logged yet. Use the 'Add New Central Invoice' expander above to start.")
+        else:
+            st.warning("Database connection inactive.")
+    except Exception as e:
+        st.info("Central invoice ledger loading...")
