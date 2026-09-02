@@ -8,6 +8,16 @@ import io
 import copy
 import cloudinary
 import cloudinary.uploader
+import cloudinary.api
+
+@st.cache_data(ttl=14400) # Caches the result for 4 hours to keep the dashboard fast
+get_cloudinary_usage():
+    try:
+        if cloudinary_configured:
+            return cloudinary.api.usage()
+    except Exception:
+        return None
+    return None
 
 # --- CLOUDINARY CONFIGURATION & HELPER ---
 try:
@@ -1484,3 +1494,50 @@ try:
             st.info("No feedback submitted by stores yet.")
 except Exception:
     st.info("Feedback table initializing...")
+st.markdown("### 📊 System Resource & Storage Monitor")
+
+try:
+    # 1. Calculate Supabase Database Usage
+    if supabase is not None:
+        audits_count = len(supabase.table("daily_audits").select("id", count="exact").execute().data)
+        receiving_count = len(supabase.table("store_receiving_logs").select("id", count="exact").execute().data)
+        wastage_count = len(supabase.table("store_wastage").select("id", count="exact").execute().data)
+        feedback_count = len(supabase.table("store_feedback").select("id", count="exact").execute().data)
+        
+        # Estimation: ~2 KB per row including photo URL links and JSON text
+        est_db_usage_kb = (audits_count + receiving_count + wastage_count + feedback_count) * 2
+        est_db_usage_mb = est_db_usage_kb / 1024
+        
+        st.markdown("#### 🗄️ Supabase Database")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1.metric("Audit Logs Stored", f"{audits_count} rows")
+        col_s2.metric("Receiving & Wastage", f"{receiving_count + wastage_count} rows")
+        col_s3.metric("Est. Database Used", f"{est_db_usage_mb:.2f} MB", "Limit: 500 MB")
+        
+        st.progress(min(est_db_usage_mb / 500.0, 1.0), text="Supabase Free Tier Capacity Used")
+    else:
+        st.warning("Database connection inactive.")
+except Exception as e:
+    st.info("Supabase storage metrics initializing...")
+
+st.markdown("---")
+
+try:
+    # 2. Fetch and Display Cloudinary Storage & Bandwidth (using your cached function from the top)
+    usage_info = get_cloudinary_usage() if 'get_cloudinary_usage' in globals() else None
+    
+    if usage_info:
+        c_storage_used_mb = usage_info.get("storage", {}).get("usage", 0) / (1024 * 1024)
+        c_storage_limit_gb = usage_info.get("storage", {}).get("limit", 0) / (1024 * 1024 * 1024)
+        
+        c_bandwidth_used_gb = usage_info.get("bandwidth", {}).get("usage", 0) / (1024 * 1024 * 1024)
+        c_bandwidth_limit_gb = usage_info.get("bandwidth", {}).get("limit", 0) / (1024 * 1024 * 1024)
+        
+        st.markdown("#### ☁️ Cloudinary Media Vault")
+        col_c1, col_c2 = st.columns(2)
+        col_c1.metric("Cloudinary Storage Used", f"{c_storage_used_mb:.2f} MB", f"Limit: {c_storage_limit_gb:.1f} GB")
+        col_c2.metric("Cloudinary Bandwidth Used", f"{c_bandwidth_used_gb:.2f} GB", f"Limit: {c_bandwidth_limit_gb:.1f} GB")
+    else:
+        st.caption("Cloudinary usage stats unavailable (Check API credentials).")
+except Exception as e:
+    st.caption("Error loading Cloudinary usage metrics.")
