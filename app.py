@@ -275,10 +275,9 @@ tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, t
     "📈 NSF Audit Intelligence",
     "📑 Reports & Archive",
     "📚 Resources Vault",
-    "⚙️ System Administration"
+    "⚙️ System Administration",
     "💳 Finance Invoices"
 ])
-
 # ==========================================
 # TAB 1: EXECUTIVE DASHBOARD
 # ==========================================
