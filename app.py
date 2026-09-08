@@ -1120,10 +1120,93 @@ with tab_nsf:
     st.subheader("📈 NSF Audit Intelligence & Network Performance")
     st.caption("Deep-dive analytics into third-party NSF food safety audits across Corporate (Ekaagra) and Sub-Franchise locations.")
 
+    # ------------------------------------------
+    # 1. NSF REPORT LOGGING & ONEDRIVE INTEGRATION FORM
+    # ------------------------------------------
+    with st.expander("➕ Log New NSF Audit Report & Link OneDrive Folder", expanded=False):
+        with st.form("nsf_upload_form"):
+            col_n1, col_n2 = st.columns(2)
+            
+            with col_n1:
+                store_options = [
+                    "189001 - Janakpuri, Delhi", 
+                    "189002 - GK1, Delhi", 
+                    "189003 - Oberoi SkyCity, Mumbai", 
+                    "189004 - M3M Atrium, Gurgaon", 
+                    "189005 - Secor 50 Noida, Noida", 
+                    "189006 - Malcha, Delhi", 
+                    "189007 - Platina, Gurgaon", 
+                    "189008 - Season Mall Pune, Pune", 
+                    "189009 - BRS Nagar Ludhiana, Ludhiana", 
+                    "189010 - DLF Moti Nagar, Delhi", 
+                    "189011 - Goldust Patiala, Patiala", 
+                    "189012 - Neelkanth - Murthal", 
+                    "189013 - Creek Side, Ludhiana", 
+                    "189014 - Chembur, Mumbai"
+                ]
+                selected_store = st.selectbox("Select Store Location", store_options)
+                audit_score = st.number_input("NSF Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f")
+                quarter_folder = st.selectbox("Select Audit Quarter Folder", ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"])
+                
+            with col_n2:
+                audit_date = st.date_input("Audit Date", value=datetime.date.today())
+                audit_result = st.selectbox("Audit Result Status", ["PASS", "FAIL"])
+                onedrive_url = st.text_input("Microsoft OneDrive Folder Link", placeholder="https://1drv.ms/f/s!...")
+                
+            auditor_remarks = st.text_area("Auditor Remarks / Action Items")
+            
+            if st.form_submit_button("🚀 Sync Audit Record & Link Folder", type="primary"):
+                try:
+                    store_id_val = selected_store.split(" - ")[0]
+                    store_name_val = selected_store.split(" - ")[1]
+                    
+                    payload = {
+                        "store_id": store_id_val,
+                        "store_name": store_name_val,
+                        "score": audit_score,
+                        "result": audit_result,
+                        "audit_date": str(audit_date),
+                        "quarter": quarter_folder,
+                        "report_url": onedrive_url,
+                        "remarks": auditor_remarks
+                    }
+                    
+                    if 'supabase' in globals() and supabase is not None:
+                        supabase.table("nsf_audits").insert(payload).execute()
+                        st.success("✅ New NSF audit entry successfully synced and linked to OneDrive!")
+                        st.rerun()
+                    else:
+                        st.error("Database connection missing.")
+                except Exception as e:
+                    st.error(f"❌ Failed to sync audit record: {e}")
+
+    st.markdown("---")
+
+    # ------------------------------------------
+    # 2. QUARTERLY ONEDRIVE DOCUMENT REPOSITORIES
+    # ------------------------------------------
+    st.markdown("### 📂 Quarterly Audit Repositories (MS OneDrive)")
+    q_col1, q_col2, q_col3, q_col4 = st.columns(4)
+    
+    with q_col1:
+        st.markdown("**Q1 2026**")
+        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q1 Audit Reports on OneDrive")
+    with q_col2:
+        st.markdown("**Q2 2026**")
+        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q2 Audit Reports on OneDrive")
+    with q_col3:
+        st.markdown("**Q3 2026**")
+        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q3 Audit Reports on OneDrive")
+    with q_col4:
+        st.markdown("**Q4 2026**")
+        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q4 Audit Reports on OneDrive")
+
+    st.markdown("---")
+
+    # ------------------------------------------
+    # 3. HIGH-LEVEL NETWORK METRICS & CHARTS
+    # ------------------------------------------
     if not df_db.empty:
-        # ------------------------------------------
-        # 1. HIGH-LEVEL NETWORK METRICS
-        # ------------------------------------------
         total_nsf = len(df_db)
         ekaagra_count = len(ekaagra_df)
         sub_count = len(subfranchise_df)
@@ -1136,14 +1219,13 @@ with tab_nsf:
         st.markdown("---")
 
         # ------------------------------------------
-        # 2. VISUAL ANALYTICS (Corporate vs Franchise)
+        # 4. VISUAL ANALYTICS (Corporate vs Franchise)
         # ------------------------------------------
         st.markdown("### 📊 Performance by Ownership Type")
         col_chart1, col_chart2 = st.columns(2)
 
         with col_chart1:
             if 'score' in df_db.columns and 'Type' in df_db.columns:
-                # Average Score by Type
                 avg_scores = df_db.groupby('Type')['score'].mean().reset_index()
                 fig_avg = px.bar(
                     avg_scores, x='Type', y='score', color='Type', text='score',
@@ -1157,15 +1239,13 @@ with tab_nsf:
                 st.info("Score data not available for visualization.")
 
         with col_chart2:
-            # Look for either 'result' or 'status' column to build distribution
             status_col = 'result' if 'result' in df_db.columns else 'status' if 'status' in df_db.columns else None
             
             if status_col and 'Type' in df_db.columns:
-                # Pass/Fail/Completed distribution by Type
                 result_dist = df_db.groupby(['Type', status_col]).size().reset_index(name='Count')
                 fig_dist = px.bar(
                     result_dist, x='Type', y='Count', color=status_col, barmode='group', text='Count',
-                    title=f"Audit Status Distribution",
+                    title="Audit Status Distribution",
                     color_discrete_map={"PASS": "#10B981", "COMPLETED": "#10B981", "FAIL": "#EF4444", "EXPIRED": "#EF4444"}
                 )
                 fig_dist.update_traces(textposition='outside')
@@ -1176,11 +1256,10 @@ with tab_nsf:
         st.markdown("---")
 
         # ------------------------------------------
-        # 3. DETAILED DATA SPLITS (Ekaagra vs Sub-Franchise)
+        # 5. DETAILED DATA SPLITS (Ekaagra vs Sub-Franchise)
         # ------------------------------------------
         st.markdown("### 📋 Detailed Audit Records by Network")
         
-        # Use nested tabs to keep the data tables clean and separated
         sub_tab_ekaagra, sub_tab_franchise = st.tabs(["🏢 Ekaagra Direct (Corporate)", "🤝 Sub-Franchise Network"])
         
         with sub_tab_ekaagra:
@@ -1197,7 +1276,6 @@ with tab_nsf:
 
     else:
         st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")
-
 # ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
