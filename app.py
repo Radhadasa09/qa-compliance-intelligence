@@ -1112,7 +1112,6 @@ with tab_lic_summary:
                         st.rerun()
                 except Exception as e:
                     st.error(f"❌ Failed to sync to database: {e}")
-
 # ==========================================
 # TAB 5: NSF AUDIT INTELLIGENCE
 # ==========================================
@@ -1120,14 +1119,13 @@ with tab_nsf:
     st.subheader("📈 NSF Audit Intelligence & Network Performance")
     st.caption("Deep-dive analytics into third-party NSF food safety audits across Corporate (Ekaagra) and Sub-Franchise locations.")
 
-    # ------------------------------------------
-    # 1. NSF REPORT LOGGING & ONEDRIVE INTEGRATION FORM
-    # ------------------------------------------
-    with st.expander("➕ Log New NSF Audit Report & Link OneDrive Folder", expanded=False):
+    # 1. NSF SUMMARY REPORT UPLOAD & LOGGING
+    with st.expander("➕ Log NSF Audit & Upload Summary Report", expanded=False):
         with st.form("nsf_upload_form"):
             col_n1, col_n2 = st.columns(2)
             
             with col_n1:
+                audit_code_input = st.text_input("NSF Audit Code (Primary Ref)", placeholder="e.g. 5041482")
                 store_options = [
                     "189001 - Janakpuri, Delhi", 
                     "189002 - GK1, Delhi", 
@@ -1146,65 +1144,48 @@ with tab_nsf:
                 ]
                 selected_store = st.selectbox("Select Store Location", store_options)
                 audit_score = st.number_input("NSF Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f")
-                quarter_folder = st.selectbox("Select Audit Quarter Folder", ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"])
                 
             with col_n2:
                 audit_date = st.date_input("Audit Date", value=datetime.date.today())
                 audit_result = st.selectbox("Audit Result Status", ["PASS", "FAIL"])
-                onedrive_url = st.text_input("Microsoft OneDrive Folder Link", placeholder="https://1drv.ms/f/s!...")
+                summary_file = st.file_uploader("Upload NSF Summary Report (PDF/Excel)", type=["pdf", "xlsx", "csv"])
                 
             auditor_remarks = st.text_area("Auditor Remarks / Action Items")
             
-            if st.form_submit_button("🚀 Sync Audit Record & Link Folder", type="primary"):
-                try:
-                    store_id_val = selected_store.split(" - ")[0]
-                    store_name_val = selected_store.split(" - ")[1]
-                    
-                    payload = {
-                        "store_id": store_id_val,
-                        "store_name": store_name_val,
-                        "score": audit_score,
-                        "result": audit_result,
-                        "audit_date": str(audit_date),
-                        "quarter": quarter_folder,
-                        "report_url": onedrive_url,
-                        "remarks": auditor_remarks
-                    }
-                    
-                    if 'supabase' in globals() and supabase is not None:
-                        supabase.table("nsf_audits").insert(payload).execute()
-                        st.success("✅ New NSF audit entry successfully synced and linked to OneDrive!")
-                        st.rerun()
-                    else:
-                        st.error("Database connection missing.")
-                except Exception as e:
-                    st.error(f"❌ Failed to sync audit record: {e}")
+            if st.form_submit_button("🚀 Sync Audit Record", type="primary"):
+                if not audit_code_input.strip():
+                    st.error("⚠️ Please enter the primary NSF Audit Code before syncing.")
+                else:
+                    try:
+                        site_code_val = selected_store.split(" - ")[0]
+                        store_name_val = selected_store.split(" - ")[1]
+                        
+                        # Payload mapping matches your Supabase columns precisely
+                        payload = {
+                            "audit_code": audit_code_input.strip(),
+                            "site_code": site_code_val,
+                            "store_name": store_name_val,
+                            "score": audit_score,
+                            "result": audit_result,
+                            "audit_date": str(audit_date),
+                            "remarks": auditor_remarks
+                        }
+                        
+                        if 'supabase' in globals() and supabase is not None:
+                            # Note: If you configure Supabase Storage in the future, 
+                            # summary_file processing can be integrated right here.
+                            supabase.table("nsf_audits").insert(payload).execute()
+                            st.success("✅ New NSF audit record successfully synced!")
+                            st.rerun()
+                        else:
+                            st.error("Database connection missing.")
+                    except Exception as e:
+                        st.error(f"❌ Failed to sync audit record: {e}")
 
     st.markdown("---")
 
     # ------------------------------------------
-    # 2. QUARTERLY ONEDRIVE DOCUMENT REPOSITORIES
-    # ------------------------------------------
-    st.markdown("### 📂 Quarterly Audit Repositories (MS OneDrive)")
-    q_col1, q_col2, q_col3, q_col4 = st.columns(4)
-    
-    with q_col1:
-        st.markdown("**Q1 2026**")
-        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q1 Audit Reports on OneDrive")
-    with q_col2:
-        st.markdown("**Q2 2026**")
-        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q2 Audit Reports on OneDrive")
-    with q_col3:
-        st.markdown("**Q3 2026**")
-        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q3 Audit Reports on OneDrive")
-    with q_col4:
-        st.markdown("**Q4 2026**")
-        st.markdown("[📁 Open Folder](https://onedrive.live.com)", help="Access Q4 Audit Reports on OneDrive")
-
-    st.markdown("---")
-
-    # ------------------------------------------
-    # 3. HIGH-LEVEL NETWORK METRICS & CHARTS
+    # 2. HIGH-LEVEL NETWORK METRICS & CHARTS
     # ------------------------------------------
     if not df_db.empty:
         total_nsf = len(df_db)
@@ -1218,9 +1199,6 @@ with tab_nsf:
 
         st.markdown("---")
 
-        # ------------------------------------------
-        # 4. VISUAL ANALYTICS (Corporate vs Franchise)
-        # ------------------------------------------
         st.markdown("### 📊 Performance by Ownership Type")
         col_chart1, col_chart2 = st.columns(2)
 
@@ -1240,7 +1218,6 @@ with tab_nsf:
 
         with col_chart2:
             status_col = 'result' if 'result' in df_db.columns else 'status' if 'status' in df_db.columns else None
-            
             if status_col and 'Type' in df_db.columns:
                 result_dist = df_db.groupby(['Type', status_col]).size().reset_index(name='Count')
                 fig_dist = px.bar(
@@ -1255,11 +1232,7 @@ with tab_nsf:
 
         st.markdown("---")
 
-        # ------------------------------------------
-        # 5. DETAILED DATA SPLITS (Ekaagra vs Sub-Franchise)
-        # ------------------------------------------
         st.markdown("### 📋 Detailed Audit Records by Network")
-        
         sub_tab_ekaagra, sub_tab_franchise = st.tabs(["🏢 Ekaagra Direct (Corporate)", "🤝 Sub-Franchise Network"])
         
         with sub_tab_ekaagra:
@@ -1273,7 +1246,6 @@ with tab_nsf:
                 st.dataframe(subfranchise_df, use_container_width=True, hide_index=True)
             else:
                 st.info("No Sub-Franchise records found in the database.")
-
     else:
         st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")
 # ==========================================
