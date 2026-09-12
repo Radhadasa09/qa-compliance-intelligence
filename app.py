@@ -1119,28 +1119,73 @@ with tab_nsf:
     st.subheader("📈 NSF Audit Intelligence & Network Performance")
     st.caption("Deep-dive analytics into third-party NSF food safety audits across Corporate (Ekaagra) and Sub-Franchise locations.")
 
-    # 1. NSF SUMMARY REPORT UPLOAD & LOGGING
-    with st.expander("➕ Log NSF Audit & Upload Summary Report", expanded=False):
-        with st.form("nsf_upload_form"):
+    # 1. SEPARATED DATA ENTRY & UPLOAD MANAGEMENT
+    st.markdown("### 📥 Data Management")
+    
+    upload_tab, manual_tab = st.tabs(["📂 Upload Master Summary Report", "✍️ Log Individual Store Score"])
+    
+    # --- ACTION 1: MASTER SUMMARY UPLOAD (Automated Parsing) ---
+    with upload_tab:
+        with st.form("master_summary_form"):
+            st.info("Upload the consolidated network-wide NSF summary file (Excel/CSV). The system will automatically extract and sync all store scores.")
+            summary_file = st.file_uploader("Upload Master Summary Report (Excel / CSV)", type=["xlsx", "csv"])
+            
+            if st.form_submit_button("📤 Parse & Sync Master Report", type="primary"):
+                if summary_file is not None:
+                    try:
+                        with st.spinner("Parsing master sheet..."):
+                            if summary_file.name.endswith('.csv'):
+                                df_summary = pd.read_csv(summary_file)
+                            else:
+                                df_summary = pd.read_excel(summary_file)
+                            
+                            # Standardize column names to lowercase for robust matching
+                            df_summary.columns = [str(c).strip().lower() for c in df_summary.columns]
+                            
+                            success_count = 0
+                            if 'supabase' in globals() and supabase is not None:
+                                for _, row in df_summary.iterrows():
+                                    # Fallbacks added in case column headers slightly differ in your actual sheet
+                                    payload = {
+                                        "audit_code": str(row.get('audit_code', row.get('audit code', ''))),
+                                        "site_code": str(row.get('site_code', row.get('site code', ''))),
+                                        "store_name": str(row.get('store_name', row.get('site name', ''))),
+                                        "score": float(row.get('score', 0)),
+                                        "result": str(row.get('result', '')),
+                                        "audit_date": str(row.get('audit_date', row.get('audit date', datetime.date.today()))),
+                                        "remarks": "Bulk uploaded from summary sheet"
+                                    }
+                                    
+                                    # Skip empty rows
+                                    if not payload["site_code"] or payload["site_code"] == "nan":
+                                        continue
+                                        
+                                    supabase.table("nsf_audits").upsert(payload).execute()
+                                    success_count += 1
+                                    
+                                st.success(f"✅ Successfully parsed and synced {success_count} store records!")
+                                st.rerun()
+                            else:
+                                st.error("Database connection missing.")
+                    except Exception as e:
+                        st.error(f"❌ Failed to parse summary file: {e}")
+                else:
+                    st.error("⚠️ Please attach a summary report file first.")
+
+    # --- ACTION 2: INDIVIDUAL STORE LOGGING (Manual Fallback) ---
+    with manual_tab:
+        with st.form("single_store_form"):
+            st.info("Manually input audit scores for specific stores.")
             col_n1, col_n2 = st.columns(2)
             
             with col_n1:
                 audit_code_input = st.text_input("NSF Audit Code (Primary Ref)", placeholder="e.g. 5041482")
                 store_options = [
-                    "189001 - Janakpuri, Delhi", 
-                    "189002 - GK1, Delhi", 
-                    "189003 - Oberoi SkyCity, Mumbai", 
-                    "189004 - M3M Atrium, Gurgaon", 
-                    "189005 - Secor 50 Noida, Noida", 
-                    "189006 - Malcha, Delhi", 
-                    "189007 - Platina, Gurgaon", 
-                    "189008 - Season Mall Pune, Pune", 
-                    "189009 - BRS Nagar Ludhiana, Ludhiana", 
-                    "189010 - DLF Moti Nagar, Delhi", 
-                    "189011 - Goldust Patiala, Patiala", 
-                    "189012 - Neelkanth - Murthal", 
-                    "189013 - Creek Side, Ludhiana", 
-                    "189014 - Chembur, Mumbai"
+                    "189001 - Janakpuri, Delhi", "189002 - GK1, Delhi", "189003 - Oberoi SkyCity, Mumbai", 
+                    "189004 - M3M Atrium, Gurgaon", "189005 - Secor 50 Noida, Noida", "189006 - Malcha, Delhi", 
+                    "189007 - Platina, Gurgaon", "189008 - Season Mall Pune, Pune", "189009 - BRS Nagar Ludhiana, Ludhiana", 
+                    "189010 - DLF Moti Nagar, Delhi", "189011 - Goldust Patiala, Patiala", "189012 - Neelkanth - Murthal", 
+                    "189013 - Creek Side, Ludhiana", "189014 - Chembur, Mumbai"
                 ]
                 selected_store = st.selectbox("Select Store Location", store_options)
                 audit_score = st.number_input("NSF Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f")
@@ -1148,11 +1193,9 @@ with tab_nsf:
             with col_n2:
                 audit_date = st.date_input("Audit Date", value=datetime.date.today())
                 audit_result = st.selectbox("Audit Result Status", ["PASS", "FAIL"])
-                summary_file = st.file_uploader("Upload NSF Summary Report (PDF/Excel)", type=["pdf", "xlsx", "csv"])
-                
-            auditor_remarks = st.text_area("Auditor Remarks / Action Items")
+                auditor_remarks = st.text_area("Specific Store Remarks")
             
-            if st.form_submit_button("🚀 Sync Audit Record", type="primary"):
+            if st.form_submit_button("🚀 Sync Store Record", type="primary"):
                 if not audit_code_input.strip():
                     st.error("⚠️ Please enter the primary NSF Audit Code before syncing.")
                 else:
@@ -1160,7 +1203,6 @@ with tab_nsf:
                         site_code_val = selected_store.split(" - ")[0]
                         store_name_val = selected_store.split(" - ")[1]
                         
-                        # Payload mapping matches your Supabase columns precisely
                         payload = {
                             "audit_code": audit_code_input.strip(),
                             "site_code": site_code_val,
@@ -1172,10 +1214,8 @@ with tab_nsf:
                         }
                         
                         if 'supabase' in globals() and supabase is not None:
-                            # Note: If you configure Supabase Storage in the future, 
-                            # summary_file processing can be integrated right here.
                             supabase.table("nsf_audits").insert(payload).execute()
-                            st.success("✅ New NSF audit record successfully synced!")
+                            st.success(f"✅ Audit record for {store_name_val} successfully synced!")
                             st.rerun()
                         else:
                             st.error("Database connection missing.")
@@ -1247,8 +1287,7 @@ with tab_nsf:
             else:
                 st.info("No Sub-Franchise records found in the database.")
     else:
-        st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")
-# ==========================================
+        st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")# ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
