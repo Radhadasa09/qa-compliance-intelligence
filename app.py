@@ -128,6 +128,19 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+    <style>
+        /* Hide Streamlit's floating deploy/manage button in the bottom right */
+        .stDeployButton {
+            display: none !important;
+        }
+        
+        /* Hide the user profile/avatar badge injected in the bottom right corner */
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 # --- 1. SECURE DATABASE CONNECTION ---
 try:
     URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
