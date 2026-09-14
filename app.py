@@ -39,15 +39,7 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-/* Universal selector to suppress bottom-right Streamlit branding and toolbars */
-div[data-testid="stToolbar"], 
-div[data-testid="stStatusWidget"], 
-.stDeployButton, 
-#stDecoration, 
-footer {
-    display: none !important;
-    visibility: hidden !important;
-}
+
 # --- HIDE STREAMLIT BRANDING & GITHUB LINK ---
 hide_streamlit_style = """
     <style>
