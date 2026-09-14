@@ -1301,7 +1301,54 @@ with tab_nsf:
             else:
                 st.info("No Sub-Franchise records found in the database.")
     else:
-        st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.")# ==========================================
+        st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.") 
+st.markdown("---")
+    st.markdown("### 🚨 Corrective Action Request (CAR) Pending Tracker")
+    st.caption("Monitoring stores with outstanding Corrective Actions and calculating delay days since audit generation.")
+
+    if not df_db.empty:
+        # Check if CAR status and audit date exist in the dataframe columns
+        car_col = 'car_status' if 'car_status' in df_db.columns else 'CAR Status' if 'CAR Status' in df_db.columns else None
+        date_col = 'audit_date' if 'audit_date' in df_db.columns else 'Audit Date' if 'Audit Date' in df_db.columns else None
+
+        if car_col and date_col:
+            df_car = df_db.copy()
+            df_car[date_col] = pd.to_datetime(df_car[date_col], errors='coerce')
+            
+            # Calculate days elapsed from audit date to today
+            today_date = pd.Timestamp(datetime.date.today())
+            df_car['Days_Elapsed'] = (today_date - df_car[date_col]).dt.days
+            
+            # Filter for rows where CAR status contains 'PENDING'
+            df_pending_car = df_car[df_car[car_col].astype(str).str.contains("PENDING", case=False, na=False)].copy()
+            
+            if not df_pending_car.empty:
+                # Sort by longest delay first
+                df_pending_car = df_pending_car.sort_values(by='Days_Elapsed', ascending=False)
+                
+                # Display high-level metric warning
+                st.warning(f"⚠️ There are **{len(df_pending_car)}** audit records across the network with pending Corrective Actions.")
+                
+                # High-end data grid with formatted delay highlighting
+                st.dataframe(
+                    df_pending_car[['store_name', date_col, 'score', car_col, 'Days_Elapsed']],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "store_name": st.column_config.TextColumn("Store Location", width="medium"),
+                        date_col: st.column_config.DateColumn("Audit Date"),
+                        "score": st.column_config.NumberColumn("Audit Score (%)", format="%.1f%%"),
+                        car_col: st.column_config.TextColumn("CAR Status Details"),
+                        "Days_Elapsed": st.column_config.NumberColumn("Delay (Days)", format="%d Days ⏰")
+                    }
+                )
+            else:
+                st.success("🎉 Outstanding! All network audits have fully approved Corrective Actions with zero pending items.")
+        else:
+            st.info("CAR status tracking columns not detected in the current data feed.")
+    else:
+        st.info("No audit data available for CAR tracking.")
+# ==========================================
 # TAB 6: REPORTS & ARCHIVE
 # ==========================================
 with tab_reports:
