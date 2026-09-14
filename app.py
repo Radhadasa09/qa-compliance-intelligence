@@ -1302,7 +1302,7 @@ with tab_nsf:
                 st.info("No Sub-Franchise records found in the database.")
     else:
         st.warning("⚠️ No NSF Audit data found in the cloud database. Please ensure your Supabase connection is active and populated.") 
-st.markdown("---")
+    st.markdown("---")
     st.markdown("### 🚨 Corrective Action Request (CAR) Pending Tracker")
     st.caption("Monitoring stores with outstanding Corrective Actions and calculating delay days since audit generation.")
 
