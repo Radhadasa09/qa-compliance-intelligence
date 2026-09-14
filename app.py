@@ -39,29 +39,15 @@ st.set_page_config(
     page_icon="🛡️",
     initial_sidebar_state="expanded"
 )
-st.markdown("""
-    <style>
-        /* Hide the floating Streamlit toolbar / deploy button */
-        div[data-testid="stToolbar"] {
-            display: none !important;
-        }
-        
-        /* Hide the bottom-right connection status and profile widget */
-        div[data-testid="stStatusWidget"] {
-            display: none !important;
-        }
-        
-        /* Hide the deploy button specifically */
-        .stDeployButton {
-            display: none !important;
-        }
-        
-        /* Hide footer branding elements entirely */
-        footer {
-            display: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+/* Universal selector to suppress bottom-right Streamlit branding and toolbars */
+div[data-testid="stToolbar"], 
+div[data-testid="stStatusWidget"], 
+.stDeployButton, 
+#stDecoration, 
+footer {
+    display: none !important;
+    visibility: hidden !important;
+}
 # --- HIDE STREAMLIT BRANDING & GITHUB LINK ---
 hide_streamlit_style = """
     <style>
