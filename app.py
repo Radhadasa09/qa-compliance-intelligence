@@ -66,83 +66,27 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- CBTL CORPORATE UI THEME ---
+# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---
 st.markdown("""
     <style>
-        /* Main background and font */
-        .stApp {
-            background-color: #F5F7FA;
-            font-family: 'Arial', sans-serif;
-        }
+        /* Hide Streamlit Chrome/Toolbar/Footer */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
         
-        /* Style the tabs to match the solid underline active state */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 15px;
-            border-bottom: 2px solid #E2E8F0;
-        }
-        .stTabs [data-baseweb="tab"] {
-            border: none;
-            background-color: transparent;
-            padding-bottom: 10px;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: transparent;
-            border-bottom: 3px solid #003366 !important; /* Dark blue underline */
-            color: #003366;
-            font-weight: 800;
-        }
+        /* Hide floating status widget, profile icons, and deploy buttons */
+        div[data-testid="stToolbar"] {display: none !important;}
+        div[data-testid="stStatusWidget"] {display: none !important;}
+        .stDeployButton {display: none !important;}
         
-        /* Light Blue Informational Cards (matching the Checklist Info card) */
-        div[data-testid="stExpander"] {
-            background-color: #EAF2F8; /* Light blue */
-            border-radius: 10px;
-            border: 1px solid #D6EAF8;
-        }
-        div[data-testid="stExpander"] summary {
-            background-color: #EAF2F8;
-            border-radius: 10px;
-        }
-        
-        /* Metric Cards / Score Badges */
-        [data-testid="stMetric"] {
-            background-color: #EAF2F8;
-            border-radius: 8px;
-            padding: 10px 15px;
-            box-shadow: none;
-            border: none;
-        }
-        
-        /* Special Green Gradient for Scores (matching the "Score / Grade" blocks) */
-        [data-testid="stMetric"]:has(label:contains("Score")), 
-        [data-testid="stMetric"]:has(label:contains("Grade")) {
-            background: linear-gradient(135deg, #E0F8E9 0%, #C8F0D6 100%);
-            border-left: 4px solid #2ECC71;
-        }
-        
-        /* Blue Status Badges */
-        .status-badge {
-            background-color: #63B3ED;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 0.9em;
+        /* Adjust top spacing */
+        .block-container {
+            padding-top: 1.5rem; 
+            padding-bottom: 2rem;
+            max-width: 1200px;
         }
     </style>
-""", unsafe_allow_html=True)
-st.markdown("""
-    <style>
-        /* Hide Streamlit's floating deploy/manage button in the bottom right */
-        .stDeployButton {
-            display: none !important;
-        }
-        
-        /* Hide the user profile/avatar badge injected in the bottom right corner */
-        [data-testid="stStatusWidget"] {
-            display: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-# --- 1. SECURE DATABASE CONNECTION ---
+""", unsafe_allow_html=True)# --- 1. SECURE DATABASE CONNECTION ---
 try:
     URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
     KEY = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
