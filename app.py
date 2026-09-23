@@ -938,7 +938,16 @@ elif nav_selection == "⚙️ System Administration":
     if supabase is not None:
         fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
         if fb_res.data:
-            st.dataframe(pd.DataFrame(fb_res.data), use_container_width=True)
+            df_fb = pd.DataFrame(fb_res.data)
+            # Render interactive list with delete buttons
+            for idx, r in df_fb.iterrows():
+                cols = st.columns()
+                with cols[0]:
+                    st.markdown(f"**[{r.get('created_at', 'N/A')[:10]}] Store {r.get('store_id', 'N/A')}**: {r.get('feedback_text', r.get('message', 'No text'))}")
+                with cols:
+                    if st.button("🗑️ Delete", key=f"del_fb_{r.get('id', idx)}"):
+                        supabase.table("store_feedback").delete().eq("id", r['id']).execute()
+                        st.rerun()
         else:
             st.info("No store feedback yet.")
 
