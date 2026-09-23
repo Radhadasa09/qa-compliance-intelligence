@@ -23,28 +23,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---
-st.markdown("""
+# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        
-        /* Instead of hiding whole header, hide deployment/toolbar buttons individually */
-        div[data-testid="stToolbar"] {display: none !important;}
-        div[data-testid="stStatusWidget"] {display: none !important;}
-        .stDeployButton {display: none !important;}
-        
-        /* Make the header transparent so native collapse toggle shows up cleanly */
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-        }
-        
-        /* Style/position the collapsed control safely */
-        [data-testid="collapsedControl"] {
-            transform: scale(1.2);
-            margin-top: 5px;
-            margin-left: 5px;
-        }
         
         section[data-testid="stSidebar"] {
             background-color: #FFFFFF;
