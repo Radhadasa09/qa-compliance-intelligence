@@ -940,7 +940,7 @@ elif nav_selection == "⚙️ System Administration":
         if fb_res.data:
             df_fb = pd.DataFrame(fb_res.data)
             for idx, r in df_fb.iterrows():
-                col_text, col_btn = st.columns()
+                col_text, col_btn = st.columns() 
                 date_str = str(r.get('created_at', 'N/A'))[:10]
                 store_val = r.get('store_id', r.get('store_name', 'N/A'))
                 msg_val = r.get('feedback_text', r.get('message', 'No text'))
