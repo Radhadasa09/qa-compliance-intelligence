@@ -27,24 +27,23 @@ st.set_page_config(
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
         footer {visibility: hidden;}
         
+        /* Instead of hiding whole header, hide deployment/toolbar buttons individually */
         div[data-testid="stToolbar"] {display: none !important;}
         div[data-testid="stStatusWidget"] {display: none !important;}
         .stDeployButton {display: none !important;}
         
-        /* Float the sidebar collapse/expand arrow lower and keep visible */
+        /* Make the header transparent so native collapse toggle shows up cleanly */
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+        }
+        
+        /* Style/position the collapsed control safely */
         [data-testid="collapsedControl"] {
-            visibility: visible !important;
-            position: fixed !important;
-            top: 18px !important;
-            left: 15px !important;
-            z-index: 999999 !important;
-            background: rgba(255, 255, 255, 0.9) !important;
-            border-radius: 6px !important;
-            padding: 4px !important;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
+            transform: scale(1.2);
+            margin-top: 5px;
+            margin-left: 5px;
         }
         
         section[data-testid="stSidebar"] {
@@ -80,8 +79,7 @@ st.markdown("""
             max-width: 1200px;
         }
     </style>
-""", unsafe_allow_html=True)
-# --- CLOUDINARY CONFIGURATION & HELPER ---
+""", unsafe_allow_html=True)# --- CLOUDINARY CONFIGURATION & HELPER ---
 try:
     cloudinary.config(
         cloud_name=st.secrets.get("CLOUDINARY_CLOUD_NAME", os.environ.get("CLOUDINARY_CLOUD_NAME")),
