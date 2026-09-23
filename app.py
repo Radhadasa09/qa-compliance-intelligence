@@ -901,12 +901,12 @@ elif nav_selection == "⚙️ System Administration":
             st.info("No store feedback yet.")
 
 elif nav_selection == "🤖 AI Support Assistant":
-    st.subheader("🤖 QA & Compliance Support Assistant (Direct DB/Pandas Engine)")
-    st.caption("Answers constrained strictly to live Supabase audit and resource records using direct analytical parsing.")
+    st.subheader("🤖 QA & Compliance Support Assistant (Smart Pandas Engine)")
+    st.caption("Answers constrained strictly to live Supabase audit and resource records with smart intent parsing.")
 
     if "support_messages" not in st.session_state:
         st.session_state["support_messages"] = [
-            {"role": "assistant", "content": "Hello! Ask me about specific store audit scores, highest scoring outlets, CAR delays, or vault summary metrics."}
+            {"role": "assistant", "content": "Hello! Ask me about Ekaagra direct outlets, latest audit scores, top performers, or pending CARs."}
         ]
 
     for msg in st.session_state["support_messages"]:
@@ -919,7 +919,7 @@ elif nav_selection == "🤖 AI Support Assistant":
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing operational records..."):
+            with st.spinner("Parsing operational records..."):
                 reply = ""
                 try:
                     p_low = prompt.lower()
@@ -929,31 +929,62 @@ elif nav_selection == "🤖 AI Support Assistant":
                         if res.data:
                             df_nsf = pd.DataFrame(res.data)
 
-                    if ("highest" in p_low or "top" in p_low) and not df_nsf.empty and 'score' in df_nsf.columns:
-                        top_df = df_nsf.sort_values(by='score', ascending=False).head(3)
-                        reply = "🏆 **Top Scoring Outlets (Cloud Database)**:\n"
-                        for _, r in top_df.iterrows():
-                            reply += f"- **{r.get('store_name', 'Unknown')}** (Code: `{r.get('site_code', 'N/A')}`): **{r.get('score', 0)}%** (Result: {r.get('result', 'N/A')}, Date: {r.get('audit_date', 'N/A')})\n"
-                    elif "car" in p_low or "delay" in p_low or "pending" in p_low:
-                        if not df_nsf.empty and 'car_status' in df_nsf.columns:
+                    if not df_nsf.empty:
+                        df_nsf['site_code_str'] = df_nsf['site_code'].astype(str) if 'site_code' in df_nsf.columns else ''
+                        if 'audit_date' in df_nsf.columns:
                             df_nsf['audit_date_dt'] = pd.to_datetime(df_nsf['audit_date'], errors='coerce')
                             df_nsf['days_elapsed'] = (pd.Timestamp(datetime.date.today()) - df_nsf['audit_date_dt']).dt.days
+
+                    # Intent 1: Ekaagra outlets query (189 series or Type == Ekaagra Direct)
+                    if "ekaagra" in p_low:
+                        ekaagra_sub = df_nsf[df_nsf['site_code_str'].str.startswith('189')] if not df_nsf.empty else pd.DataFrame()
+                        if not ekaagra_sub.empty:
+                            avg_e = ekaagra_sub['score'].mean() if 'score' in ekaagra_sub else 0
+                            reply = f"🏢 **Ekaagra Direct Outlets (189-series)**: Found **{len(ekaagra_sub)} audit records** across Ekaagra stores (Network Avg: **{avg_e:.1f}%**):\n"
+                            for _, r in ekaagra_sub.head(5).iterrows():
+                                reply += f"- **{r.get('store_name')}** (`{r.get('site_code_str')}`): Score **{r.get('score')}**% ({r.get('result')})\n"
+                            if len(ekaagra_sub) > 5:
+                                reply += f"_...and {len(ekaagra_sub) - 5} more records._"
+                        else:
+                            reply = "⚠️ No Ekaagra Direct (189-series) records found in database."
+
+                    # Intent 2: Latest audit or recent high scores
+                    elif "latest" in p_low or "recent" in p_low:
+                        if not df_nsf.empty and 'audit_date_dt' in df_nsf.columns:
+                            latest_df = df_nsf.sort_values(by='audit_date_dt', ascending=False).head(3)
+                            reply = "📅 **Latest Audit Records**: \n"
+                            for _, r in latest_df.iterrows():
+                                reply += f"- **{r.get('store_name')}** ({r.get('audit_date')}): **{r.get('score')}**% ({r.get('result')})\n"
+                        else:
+                            reply = "⚠️ Date sorting unavailable."
+
+                    # Intent 3: Highest / top scoring
+                    elif "highest" in p_low or "top" in p_low:
+                        if not df_nsf.empty and 'score' in df_nsf.columns:
+                            top_df = df_nsf.sort_values(by='score', ascending=False).head(3)
+                            reply = "🏆 **Top Scoring Outlets (Cloud Database)**:\n"
+                            for _, r in top_df.iterrows():
+                                reply += f"- **{r.get('store_name')}** (Code: `{r.get('site_code_str', 'N/A')}`): **{r.get('score', 0)}%** (Result: {r.get('result', 'N/A')}, Date: {r.get('audit_date', 'N/A')})\n"
+                        else:
+                            reply = "⚠️ No score data available."
+
+                    # Intent 4: Pending CARs / quarter / delayed reports
+                    elif "car" in p_low or "pending" in p_low or "quarter" in p_low:
+                        if not df_nsf.empty and 'car_status' in df_nsf.columns:
                             pend = df_nsf[df_nsf['car_status'].astype(str).str.contains("PENDING", case=False, na=False)]
                             if not pend.empty:
                                 reply = f"🚨 Found **{len(pend)}** records with pending CARs:\n"
                                 for _, r in pend.iterrows():
                                     reply += f"- **{r.get('store_name')}** | Days elapsed: {r.get('days_elapsed')} | Score: {r.get('score')}%\n"
                             else:
-                                reply = "✅ No pending CARs found in current database records."
+                                reply = "✅ **No pending CARs** found in current database records matching your criteria."
                         else:
-                            reply = "⚠️ CAR status column not available in local query set."
+                            reply = "⚠️ CAR status tracking column not found."
+
                     else:
-                        if not df_nsf.empty:
-                            count = len(df_nsf)
-                            avg_s = df_nsf['score'].mean() if 'score' in df_nsf.columns else 0
-                            reply = f"📊 Database overview: **{count} total audits** recorded, network average score: **{avg_s:.1f}%**. Try asking about *'highest scoring outlet'* or *'pending CARs'*."
-                        else:
-                            reply = "⚠️ No records available in `nsf_audits` to answer that query."
+                        count = len(df_nsf) if not df_nsf.empty else 0
+                        avg_s = df_nsf['score'].mean() if not df_nsf.empty and 'score' in df_nsf.columns else 0
+                        reply = f"📊 Database overview: **{count} total audits** recorded, network average score: **{avg_s:.1f}%**. Try asking about *'ekaagra outlets'*, *'latest audit'*, *'highest scoring outlet'*, or *'pending CARs'*."
                 except Exception as e:
                     reply = f"Error processing query: {e}"
 
