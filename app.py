@@ -913,7 +913,7 @@ elif nav_selection == "⚙️ System Administration":
                 st.progress(completion_rate, text=f"Overall Unification Progress: {int(unified_items)} out of {total_items} items unified.")
                 edited_df = st.data_editor(
                     df_items[['id', 'warehouse_item_name', 'store_retail_name', 'item_category', 'is_name_unified']],
-                    use_container_width=True, hide_index=True,
+                    width='stretch', hide_index=True,
                     disabled=['id', 'warehouse_item_name', 'store_retail_name', 'item_category'],
                     column_config={
                         "id": None, "warehouse_item_name": st.column_config.TextColumn("Current Invoice Name"),
@@ -934,7 +934,7 @@ elif nav_selection == "⚙️ System Administration":
     except Exception as e:
         st.error(f"Failed to load terminology data: {e}")
 
-st.markdown("### 💬 Store Feedback & Support Tickets")
+    st.markdown("### 💬 Store Feedback & Support Tickets")
     if supabase is not None:
         fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
         if fb_res.data:
@@ -951,8 +951,7 @@ st.markdown("### 💬 Store Feedback & Support Tickets")
                     st.success("✅ Ticket deleted!")
                     st.rerun()
         else:
-            st.info("No store feedback yet.")
-            
+            st.info("No store feedback yet.")            
 elif nav_selection == "🤖 AI Support Assistant":
     st.subheader("🤖 QA & Compliance Support Assistant (Smart Pandas Engine)")
     st.caption("Answers constrained strictly to live Supabase audit and resource records with smart intent parsing.")
