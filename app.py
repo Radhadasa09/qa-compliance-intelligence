@@ -811,19 +811,61 @@ elif nav_selection == "📑 Reports & Archive":
 
 elif nav_selection == "📚 Resources Vault":
     st.subheader("📚 Central Resources & Document Management")
-    with st.form("upload_master_resource"):
-        cat = st.selectbox("Category", ["QA SOPs & Safety", "Menu & Nutrition Booklet", "Shelf Life Chart", "Chemical Info Sheet"])
-        dfile = st.file_uploader("Upload PDF", type=["pdf"])
-        if st.form_submit_button("🚀 Publish to All Stores", type="primary") and dfile and cloudinary_configured:
-            ures = cloudinary.uploader.upload(dfile, folder="cbtl/central_resources", resource_type="auto")
+    
+    pub_scope = st.radio("Publication Scope", ["Global (All Stores)", "Specific Outlet (Water Test, Pest Map, etc.)"], horizontal=True)
+    
+    target_store_val = "ALL"
+    if pub_scope == "Specific Outlet (Water Test, Pest Map, etc.)":
+        store_names_list = df_stores['name'].tolist() if not df_stores.empty else ["Janakpuri, Delhi"]
+        target_store_val = st.selectbox("Select Target Outlet", store_names_list)
+
+    with st.form("upload_master_resource", clear_on_submit=True):
+        cat = st.selectbox("Category", [
+            "QA SOPs & Safety", "Menu & Nutrition Booklet", "Shelf Life Chart", 
+            "Chemical Info Sheet", "Water Test Report", "Pest Control Layout / Map"
+        ])
+        dfile = st.file_uploader("Upload Document (PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
+        btn_label = f"🚀 Publish to {target_store_val if target_store_val != 'ALL' else 'All Stores'}"
+        
+        if st.form_submit_button(btn_label, type="primary") and dfile and cloudinary_configured:
+            folder_scope = target_store_val.replace(' ', '_') if target_store_val != 'ALL' else "global"
+            folder_path = f"cbtl/central_resources/{folder_scope}"
+            ures = cloudinary.uploader.upload(dfile, folder=folder_path, resource_type="auto")
+            
             if supabase is not None:
-                supabase.table("central_resources").insert({"category": cat, "file_name": dfile.name, "file_url": ures.get("secure_url", ""), "updated_at": str(datetime.date.today())}).execute()
-                st.success("Published document!")
+                supabase.table("central_resources").insert({
+                    "category": cat, 
+                    "file_name": dfile.name, 
+                    "file_url": ures.get("secure_url", ""), 
+                    "updated_at": str(datetime.date.today()),
+                    "target_store": target_store_val
+                }).execute()
+                st.success(f"✅ Published `{dv if 'dv' in locals() else dfile.name}` for **{target_store_val}**!")
                 st.rerun()
+
     if supabase is not None:
-        rquery = supabase.table("central_resources").select("*").execute()
+        rquery = supabase.table("central_resources").select("*").order("updated_at", desc=True).execute()
         if rquery.data:
-            st.dataframe(pd.DataFrame(rquery.data), use_container_width=True)
+            df_res = pd.DataFrame(rquery.data)
+            if 'target_store' not in df_res.columns:
+                df_res['target_store'] = 'ALL'
+                
+            filter_view = st.selectbox("Filter Vault View", ["All Records", "Global Only", "Outlet Specific Only"])
+            if filter_view == "Global Only":
+                df_res = df_res[df_res['target_store'] == 'ALL']
+            elif filter_view == "Outlet Specific Only":
+                df_res = df_res[df_res['target_store'] != 'ALL']
+                
+            st.dataframe(
+                df_res[['category', 'target_store', 'file_name', 'updated_at', 'file_url']],
+                column_config={
+                    "target_store": st.column_config.TextColumn("Scope / Outlet"),
+                    "file_url": st.column_config.LinkColumn("Document", display_text="🔗 Open")
+                },
+                width='stretch', hide_index=True
+            )
+        else:
+            st.info("No documents published in vault yet.")
 
 elif nav_selection == "💳 Finance Invoices":
     st.subheader("💳 Central Invoices & Finance Clearance")
