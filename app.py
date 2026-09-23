@@ -952,7 +952,7 @@ elif nav_selection == "⚙️ System Administration":
                     st.rerun()
         else:
             st.info("No store feedback yet.")
-
+            
 elif nav_selection == "🤖 AI Support Assistant":
     st.subheader("🤖 QA & Compliance Support Assistant (Smart Pandas Engine)")
     st.caption("Answers constrained strictly to live Supabase audit and resource records with smart intent parsing.")
