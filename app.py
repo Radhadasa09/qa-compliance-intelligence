@@ -6,7 +6,7 @@ import os
 import datetime
 import io
 import copy
-import cloudinary
+import cloudinary 
 import cloudinary.uploader
 
 try:
