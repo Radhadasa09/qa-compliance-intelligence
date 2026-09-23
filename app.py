@@ -34,6 +34,19 @@ st.markdown("""
         div[data-testid="stStatusWidget"] {display: none !important;}
         .stDeployButton {display: none !important;}
         
+        /* Float the sidebar collapse/expand arrow lower and keep visible */
+        [data-testid="collapsedControl"] {
+            visibility: visible !important;
+            position: fixed !important;
+            top: 18px !important;
+            left: 15px !important;
+            z-index: 999999 !important;
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-radius: 6px !important;
+            padding: 4px !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
+        }
+        
         section[data-testid="stSidebar"] {
             background-color: #FFFFFF;
             border-right: 1px solid #E2E8F0;
@@ -68,7 +81,6 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
-
 # --- CLOUDINARY CONFIGURATION & HELPER ---
 try:
     cloudinary.config(
