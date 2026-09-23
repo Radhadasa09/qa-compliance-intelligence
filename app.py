@@ -912,12 +912,12 @@ elif nav_selection == "⚙️ System Administration":
             st.info("No store feedback yet.")
 
 elif nav_selection == "🤖 AI Support Assistant":
-    st.subheader("🤖 QA & Compliance Support Assistant (Strict Supabase Grounding)")
-    st.caption("Answers constrained strictly to live Supabase audit and resource records. Zero external/personal data exposure.")
+    st.subheader("🤖 QA & Compliance Support Assistant (Direct DB/Pandas Engine)")
+    st.caption("Answers constrained strictly to live Supabase audit and resource records using direct analytical parsing.")
 
     if "support_messages" not in st.session_state:
         st.session_state["support_messages"] = [
-            {"role": "model", "content": "Hello! Ask me about specific store audit scores, CAR delay metrics, or vault SOP references from Supabase."}
+            {"role": "assistant", "content": "Hello! Ask me about specific store audit scores, highest scoring outlets, CAR delays, or vault summary metrics."}
         ]
 
     for msg in st.session_state["support_messages"]:
@@ -929,47 +929,44 @@ elif nav_selection == "🤖 AI Support Assistant":
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        with st.chat_message("model"):
-            with st.spinner("Querying Supabase operational records..."):
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing operational records..."):
+                reply = ""
                 try:
-                    fetched_data_str = "No database records retrieved."
+                    p_low = prompt.lower()
+                    df_nsf = pd.DataFrame()
                     if supabase is not None:
-                        nsf_res = supabase.table("nsf_audits").select("store_name, score, result, car_status, audit_date").limit(30).execute()
-                        res_res = supabase.table("central_resources").select("category, file_name").limit(10).execute()
-                        db_summary = {
-                            "nsf_audits_sample": nsf_res.data if nsf_res.data else [],
-                            "central_resources": res_res.data if res_res.data else []
-                        }
-                        fetched_data_str = str(db_summary)
+                        res = supabase.table("nsf_audits").select("*").execute()
+                        if res.data:
+                            df_nsf = pd.DataFrame(res.data)
 
-                    system_instructions = f"""
-                    You are an internal QA & Compliance support bot for The Coffee Bean & Tea Leaf (CBTL) India / Ekaagra operations.
-                    
-                    === CRITICAL SECURITY & GROUNDING RULES ===
-                    1. Answer the user query USE ONLY the RETRIEVED SUPABASE DATA block below.
-                    2. Do NOT use general knowledge, external assumptions, or fabricated facts.
-                    3. If the answer cannot be derived directly from the Supabase data, reply EXACTLY:
-                       "⚠️ Data not available in the operational database."
-                    4. Always cite specific store_name, audit_date, or file_name if referencing data.
-                    
-                    === RETRIEVED SUPABASE DATA ===
-                    {fetched_data_str}
-                    =====================================
-                    """
-
-                    api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY"))
-                    if genai and api_key:
-                        client = genai.Client(api_key=api_key)
-                        history_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state['support_messages'][-6:]])
-                        response = client.models.generate_content(
-                            model="gemini-2.5-flash",
-                            contents=f"{system_instructions}\n\n=== RECENT CHAT HISTORY ===\n{history_text}\n\n=== NEW USER QUERY ===\n{prompt}"
-                        )
-                        reply = response.text
+                    if ("highest" in p_low or "top" in p_low) and not df_nsf.empty and 'score' in df_nsf.columns:
+                        top_df = df_nsf.sort_values(by='score', ascending=False).head(3)
+                        reply = "🏆 **Top Scoring Outlets (Cloud Database)**:\n"
+                        for _, r in top_df.iterrows():
+                            reply += f"- **{r.get('store_name', 'Unknown')}** (Code: `{r.get('site_code', 'N/A')}`): **{r.get('score', 0)}%** (Result: {r.get('result', 'N/A')}, Date: {r.get('audit_date', 'N/A')})\n"
+                    elif "car" in p_low or "delay" in p_low or "pending" in p_low:
+                        if not df_nsf.empty and 'car_status' in df_nsf.columns:
+                            df_nsf['audit_date_dt'] = pd.to_datetime(df_nsf['audit_date'], errors='coerce')
+                            df_nsf['days_elapsed'] = (pd.Timestamp(datetime.date.today()) - df_nsf['audit_date_dt']).dt.days
+                            pend = df_nsf[df_nsf['car_status'].astype(str).str.contains("PENDING", case=False, na=False)]
+                            if not pend.empty:
+                                reply = f"🚨 Found **{len(pend)}** records with pending CARs:\n"
+                                for _, r in pend.iterrows():
+                                    reply += f"- **{r.get('store_name')}** | Days elapsed: {r.get('days_elapsed')} | Score: {r.get('score')}%\n"
+                            else:
+                                reply = "✅ No pending CARs found in current database records."
+                        else:
+                            reply = "⚠️ CAR status column not available in local query set."
                     else:
-                        reply = "⚠️ `GEMINI_API_KEY` missing or `google-genai` SDK not imported."
+                        if not df_nsf.empty:
+                            count = len(df_nsf)
+                            avg_s = df_nsf['score'].mean() if 'score' in df_nsf.columns else 0
+                            reply = f"📊 Database overview: **{count} total audits** recorded, network average score: **{avg_s:.1f}%**. Try asking about *'highest scoring outlet'* or *'pending CARs'*."
+                        else:
+                            reply = "⚠️ No records available in `nsf_audits` to answer that query."
                 except Exception as e:
-                    reply = f"Error processing query against database: {e}"
+                    reply = f"Error processing query: {e}"
 
                 st.markdown(reply)
-                st.session_state["support_messages"].append({"role": "model", "content": reply})
+                st.session_state["support_messages"].append({"role": "assistant", "content": reply})
