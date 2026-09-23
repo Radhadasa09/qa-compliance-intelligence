@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # --- UNIFIED BRANDING REMOVAL & SPACING FIX ---st.markdown("""
-    <style>
+<style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
