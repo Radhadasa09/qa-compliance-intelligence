@@ -23,8 +23,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---st.markdown("""
-<style>
+# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---
+st.markdown("""
+ <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
