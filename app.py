@@ -934,7 +934,7 @@ elif nav_selection == "⚙️ System Administration":
     except Exception as e:
         st.error(f"Failed to load terminology data: {e}")
 
-    st.markdown("### 💬 Store Feedback & Support Tickets")
+st.markdown("### 💬 Store Feedback & Support Tickets")
     if supabase is not None:
         fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
         if fb_res.data:
