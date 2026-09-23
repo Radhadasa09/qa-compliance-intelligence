@@ -8,16 +8,12 @@ import io
 import copy
 import cloudinary
 import cloudinary.uploader
+import pdfplumber
 
 try:
     from fpdf import FPDF
 except ImportError:
     FPDF = None
-
-try:
-    from google import genai
-except ImportError:
-    genai = None
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -385,7 +381,7 @@ if nav_selection == "📊 Executive Dashboard":
         )
         fig_nsf.update_traces(textposition='outside')
         fig_nsf.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-        st.plotly_chart(fig_nsf, width='stretch')
+        st.plotly_chart(fig_nsf, use_container_width=True)
     else:
         st.info("No Ekaagra Direct NSF data available in the cloud database yet.")
 
@@ -397,7 +393,7 @@ if nav_selection == "📊 Executive Dashboard":
                 df_comp = pd.DataFrame(comp_response.data).sort_values(by='id', ascending=False)
                 st.dataframe(
                     df_comp[['store_name', 'month_year', 'fostac_pending', 'medical_pending', 'fully_compliant', 'self_audit_done', 'self_audit_score', 'remark']],
-                    width='stretch', hide_index=True,
+                    use_container_width=True, hide_index=True,
                     column_config={
                         "store_name": st.column_config.TextColumn("Store Name", width="medium"),
                         "month_year": st.column_config.TextColumn("Audit Month"),
@@ -473,7 +469,7 @@ elif nav_selection == "🏬 Retail Operations":
                     audit_counts.columns = ['Store Name', 'Total Valid Submissions']
                     fig_audit = px.bar(audit_counts, x='Store Name', y='Total Valid Submissions', title="Valid Daily Audits by Store", text_auto=True, color='Total Valid Submissions', color_continuous_scale='Blues')
                     fig_audit.update_layout(xaxis_type='category')
-                    st.plotly_chart(fig_audit, width='stretch')
+                    st.plotly_chart(fig_audit, use_container_width=True)
                     
                     with st.expander("🔍 View & Download Detailed Audit Reports"):
                         df_display = df_latest_audits.copy()
@@ -489,7 +485,7 @@ elif nav_selection == "🏬 Retail Operations":
                                 "product_proof_url": st.column_config.LinkColumn("Product Photo", display_text="🔗 View"),
                                 "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_text="🔗 View")
                             },
-                            width='stretch', hide_index=True
+                            use_container_width=True, hide_index=True
                         )
                         st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")
         except Exception as e:
@@ -503,9 +499,9 @@ elif nav_selection == "🏬 Retail Operations":
                     df_recv = pd.DataFrame(recv_res.data)
                     fig_recv = px.scatter(df_recv, x='created_at', y='received_temp', color='store_id', title="Vendor Delivery Temperatures (°C)", size_max=10, hover_data=['vendor_name', 'invoice_number'])
                     fig_recv.add_hline(y=5.0, line_dash="dot", annotation_text="Max Acceptable Temp (5°C)", annotation_position="bottom right", line_color="red")
-                    st.plotly_chart(fig_recv, width='stretch')
+                    st.plotly_chart(fig_recv, use_container_width=True)
                     with st.expander("🔍 View Detailed Receiving Logs"):
-                        st.dataframe(df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']], width='stretch', hide_index=True)
+                        st.dataframe(df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']], use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error loading receiving logs: {e}")
 
@@ -518,9 +514,9 @@ elif nav_selection == "🏬 Retail Operations":
                     waste_counts = df_waste['reason'].value_counts().reset_index()
                     waste_counts.columns = ['Reason', 'Count']
                     fig_waste = px.pie(waste_counts, names='Reason', values='Count', title="Wastage Breakdown by Reason", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                    st.plotly_chart(fig_waste, width='stretch')
+                    st.plotly_chart(fig_waste, use_container_width=True)
                     with st.expander("🔍 View Detailed Wastage Records"):
-                        st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], width='stretch', hide_index=True)
+                        st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error loading wastage logs: {e}")
 
@@ -569,7 +565,7 @@ elif nav_selection == "🏬 Retail Operations":
                 if transfers_res.data:
                     df_transfers = pd.DataFrame(transfers_res.data)
                     df_transfers['created_at'] = pd.to_datetime(df_transfers['created_at']).dt.strftime('%Y-%m-%d %H:%M')
-                    st.dataframe(df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']], width='stretch', hide_index=True)
+                    st.dataframe(df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']], use_container_width=True, hide_index=True)
                 else:
                     st.info("No inter-store dispatches logged.")
         except Exception as e:
@@ -581,7 +577,7 @@ elif nav_selection == "🏬 Retail Operations":
                 fdu_res = supabase.table("store_fdu_transfers").select("*").order("created_at", desc=True).limit(50).execute()
                 if fdu_res.data:
                     df_fdu = pd.DataFrame(fdu_res.data)
-                    st.dataframe(df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']], width='stretch', hide_index=True)
+                    st.dataframe(df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']], use_container_width=True, hide_index=True)
                 else:
                     st.info("No FDU transfers logged.")
         except Exception as e:
@@ -630,7 +626,7 @@ elif nav_selection == "🚚 Vendor & Supply Chain":
                 res = {}
                 for q_text, pts, is_star in qlist:
                     lbl = f"⭐ {q_text} ({pts} pts)" if is_star else f"{q_text} ({pts} pts)"
-                    c1, c2 = st.columns()
+                    c1, c2 = st.columns(2)
                     st_val = c1.selectbox(lbl, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"s_{q_text}")
                     comm = c2.text_input("Note (if NC/PC)", key=f"c_{q_text}")
                     res[q_text] = {"status": st_val, "points": pts, "is_star": is_star, "comment": comm}
@@ -656,8 +652,8 @@ elif nav_selection == "🚚 Vendor & Supply Chain":
                             url = upload_photo(pfile, "vendor_audits", f"{audit_vendor_name.replace(' ', '_')}_{idx+1}")
                             if url: photo_urls.append(url)
                     earned = sum(d['points'] if d['status'] == "Compliance (C)" else (d['points']/2 if d['status'] == "Partial Compliance (PC)" else 0) for d in audit_responses.values())
-                    max_pts = 90
-                    pct = (earned / max_pts) * 100
+                    max_pts = sum(d['points'] for d in audit_responses.values()) if audit_responses else 90
+                    pct = (earned / max_pts) * 100 if max_pts > 0 else 0
                     grade = "A+ (Exemplar)" if pct >= 80 else ("A (Satisfactory)" if pct >= 72 else ("B (Needs Improvement)" if pct >= 45 else "Non Compliance"))
                     status_res = "Passed" if pct >= 72 else ("Conditionally Approved" if pct >= 45 else "Failed")
                     payload = {
@@ -782,13 +778,13 @@ elif nav_selection == "📈 NSF Audit Intelligence":
             avg_scores = df_db.groupby('Type')['score'].mean().reset_index()
             fig_avg = px.bar(avg_scores, x='Type', y='score', color='Type', text='score', title="Average Score (%) by Ownership")
             fig_avg.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-            st.plotly_chart(fig_avg, width='stretch')
+            st.plotly_chart(fig_avg, use_container_width=True)
         with c2:
             st_col = 'result' if 'result' in df_db.columns else 'status' if 'status' in df_db.columns else None
             if st_col:
                 res_dist = df_db.groupby(['Type', st_col]).size().reset_index(name='Count')
                 fig_dist = px.bar(res_dist, x='Type', y='Count', color=st_col, barmode='group', text='Count', title="Audit Status Distribution")
-                st.plotly_chart(fig_dist, width='stretch')
+                st.plotly_chart(fig_dist, use_container_width=True)
 
     st.markdown("---")
     st.markdown("### 🚨 Corrective Action Request (CAR) Pending Tracker")
@@ -803,7 +799,7 @@ elif nav_selection == "📈 NSF Audit Intelligence":
             df_pending = df_car[df_car[car_col].astype(str).str.contains("PENDING", case=False, na=False)].sort_values(by='Days_Elapsed', ascending=False)
             if not df_pending.empty:
                 st.warning(f"⚠️ There are **{len(df_pending)}** audit records across the network with pending Corrective Actions.")
-                st.dataframe(df_pending[['store_name', date_col, 'score', car_col, 'Days_Elapsed']], width='stretch', hide_index=True)
+                st.dataframe(df_pending[['store_name', date_col, 'score', car_col, 'Days_Elapsed']], use_container_width=True, hide_index=True)
             else:
                 st.success("🎉 All network audits have approved Corrective Actions.")
         else:
@@ -834,7 +830,7 @@ elif nav_selection == "📚 Resources Vault":
     if supabase is not None:
         rquery = supabase.table("central_resources").select("*").execute()
         if rquery.data:
-            st.dataframe(pd.DataFrame(rquery.data), width='stretch')
+            st.dataframe(pd.DataFrame(rquery.data), use_container_width=True)
 
 elif nav_selection == "💳 Finance Invoices":
     st.subheader("💳 Central Invoices & Finance Clearance")
@@ -857,7 +853,7 @@ elif nav_selection == "💳 Finance Invoices":
     if supabase is not None:
         inv_res = supabase.table("central_finance_invoices").select("*").order("created_at", desc=True).execute()
         if inv_res.data:
-            st.dataframe(pd.DataFrame(inv_res.data), width='stretch')
+            st.dataframe(pd.DataFrame(inv_res.data), use_container_width=True)
 
 elif nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
@@ -882,7 +878,7 @@ elif nav_selection == "⚙️ System Administration":
                 st.progress(completion_rate, text=f"Overall Unification Progress: {int(unified_items)} out of {total_items} items unified.")
                 edited_df = st.data_editor(
                     df_items[['id', 'warehouse_item_name', 'store_retail_name', 'item_category', 'is_name_unified']],
-                    width='stretch', hide_index=True,
+                    use_container_width=True, hide_index=True,
                     disabled=['id', 'warehouse_item_name', 'store_retail_name', 'item_category'],
                     column_config={
                         "id": None, "warehouse_item_name": st.column_config.TextColumn("Current Invoice Name"),
@@ -907,7 +903,7 @@ elif nav_selection == "⚙️ System Administration":
     if supabase is not None:
         fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
         if fb_res.data:
-            st.dataframe(pd.DataFrame(fb_res.data), width='stretch')
+            st.dataframe(pd.DataFrame(fb_res.data), use_container_width=True)
         else:
             st.info("No store feedback yet.")
 
