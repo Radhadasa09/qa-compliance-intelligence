@@ -219,23 +219,73 @@ for idx, row in df_stores.iterrows():
 df_monthly_filtered = pd.DataFrame(monthly_records)
 
 # --- CEO-LEVEL HEADER ---
-st.title("🛡️ QA & Compliance Leadership Briefing — Live Status")
-st.markdown("**Command Center Admin:** Girish Kumar")
-st.markdown("Real-time oversight of Ekaagra Master Franchise Operations, Licensing, Supply Chain, and Sub Franchise compliance.")
-st.divider()
+# --- SIDEBAR COMMAND NAV ---
+with st.sidebar:
+    st.markdown("### 🛡️ CBTL India Command")
+    st.caption("Ekaagra Master Franchise • QA Hub")
+    selected_month = st.selectbox("Global Period Filter", ["Live Data", "August 2026", "September 2026", "October 2026"])
+    
+    st.markdown("---")
+    nav_selection = st.radio(
+        "Navigation",
+        [
+            "📊 Executive Dashboard",
+            "🏬 Retail Operations",
+            "🚚 Vendor & Supply Chain",
+            "📜 License Summary",
+            "📈 NSF Audit Intelligence",
+            "📑 Reports & Archive",
+            "📚 Resources Vault",
+            "💳 Finance Invoices",
+            "⚙️ System Administration",
+            "🤖 AI Support Assistant"
+        ],
+        label_visibility="collapsed"
+    )
+    st.markdown("---")
+    st.caption("Admin: Girish Kumar | v2.4 Live")
 
-# Add "📚 Resources Vault" to your main executive tabs list:
-tab_exec, tab_ops, tab_supply, tab_lic_summary, tab_nsf, tab_reports, tab_res, tab_admin, tab_finance = st.tabs([
-    "📊 Executive Dashboard",
-    "🏬 Retail Operations",
-    "🚚 Vendor & Supply Chain",
-    "📜 License Summary",
-    "📈 NSF Audit Intelligence",
-    "📑 Reports & Archive",
-    "📚 Resources Vault",
-    "⚙️ System Administration",
-    "💳 Finance Invoices"
-])
+# --- MAIN ROUTER ---
+if nav_selection == "📊 Executive Dashboard":
+    # --- Move Tab 1 content indented underneath here ---
+    pass
+
+elif nav_selection == "🏬 Retail Operations":
+    # --- Move Tab 2 content indented underneath here ---
+    pass
+
+elif nav_selection == "🚚 Vendor & Supply Chain":
+    # --- Move Tab 3 content indented underneath here ---
+    pass
+
+elif nav_selection == "📜 License Summary":
+    # --- Move Tab 4 content indented underneath here ---
+    pass
+
+elif nav_selection == "📈 NSF Audit Intelligence":
+    # --- Move Tab 5 content (including CAR tracker) indented underneath here ---
+    pass
+
+elif nav_selection == "📑 Reports & Archive":
+    # --- Move Tab 6 content indented underneath here ---
+    pass
+
+elif nav_selection == "📚 Resources Vault":
+    # --- Move Tab 7 content indented underneath here ---
+    pass
+
+elif nav_selection == "💳 Finance Invoices":
+    # --- Move Finance content indented underneath here ---
+    pass
+
+elif nav_selection == "⚙️ System Administration":
+    # --- Move Admin & feedback archive indented underneath here ---
+    pass
+
+elif nav_selection == "🤖 AI Support Assistant":
+    # --- Drop RAG AI agent code block here ---
+    st.subheader("🤖 QA & Compliance Support Assistant")
+    st.info("AI assistant router ready.")
 # ==========================================
 # TAB 1: EXECUTIVE DASHBOARD
 # ==========================================
