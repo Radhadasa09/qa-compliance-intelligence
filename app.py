@@ -673,11 +673,58 @@ elif nav_selection == "🚚 Vendor & Supply Chain":
                     res[q_text] = {"status": st_val, "points": pts, "is_star": is_star, "comment": comm}
                 return res
 
-            q_design = render_sec("1. Design & Facilities", [("Q1: Updated FSSAI license", 2, True), ("Q2: Clean space", 2, False), ("Q3: Non-toxic material", 2, False), ("Q4: Walls sound", 2, False), ("Q5: Floors sloped", 2, False), ("Q6: Insect screens", 2, False), ("Q7: Doors close-fit", 2, False), ("Q8: Equipment impervious", 2, False), ("Q9: Lighting", 2, False), ("Q10: Ventilation", 2, False), ("Q11: Storage facility", 2, False), ("Q12: Hygiene facilities", 2, False)])
-            q_ops = render_sec("2. Control of Operation", [("Q13: Potable water tested", 4, True), ("Q14: Lab testing", 2, False), ("Q15: Approved vendors", 2, False), ("Q16: Raw material inspection", 2, False), ("Q17: Temp/FIFO", 4, True), ("Q18: Time/temp log", 4, True), ("Q19: Hygienic packing", 2, False), ("Q20: Food-grade pkg", 2, False), ("Q21: Chemicals separated", 2, False), ("Q22: Vehicles clean", 2, False), ("Q23: Vehicle temp", 2, False), ("Q24: Recalls managed", 2, False)])
-            q_maint = render_sec("3. Maintenance & Sanitation", [("Q25: Cleaning schedule", 2, False), ("Q26: Preventive maintenance", 2, False), ("Q27: Calibration", 2, False), ("Q28: Pest control records", 4, True), ("Q29: No pests", 2, False), ("Q30: Drain traps", 2, False), ("Q31: Waste removal", 2, False), ("Q32: Sewage disposal", 2, False)])
-            q_hyg = render_sec("4. Personal Hygiene",)
-            q_train = render_sec("5. Training & Complaints",)
+            q_design = render_sec("1. Design & Facilities", [
+                ("Q1: Food establishment location is away from environmental pollution", 2, False),
+                ("Q2: Premises is clean, adequately lighted, and ventilated", 2, False),
+                ("Q3: Walls, floors, ceilings are smooth, impervious, and easy to clean", 2, False),
+                ("Q4: Windows and doors are fitted with insect and pest proof screens", 2, False),
+                ("Q5: Drainage system is adequate and sloped appropriately", 2, False),
+                ("Q6: Food contact surfaces are made of non-toxic, non-corrosive materials", 2, False),
+                ("Q7: Adequate facilities for cleaning and disinfecting equipment", 2, False),
+                ("Q8: Proper storage facilities for raw materials and finished goods", 2, False),
+                ("Q9: Separate storage under lock & key for hazardous chemicals", 2, False),
+                ("Q10: Adequate potable water supply available with test reports", 4, True)
+            ])
+            
+            q_ops = render_sec("2. Control of Operation", [
+                ("Q11: Raw materials purchased from approved/licensed vendors", 2, False),
+                ("Q12: Raw materials inspected for quality and safety before use", 2, False),
+                ("Q13: Segregation of raw and cooked food to prevent cross-contamination", 4, True),
+                ("Q14: Time and temperature controls maintained during processing", 4, True),
+                ("Q15: Food additives used are permitted and within legal limits", 4, True),
+                ("Q16: Packaging materials are food grade and safe", 2, False),
+                ("Q17: FIFO/FEFO method used for inventory rotation", 2, False),
+                ("Q18: Transport vehicles are clean and maintain required temperature", 2, False),
+                ("Q19: Traceability system is in place for forward and backward tracking", 2, False),
+                ("Q20: Product recall procedure is documented and tested", 2, False)
+            ])
+            
+            q_maint = render_sec("3. Maintenance & Sanitation", [
+                ("Q21: Cleaning and sanitation schedule documented and followed", 2, False),
+                ("Q22: Preventive maintenance program in place for machinery", 2, False),
+                ("Q23: Equipment calibration records maintained", 2, False),
+                ("Q24: Documented pest control program with authorized agency", 4, True),
+                ("Q25: No signs of pest activity or harborages", 2, False),
+                ("Q26: Waste is disposed of scientifically without attracting pests", 2, False),
+                ("Q27: Drains are covered and equipped with traps", 2, False)
+            ])
+
+            q_hyg = render_sec("4. Personal Hygiene", [
+                ("Q28: Annual medical examination records for all food handlers", 2, False),
+                ("Q29: Daily fitness/illness screening for food handlers", 2, False),
+                ("Q30: Food handlers wear clean uniforms, aprons, and hairnets", 2, False),
+                ("Q31: Handwashing stations have soap, water, and drying facilities", 4, True),
+                ("Q32: Strict policy against smoking, spitting, chewing in production", 2, False),
+                ("Q33: Nails kept short, clean, and no jewelry worn by handlers", 2, False)
+            ])
+            
+            q_train = render_sec("5. Training & Complaints", [
+                ("Q34: At least one FOSTAC trained supervisor on premises", 4, True),
+                ("Q35: Routine food safety training provided to all staff", 2, False),
+                ("Q36: Documented consumer complaint handling procedure", 2, False),
+                ("Q37: Corrective actions taken on complaints and documented", 2, False)
+            ])
+
             audit_responses = {**q_design, **q_ops, **q_maint, **q_hyg, **q_train}
 
             audit_photos = st.file_uploader("Upload Inspection Snaps", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
