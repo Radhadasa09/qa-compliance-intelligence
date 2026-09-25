@@ -140,14 +140,7 @@ if not df_stores_dynamic.empty:
 else:
     store_name_map = {}
     store_opt = []
-# --- Filter data dynamically if Present Quarter is selected ---
-if selected_month == "Present Quarter (Q3 2026)":
-    if not df_db.empty and 'audit_date' in df_db.columns:
-        df_db['audit_date'] = pd.to_datetime(df_db['audit_date'], errors='coerce')
-        df_db = df_db[(df_db['audit_date'].dt.year == 2026) & (df_db['audit_date'].dt.quarter == 3)]
-        ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
-        subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
-@st.cache_data(ttl=60)
+
 def load_vendor_audits():
     if supabase is None:
         return pd.DataFrame()
