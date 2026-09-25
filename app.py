@@ -362,16 +362,26 @@ def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, p
     pdf.cell(200, 6, txt=f"Address: {addr} | Date: {audit_dt} | Score: {pct:.1f}% ({grade})", ln=1, align='C')
     pdf.ln(5)
     pdf.set_font("Arial", size=9)
+    
     for q_key, data in responses.items():
-        pdf.multi_cell(0, 5, txt=f"[{data['status']}] {q_key} - Note: {data.get('comment', '')}")
+        # Combine the text
+        raw_text = f"[{data['status']}] {q_key} - Note: {data.get('comment', '')}"
+        # Strip unsupported emojis/unicode that crash FPDF Arial font
+        safe_text = raw_text.encode('latin-1', 'ignore').decode('latin-1')
+        
+        # Use explicit width 190 (Standard A4 width minus margins) instead of 0
+        pdf.multi_cell(190, 5, txt=safe_text)
+        pdf.ln(1) # Add a small visual gap between questions
+        
     if rem:
         pdf.ln(3)
-        pdf.multi_cell(0, 5, txt=f"Overall Remarks: {rem}")
+        safe_rem = f"Overall Remarks: {rem}".encode('latin-1', 'ignore').decode('latin-1')
+        pdf.multi_cell(190, 5, txt=safe_rem)
+        
     try:
         return bytes(pdf.output())
     except TypeError:
         return pdf.output(dest='S').encode('latin-1')
-
 # ==========================================
 # MAIN ROUTER SWITCH
 # ==========================================
