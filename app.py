@@ -257,6 +257,16 @@ for idx, row in df_stores.iterrows():
 
 df_monthly_filtered = pd.DataFrame(monthly_records)
 
+# --- Filter only the base cloud data for Q3 if selected ---
+if selected_month == "Present Quarter (Q3 2026)":
+    if not df_db.empty and 'audit_date' in df_db.columns:
+        df_db['audit_date'] = pd.to_datetime(df_db['audit_date'], errors='coerce')
+        df_db = df_db[(df_db['audit_date'].dt.year == 2026) & (df_db['audit_date'].dt.quarter == 3)]
+        # Re-apply strict classification to keep Ekaagra Direct isolated for the Executive Dashboard
+        df_db['site_code_str'] = df_db['site_code'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+        df_db['Type'] = df_db['site_code_str'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") and x != "1891004" else "Sub Franchise") # adjusting for specific overrides if needed
+        ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
+        subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
 # --- PDF GENERATOR HELPERS ---
 def generate_pdf(month_str, records, vendors, nsf_data):
     if FPDF is None: return None
