@@ -217,7 +217,7 @@ def get_store_monthly(store_name, month):
 with st.sidebar:
     st.markdown("### 🛡️ CBTL India Command")
     st.caption("Ekaagra Master Franchise • QA Hub")
-    selected_month = st.selectbox("Global Period Filter", ["Live Data", "August 2026", "September 2026", "October 2026"])
+    selected_month = st.selectbox("Global Period Filter", ["Live Data", "Present Quarter (Q3 2026)", "August 2026", "September 2026", "October 2026"])
     
     st.markdown("---")
     nav_selection = st.radio(
