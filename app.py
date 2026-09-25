@@ -121,7 +121,25 @@ def load_nsf_audits():
         return pd.DataFrame()
 
 df_db = load_nsf_audits()
+@st.cache_data(ttl=300)
+def load_store_master():
+    if supabase is None:
+        return pd.DataFrame()
+    try:
+        response = supabase.table("store_master").select("*").eq("is_active", True).order("site_code").execute()
+        return pd.DataFrame(response.data)
+    except Exception:
+        return pd.DataFrame()
 
+df_stores_dynamic = load_store_master()
+
+# Dynamically generate the mapping dictionary and dropdown list
+if not df_stores_dynamic.empty:
+    store_name_map = dict(zip(df_stores_dynamic['site_code'], df_stores_dynamic['store_name']))
+    store_opt = [f"{row['site_code']} - {row['store_name']}" for _, row in df_stores_dynamic.iterrows()]
+else:
+    store_name_map = {}
+    store_opt = []
 @st.cache_data(ttl=60)
 def load_vendor_audits():
     if supabase is None:
