@@ -1060,3 +1060,4 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
+
