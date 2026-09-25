@@ -392,20 +392,40 @@ if nav_selection == "📊 Executive Dashboard":
 
     st.markdown("---")
 
-    if not ekaagra_df.empty and 'score' in ekaagra_df.columns and 'store_name' in ekaagra_df.columns:
-        st.markdown("### 🏬 Ekaagra Direct Operations (Historical Journey Stack)")
-        fig_nsf = px.bar(
-            ekaagra_df, x='store_name', y='score', text='score',
-            title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
-            color='result' if 'result' in ekaagra_df.columns else 'score', 
-            color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
-        )
-        fig_nsf.update_traces(textposition='outside')
-        fig_nsf.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-        st.plotly_chart(fig_nsf, use_container_width=True)
-    else:
-        st.info("No Ekaagra Direct NSF data available in the cloud database yet.")
+    if not df_db.empty and 'score' in df_db.columns and 'store_name' in df_db.columns:
+        st.markdown("### 🏬 Network Operations (Historical Journey Stack)")
+        
+        tab_ekaagra, tab_sub = st.tabs(["🏢 Ekaagra Direct", "🏪 Sub Franchise"])
+        
+        with tab_ekaagra:
+            if not ekaagra_df.empty:
+                fig_nsf_e = px.bar(
+                    ekaagra_df, x='store_name', y='score', text='score',
+                    title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
+                    color='result' if 'result' in ekaagra_df.columns else 'score', 
+                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
+                )
+                fig_nsf_e.update_traces(textposition='outside')
+                fig_nsf_e.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
+                st.plotly_chart(fig_nsf_e, width='stretch')
+            else:
+                st.info("No Ekaagra Direct NSF data available in the selected period.")
 
+        with tab_sub:
+            if not subfranchise_df.empty:
+                fig_nsf_s = px.bar(
+                    subfranchise_df, x='store_name', y='score', text='score',
+                    title="Sub Franchise Outlets Cumulative/Historical NSF Scores",
+                    color='result' if 'result' in subfranchise_df.columns else 'score', 
+                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
+                )
+                fig_nsf_s.update_traces(textposition='outside')
+                fig_nsf_s.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
+                st.plotly_chart(fig_nsf_s, width='stretch')
+            else:
+                st.info("No Sub Franchise NSF data available in the selected period.")
+    else:
+        st.info("No NSF data available in the cloud database yet.")
     st.markdown("### 👥 Store-by-Store Staff Compliance Status")
     try:
         if supabase is not None:
