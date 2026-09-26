@@ -1063,13 +1063,11 @@ elif nav_selection == "⚙️ System Administration":
             st.info("No store feedback yet.")            
 elif nav_selection == "🤖 AI Support Assistant":
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
-    st.caption("Powered by Gemini 1.5 Flash • Multi-Module Live Context + FSSAI Operational Guidance")
+    st.caption("Powered by Gemini 1.5 Pro • Multi-Module Live Context + FSSAI Operational Guidance")
 
-    # 1. API Key & Model Setup (with Safe Library Check)
+    # 1. API Key Setup
     gemini_ready = False
-    if genai is None:
-        st.error("⚠️ `google-generativeai` package is not installed. Please add `google-generativeai>=0.8.0` to your `requirements.txt` file.")
-    elif "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
+    if "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             gemini_ready = True
@@ -1096,7 +1094,7 @@ elif nav_selection == "🤖 AI Support Assistant":
 
         with st.chat_message("assistant"):
             if not gemini_ready:
-                reply = "⚠️ API Key or required module is missing. Please check your `requirements.txt` and Streamlit secrets."
+                reply = "⚠️ API Key is missing. Please check your Streamlit secrets."
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
             else:
@@ -1161,11 +1159,11 @@ elif nav_selection == "🤖 AI Support Assistant":
                         4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
                         """
 
-                        # --- GENERATE CONTENT WITH FULL RESOURCE PATH ---
-                        model = genai.GenerativeModel(
-                            model_name="models/gemini-1.5-flash",
-                            generation_config={"max_output_tokens": 800, "temperature": 0.2}
-                        )
+                        # --- GENERATE CONTENT USING SAFE MODEL ALIAS ---
+                        try:
+                            model = genai.GenerativeModel("gemini-1.5-pro")
+                        except Exception:
+                            model = genai.GenerativeModel("models/gemini-1.5-pro")
                         
                         response = model.generate_content([system_prompt, f"User Question: {prompt}"])
                         reply = response.text
