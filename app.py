@@ -1164,7 +1164,7 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                         # --- GENERATE CONTENT ---
                         model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash-latest",
+                        model_name="gemini-1.5-flash",
                         generation_config={"max_output_tokens": 800, "temperature": 0.2}
                         )
                         
