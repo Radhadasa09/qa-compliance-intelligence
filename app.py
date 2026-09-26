@@ -1068,7 +1068,7 @@ elif nav_selection == "🤖 AI Support Assistant":
     # 1. API Key & Model Setup (with Safe Library Check)
     gemini_ready = False
     if genai is None:
-        st.error("⚠️ `google-generativeai` package is not installed. Please add `google-generativeai` to your `requirements.txt` file.")
+        st.error("⚠️ `google-generativeai` package is not installed. Please add `google-generativeai>=0.8.0` to your `requirements.txt` file.")
     elif "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -1084,7 +1084,6 @@ elif nav_selection == "🤖 AI Support Assistant":
             {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, support tickets, or general FSSAI guidelines."}
         ]
 
-    # Render previous messages
     for msg in st.session_state["support_messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -1162,10 +1161,10 @@ elif nav_selection == "🤖 AI Support Assistant":
                         4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
                         """
 
-                        # --- GENERATE CONTENT ---
+                        # --- GENERATE CONTENT WITH FULL RESOURCE PATH ---
                         model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash",
-                        generation_config={"max_output_tokens": 800, "temperature": 0.2}
+                            model_name="models/gemini-1.5-flash",
+                            generation_config={"max_output_tokens": 800, "temperature": 0.2}
                         )
                         
                         response = model.generate_content([system_prompt, f"User Question: {prompt}"])
