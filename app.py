@@ -1164,8 +1164,8 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                         # --- GENERATE CONTENT ---
                         model = genai.GenerativeModel(
-                            model_name="gemini-1.5-flash",
-                            generation_config={"max_output_tokens": 800, "temperature": 0.2}
+                        model_name="gemini-1.5-flash-latest",
+                        generation_config={"max_output_tokens": 800, "temperature": 0.2}
                         )
                         
                         response = model.generate_content([system_prompt, f"User Question: {prompt}"])
