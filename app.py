@@ -18,7 +18,26 @@ try:
     from fpdf import FPDF
 except ImportError:
     FPDF = None
+# --- 🔒 PASSWORD GATE ---
+if "ADMIN_PASSWORD" in st.secrets:
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
 
+    if not st.session_state["logged_in"]:
+        st.title("🔒 Ekaagra Command Center")
+        st.caption("Please enter the admin password to access the QA & Compliance dashboards.")
+        
+        pwd = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if pwd == st.secrets["ADMIN_PASSWORD"]:
+                st.session_state["logged_in"] = True
+                st.rerun()  # Reloads the app showing the full dashboard
+            else:
+                st.error("⚠️ Incorrect password. Access denied.")
+        
+        # This completely stops the rest of your app from loading until authenticated
+        st.stop() 
+# ------------------------
 # --- PAGE CONFIG ---
 st.set_page_config(
     page_title="QA Intelligence Command Center", 
