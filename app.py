@@ -1175,7 +1175,7 @@ elif nav_selection == "🤖 AI Support Assistant":
                             try:
                                 model = genai.GenerativeModel(
                                     model_name=target_model,
-                                    generation_config={"max_output_tokens": 800, "temperature": 0.2}
+                                    generation_config={"temperature": 0.2}
                                 )
                                 response = model.generate_content([system_prompt, f"User Question: {prompt}"])
                                 if response and response.text:
