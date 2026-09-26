@@ -1065,9 +1065,11 @@ elif nav_selection == "🤖 AI Support Assistant":
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
     st.caption("Powered by Gemini 1.5 Flash • Multi-Module Live Context + FSSAI Operational Guidance")
 
-    # 1. API Key & Model Setup
+    # 1. API Key & Model Setup (with Safe Library Check)
     gemini_ready = False
-    if "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
+    if genai is None:
+        st.error("⚠️ `google-generativeai` package is not installed. Please add `google-generativeai` to your `requirements.txt` file.")
+    elif "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             gemini_ready = True
@@ -1094,30 +1096,25 @@ elif nav_selection == "🤖 AI Support Assistant":
 
         with st.chat_message("assistant"):
             if not gemini_ready:
-                reply = "⚠️ API Key is missing or invalid. Please configure `GEMINI_API_KEY` in Streamlit secrets."
+                reply = "⚠️ API Key or module is missing. Please check your `requirements.txt` and Streamlit secrets."
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
             else:
                 with st.spinner("Analyzing operational database across all modules..."):
                     try:
                         # --- FULL MULTI-MODULE SUPABASE EXTRACTION ---
-                        # 1. Store Master Portfolio
                         res_s = supabase.table("store_master").select("*").execute() if supabase else None
                         df_stores = pd.DataFrame(res_s.data) if res_s and res_s.data else pd.DataFrame()
 
-                        # 2. NSF Quarterly Audits (Top 40 recent)
                         res_n = supabase.table("nsf_audits").select("*").order("audit_date", desc=True).limit(40).execute() if supabase else None
                         df_nsf = pd.DataFrame(res_n.data) if res_n and res_n.data else pd.DataFrame()
 
-                        # 3. Store Feedback & Support Tickets (Top 20 recent)
                         res_f = supabase.table("store_feedback").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
                         df_fb = pd.DataFrame(res_f.data) if res_f and res_f.data else pd.DataFrame()
 
-                        # 4. Daily Store FSSAI Checklist Audits (Top 30 recent)
                         res_d = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(30).execute() if supabase else None
                         df_daily = pd.DataFrame(res_d.data) if res_d and res_d.data else pd.DataFrame()
 
-                        # 5. Vendor & Supply Chain Audits (Top 20 recent)
                         res_v = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
                         df_vendor = pd.DataFrame(res_v.data) if res_v and res_v.data else pd.DataFrame()
 
@@ -1172,8 +1169,8 @@ elif nav_selection == "🤖 AI Support Assistant":
                                     "user_prompt": prompt,
                                     "ai_response": reply
                                 }).execute()
-                            except Exception as log_err:
-                                pass  # Silently skip if network/table issue occurs so user experience is smooth
+                            except Exception:
+                                pass
 
                     except Exception as e:
                         if "429" in str(e):
