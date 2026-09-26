@@ -6,3 +6,4 @@ fpdf2
 pdfplumber
 cloudinary
 openpyxl
+google-generativeai
