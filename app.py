@@ -1,3 +1,4 @@
+import google.generativeai as genai
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
@@ -1058,107 +1059,124 @@ elif nav_selection == "⚙️ System Administration":
         else:
             st.info("No store feedback yet.")            
 elif nav_selection == "🤖 AI Support Assistant":
-    st.subheader("🤖 QA & Compliance Support Assistant (Smart Pandas Engine)")
-    st.caption("Answers constrained strictly to live Supabase audit and resource records with smart intent parsing.")
+    st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
+    st.caption("Powered by Gemini 1.5 Flash • Multi-Module Live Context + FSSAI Operational Guidance")
 
+    # 1. API Key & Model Setup
+    gemini_ready = False
+    if "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
+        try:
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+            gemini_ready = True
+        except Exception as e:
+            st.error(f"Failed to configure Gemini API: {e}")
+    else:
+        st.warning("⚠️ `GEMINI_API_KEY` not detected in Streamlit Secrets. Please configure `.streamlit/secrets.toml`.")
+
+    # 2. Session Chat History
     if "support_messages" not in st.session_state:
         st.session_state["support_messages"] = [
-            {"role": "assistant", "content": "Hello! Ask me about Ekaagra direct outlets, latest audit scores, top performers, or pending CARs."}
+            {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, support tickets, or general FSSAI guidelines."}
         ]
 
     for msg in st.session_state["support_messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ask a grounded compliance question..."):
+    # 3. Handle Prompt Input
+    if prompt := st.chat_input("Ask a question across any operational module or compliance policy..."):
         st.session_state["support_messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("Parsing operational records..."):
-                reply = ""
-                try:
-                    p_low = prompt.lower()
-                    
-                    # --- 1. CONTEXT MEMORY ---
-                    # If user types a short follow-up (like "in ekaagra"), inherit intent from previous query
-                    if len(p_low.split()) <= 4 and len(st.session_state["support_messages"]) >= 3:
-                        last_q = st.session_state["support_messages"][-3]["content"].lower()
-                        if "highest" in last_q and "highest" not in p_low: p_low += " highest"
-                        if "latest" in last_q and "latest" not in p_low: p_low += " latest"
-                        if "car" in last_q or "pending" in last_q: p_low += " pending"
-
-                    # --- 2. LOAD & CLEAN DATA ---
-                    df_nsf = pd.DataFrame()
-                    if supabase is not None:
-                        res = supabase.table("nsf_audits").select("*").execute()
-                        if res.data:
-                            df_nsf = pd.DataFrame(res.data)
-
-                    if not df_nsf.empty:
-                        df_nsf['site_code_str'] = df_nsf['site_code'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-                        if 'audit_date' in df_nsf.columns:
-                            df_nsf['audit_date_dt'] = pd.to_datetime(df_nsf['audit_date'], errors='coerce')
-                            # Sort by date so duplicates drop keeps the latest
-                            df_nsf = df_nsf.sort_values(by='audit_date_dt', ascending=False)
-                            df_nsf['days_elapsed'] = (pd.Timestamp(datetime.date.today()) - df_nsf['audit_date_dt']).dt.days
-
-                    # --- 3. FILTER SCOPE (Ekaagra vs All) ---
-                    scope_text = "Network-wide"
-                    filtered_df = df_nsf.copy()
-                    
-                    if "ekaagra" in p_low or "direct" in p_low:
-                        filtered_df = filtered_df[filtered_df['site_code_str'].str.startswith('189')] if not filtered_df.empty else filtered_df
-                        scope_text = "Ekaagra Direct Outlets"
-                    elif "sub franchise" in p_low or "franchise" in p_low:
-                        filtered_df = filtered_df[~filtered_df['site_code_str'].str.startswith('189')] if not filtered_df.empty else filtered_df
-                        scope_text = "Sub Franchise Outlets"
-
-                    # --- 4. DETERMINE INTENT (Highest, Latest, CAR, or General) ---
-                    if filtered_df.empty:
-                        reply = f"⚠️ No database records found for **{scope_text}**."
-                        
-                    elif "highest" in p_low or "top" in p_low:
-                        top_df = filtered_df.sort_values(by='score', ascending=False).drop_duplicates(subset=['site_code_str'], keep='first').head(5)
-                        reply = f"🏆 **Top Scoring Outlets ({scope_text})**:\n"
-                        for _, r in top_df.iterrows():
-                            reply += f"- **{r.get('store_name')}** (Code: `{r.get('site_code_str', 'N/A')}`): **{r.get('score', 0)}%** (Result: {r.get('result', 'N/A')})\n"
-                            
-                    elif "latest" in p_low or "recent" in p_low:
-                        latest_df = filtered_df.drop_duplicates(subset=['site_code_str'], keep='first').head(5)
-                        reply = f"📅 **Latest Audits ({scope_text})**:\n"
-                        for _, r in latest_df.iterrows():
-                            reply += f"- **{r.get('store_name')}** ({r.get('audit_date')}): **{r.get('score')}%** ({r.get('result')})\n"
-
-                    elif "car" in p_low or "pending" in p_low or "quarter" in p_low:
-                        if 'car_status' in filtered_df.columns:
-                            pend = filtered_df[filtered_df['car_status'].astype(str).str.contains("PENDING", case=False, na=False)]
-                            pend = pend.drop_duplicates(subset=['site_code_str'], keep='first')
-                            if not pend.empty:
-                                reply = f"🚨 Found **{len(pend)} unique stores** with pending CARs ({scope_text}):\n"
-                                for _, r in pend.iterrows():
-                                    reply += f"- **{r.get('store_name')}** | Days elapsed: {r.get('days_elapsed')} | Score: {r.get('score')}%\n"
-                            else:
-                                reply = f"✅ **No pending CARs** found in current records for {scope_text}."
-                        else:
-                            reply = "⚠️ CAR status tracking column not found."
-
-                    else:
-                        # General Overview Query
-                        unique_df = filtered_df.drop_duplicates(subset=['site_code_str'], keep='first')
-                        count_total = len(filtered_df)
-                        count_unique = len(unique_df)
-                        avg_s = unique_df['score'].mean() if 'score' in unique_df else 0
-                        
-                        reply = f"🏢 **{scope_text} Overview**: Found **{count_total} total audits** across **{count_unique} unique stores** (Latest Avg Score: **{avg_s:.1f}%**):\n"
-                        for _, r in unique_df.head(5).iterrows():
-                            reply += f"- **{r.get('store_name')}** (`{r.get('site_code_str')}`): Latest Score **{r.get('score')}%** ({r.get('result')})\n"
-                        if count_unique > 5:
-                            reply += f"_...and {count_unique - 5} more unique stores._"
-
-                except Exception as e:
-                    reply = f"Error processing query: {e}"
-
+            if not gemini_ready:
+                reply = "⚠️ API Key is missing or invalid. Please configure `GEMINI_API_KEY` in Streamlit secrets."
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
+            else:
+                with st.spinner("Analyzing operational database across all modules..."):
+                    try:
+                        # --- FULL MULTI-MODULE SUPABASE EXTRACTION ---
+                        # 1. Store Master Portfolio
+                        res_s = supabase.table("store_master").select("*").execute() if supabase else None
+                        df_stores = pd.DataFrame(res_s.data) if res_s and res_s.data else pd.DataFrame()
+
+                        # 2. NSF Quarterly Audits (Top 40 recent)
+                        res_n = supabase.table("nsf_audits").select("*").order("audit_date", desc=True).limit(40).execute() if supabase else None
+                        df_nsf = pd.DataFrame(res_n.data) if res_n and res_n.data else pd.DataFrame()
+
+                        # 3. Store Feedback & Support Tickets (Top 20 recent)
+                        res_f = supabase.table("store_feedback").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
+                        df_fb = pd.DataFrame(res_f.data) if res_f and res_f.data else pd.DataFrame()
+
+                        # 4. Daily Store FSSAI Checklist Audits (Top 30 recent)
+                        res_d = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(30).execute() if supabase else None
+                        df_daily = pd.DataFrame(res_d.data) if res_d and res_d.data else pd.DataFrame()
+
+                        # 5. Vendor & Supply Chain Audits (Top 20 recent)
+                        res_v = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
+                        df_vendor = pd.DataFrame(res_v.data) if res_v and res_v.data else pd.DataFrame()
+
+                        # --- CONDENSE DATASETS FOR GEMINI ---
+                        summary_stores = df_stores[['site_code', 'store_name', 'ownership_type']].to_string(index=False) if not df_stores.empty else "None"
+                        summary_nsf = df_nsf[['site_code', 'store_name', 'score', 'result', 'car_status', 'audit_date']].to_string(index=False) if not df_nsf.empty else "None"
+                        summary_fb = df_fb[['store_id', 'feedback_text', 'created_at']].to_string(index=False) if not df_fb.empty else "None"
+                        summary_daily = df_daily[['store_id', 'audit_date', 'compliance_score', 'status']].to_string(index=False) if not df_daily.empty else "None"
+                        summary_vendor = df_vendor[['vendor_name', 'score', 'grade', 'audit_date']].to_string(index=False) if not df_vendor.empty else "None"
+
+                        # --- SYSTEM PROMPT ---
+                        system_prompt = f"""
+                        You are the Senior QA & Compliance AI Officer for CBTL India / Ekaagra Retail Operations.
+                        
+                        === FULL APPLICATION LIVE DATASETS ===
+                        
+                        [STORE MASTER PORTFOLIO]
+                        {summary_stores}
+                        
+                        [NSF QUARTERLY AUDIT RECORDS]
+                        {summary_nsf}
+                        
+                        [DAILY STORE FSSAI LOGS]
+                        {summary_daily}
+                        
+                        [VENDOR & SUPPLY CHAIN AUDITS]
+                        {summary_vendor}
+                        
+                        [STORE FEEDBACK & SUPPORT TICKETS]
+                        {summary_fb}
+                        
+                        === OPERATIONAL & COMPLIANCE RULES ===
+                        1. CLASSIFICATION: Site codes starting with '189' (or '1891...') are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
+                        2. INTERNAL DATA GUARDRALL: Prioritize the provided tables above for internal company metrics, store performance, daily checklists, vendor scores, and support tickets. Never invent internal metrics.
+                        3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, temp/FIFO controls, or hygiene SOPs, utilize general QA/FSSAI industry knowledge to provide practical advice.
+                        4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
+                        """
+
+                        # --- GENERATE CONTENT ---
+                        model = genai.GenerativeModel(
+                            model_name="gemini-1.5-flash",
+                            generation_config={"max_output_tokens": 800, "temperature": 0.2}
+                        )
+                        
+                        response = model.generate_content([system_prompt, f"User Question: {prompt}"])
+                        reply = response.text
+
+                        # --- AUTOMATIC LOGGING TO SUPABASE CHAT_LOGS ---
+                        if supabase is not None:
+                            try:
+                                supabase.table("chat_logs").insert({
+                                    "user_prompt": prompt,
+                                    "ai_response": reply
+                                }).execute()
+                            except Exception as log_err:
+                                pass  # Silently skip if network/table issue occurs so user experience is smooth
+
+                    except Exception as e:
+                        if "429" in str(e):
+                            reply = "⚠️ **Rate limit reached**. You have exceeded the free tier quota for this minute. Please wait a moment before sending another query."
+                        else:
+                            reply = f"Error processing query: {e}"
+
+                    st.markdown(reply)
+                    st.session_state["support_messages"].append({"role": "assistant", "content": reply})
