@@ -1078,12 +1078,13 @@ elif nav_selection == "🤖 AI Support Assistant":
     else:
         st.warning("⚠️ `GEMINI_API_KEY` not detected in Streamlit Secrets. Please configure `.streamlit/secrets.toml`.")
 
-    # 2. Session Chat History
+    # 2. Session Chat History Initialization
     if "support_messages" not in st.session_state:
         st.session_state["support_messages"] = [
             {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, support tickets, or general FSSAI guidelines."}
         ]
 
+    # Render previous messages
     for msg in st.session_state["support_messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -1096,7 +1097,7 @@ elif nav_selection == "🤖 AI Support Assistant":
 
         with st.chat_message("assistant"):
             if not gemini_ready:
-                reply = "⚠️ API Key or module is missing. Please check your `requirements.txt` and Streamlit secrets."
+                reply = "⚠️ API Key or required module is missing. Please check your `requirements.txt` and Streamlit secrets."
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
             else:
@@ -1118,12 +1119,20 @@ elif nav_selection == "🤖 AI Support Assistant":
                         res_v = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
                         df_vendor = pd.DataFrame(res_v.data) if res_v and res_v.data else pd.DataFrame()
 
-                        # --- CONDENSE DATASETS FOR GEMINI ---
-                        summary_stores = df_stores[['site_code', 'store_name', 'ownership_type']].to_string(index=False) if not df_stores.empty else "None"
-                        summary_nsf = df_nsf[['site_code', 'store_name', 'score', 'result', 'car_status', 'audit_date']].to_string(index=False) if not df_nsf.empty else "None"
-                        summary_fb = df_fb[['store_id', 'feedback_text', 'created_at']].to_string(index=False) if not df_fb.empty else "None"
-                        summary_daily = df_daily[['store_id', 'audit_date', 'compliance_score', 'status']].to_string(index=False) if not df_daily.empty else "None"
-                        summary_vendor = df_vendor[['vendor_name', 'score', 'grade', 'audit_date']].to_string(index=False) if not df_vendor.empty else "None"
+                        # --- SAFE CONDENSE DATASETS FOR GEMINI ---
+                        def safe_to_string(df, preferred_cols, fallback_text="None"):
+                            if df.empty:
+                                return fallback_text
+                            existing_cols = [c for c in preferred_cols if c in df.columns]
+                            if existing_cols:
+                                return df[existing_cols].to_string(index=False)
+                            return df.to_string(index=False)
+
+                        summary_stores = safe_to_string(df_stores, ['site_code', 'store_name', 'ownership_type'], "No store master records.")
+                        summary_nsf = safe_to_string(df_nsf, ['site_code', 'store_name', 'score', 'result', 'car_status', 'audit_date'], "No NSF audit records.")
+                        summary_fb = safe_to_string(df_fb, ['store_id', 'feedback_text', 'created_at'], "No store feedback tickets.")
+                        summary_daily = safe_to_string(df_daily, ['store_id', 'store_name', 'audit_date', 'date', 'compliance_score', 'score', 'status', 'created_at'], "No daily store FSSAI records.")
+                        summary_vendor = safe_to_string(df_vendor, ['vendor_name', 'score', 'grade', 'audit_date', 'created_at'], "No vendor audit records.")
 
                         # --- SYSTEM PROMPT ---
                         system_prompt = f"""
