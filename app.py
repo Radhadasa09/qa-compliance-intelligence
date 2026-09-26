@@ -1063,7 +1063,7 @@ elif nav_selection == "⚙️ System Administration":
             st.info("No store feedback yet.")            
 elif nav_selection == "🤖 AI Support Assistant":
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
-    st.caption("Powered by Gemini 1.5 Pro • Multi-Module Live Context + FSSAI Operational Guidance")
+    st.caption("Powered by Gemini Auto-Detect • Multi-Module Live Context + FSSAI Operational Guidance")
 
     # 1. API Key Setup
     gemini_ready = False
@@ -1159,17 +1159,26 @@ elif nav_selection == "🤖 AI Support Assistant":
                         4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
                         """
 
-                        # --- GENERATE CONTENT USING SAFE MODEL ALIAS ---
-                        try:
-                            model = genai.GenerativeModel("gemini-1.5-pro")
-                        except Exception:
-                            model = genai.GenerativeModel("models/gemini-1.5-pro")
+                        # --- 🔻 AUTO-DETECT WORKING GEMINI MODEL 🔻 ---
+                        # Dynamically find the first working model supported by this exact API key
+                        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                         
-                        response = model.generate_content([system_prompt, f"User Question: {prompt}"])
-                        reply = response.text
+                        if not available_models:
+                            reply = "⚠️ Error: No generative models found for your API key. Please check your Google Cloud console permissions."
+                        else:
+                            # Prioritize a 1.5 model if available, otherwise just use the first valid one it finds
+                            best_model = next((m for m in available_models if "gemini-1.5" in m), available_models[0])
+                            
+                            model = genai.GenerativeModel(
+                                model_name=best_model,
+                                generation_config={"max_output_tokens": 800, "temperature": 0.2}
+                            )
+                            
+                            response = model.generate_content([system_prompt, f"User Question: {prompt}"])
+                            reply = response.text
 
                         # --- AUTOMATIC LOGGING TO SUPABASE CHAT_LOGS ---
-                        if supabase is not None:
+                        if supabase is not None and "Error" not in reply:
                             try:
                                 supabase.table("chat_logs").insert({
                                     "user_prompt": prompt,
