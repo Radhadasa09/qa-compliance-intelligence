@@ -1082,8 +1082,12 @@ elif nav_selection == "⚙️ System Administration":
         else:
             st.info("No store feedback yet.")            
 elif nav_selection == "🤖 AI Support Assistant":
+    import pandas as pd
+    import streamlit as st
+    import google.generativeai as genai
+
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
-    st.caption("Powered by Gemini • Multi-Module Live Context + FSSAI Operational Guidance")
+    st.caption("Powered by Gemini • Intelligent Context Routing + FSSAI Guidance")
 
     # 1. API Key Setup
     gemini_ready = False
@@ -1099,7 +1103,7 @@ elif nav_selection == "🤖 AI Support Assistant":
     # 2. Session Chat History Initialization
     if "support_messages" not in st.session_state:
         st.session_state["support_messages"] = [
-            {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, support tickets, or general FSSAI guidelines."}
+            {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, shelf-life items, or general FSSAI guidelines."}
         ]
 
     for msg in st.session_state["support_messages"]:
@@ -1118,25 +1122,13 @@ elif nav_selection == "🤖 AI Support Assistant":
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
             else:
-                with st.spinner("Analyzing operational database across all modules..."):
+                # --- THE INTELLIGENT ROUTER (Fixes the Speed Issue) ---
+                query_lower = prompt.lower()
+                context_data = ""
+                source_used = ""
+                
+                with st.spinner("Intelligently routing query and analyzing specific module..."):
                     try:
-                        # --- FULL MULTI-MODULE SUPABASE EXTRACTION ---
-                        res_s = supabase.table("store_master").select("*").execute() if supabase else None
-                        df_stores = pd.DataFrame(res_s.data) if res_s and res_s.data else pd.DataFrame()
-
-                        res_n = supabase.table("nsf_audits").select("*").order("audit_date", desc=True).limit(40).execute() if supabase else None
-                        df_nsf = pd.DataFrame(res_n.data) if res_n and res_n.data else pd.DataFrame()
-
-                        res_f = supabase.table("store_feedback").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
-                        df_fb = pd.DataFrame(res_f.data) if res_f and res_f.data else pd.DataFrame()
-
-                        res_d = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(30).execute() if supabase else None
-                        df_daily = pd.DataFrame(res_d.data) if res_d and res_d.data else pd.DataFrame()
-
-                        res_v = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
-                        df_vendor = pd.DataFrame(res_v.data) if res_v and res_v.data else pd.DataFrame()
-
-                        # --- SAFE CONDENSE DATASETS FOR GEMINI ---
                         def safe_to_string(df, preferred_cols, fallback_text="None"):
                             if df.empty:
                                 return fallback_text
@@ -1145,37 +1137,54 @@ elif nav_selection == "🤖 AI Support Assistant":
                                 return df[existing_cols].to_string(index=False)
                             return df.to_string(index=False)
 
-                        summary_stores = safe_to_string(df_stores, ['site_code', 'store_name', 'ownership_type'], "No store master records.")
-                        summary_nsf = safe_to_string(df_nsf, ['site_code', 'store_name', 'score', 'result', 'car_status', 'audit_date'], "No NSF audit records.")
-                        summary_fb = safe_to_string(df_fb, ['store_id', 'feedback_text', 'created_at'], "No store feedback tickets.")
-                        summary_daily = safe_to_string(df_daily, ['store_id', 'store_name', 'audit_date', 'date', 'compliance_score', 'score', 'status', 'created_at'], "No daily store FSSAI records.")
-                        summary_vendor = safe_to_string(df_vendor, ['vendor_name', 'score', 'grade', 'audit_date', 'created_at'], "No vendor audit records.")
+                        # Route 1: Shelf Life / Menu
+                        if any(kw in query_lower for kw in ["menu", "food", "item", "shelf life", "expire", "brand"]):
+                            source_used = "Shelf-Life Master"
+                            res = supabase.table("shelf_life_master").select("*").execute() if supabase else None
+                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
+                            context_data = f"[SHELF-LIFE DATA]\n{safe_to_string(df, ['category', 'product_name', 'primary_shelf_life', 'secondary_shelf_life'], 'No data')}"
+                        
+                        # Route 2: Audits / NSF
+                        elif any(kw in query_lower for kw in ["audit", "nsf", "score", "car"]):
+                            source_used = "NSF Audits"
+                            res = supabase.table("nsf_audits").select("*").order("audit_date", desc=True).limit(40).execute() if supabase else None
+                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
+                            context_data = f"[NSF AUDITS]\n{safe_to_string(df, ['site_code', 'store_name', 'score', 'result', 'audit_date'], 'No data')}"
+                        
+                        # Route 3: Vendors
+                        elif "vendor" in query_lower or "supply" in query_lower:
+                            source_used = "Vendor Audits"
+                            res = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
+                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
+                            context_data = f"[VENDOR AUDITS]\n{safe_to_string(df, ['vendor_name', 'score', 'grade'], 'No data')}"
+                        
+                        # Route 4: FSSAI Daily Logs
+                        elif any(kw in query_lower for kw in ["fssai", "daily", "temperature"]):
+                            source_used = "Daily FSSAI Logs"
+                            res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(30).execute() if supabase else None
+                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
+                            context_data = f"[DAILY FSSAI LOGS]\n{safe_to_string(df, ['store_name', 'compliance_score', 'status'], 'No data')}"
+                        
+                        # Route 5: General / Fallback
+                        else:
+                            source_used = "General FSSAI Knowledge & Store Master"
+                            res = supabase.table("store_master").select("*").execute() if supabase else None
+                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
+                            context_data = f"[STORE MASTER]\n{safe_to_string(df, ['site_code', 'store_name'], 'No data')}"
+
+                        st.caption(f"*(Query optimally routed to: {source_used})*")
 
                         # --- SYSTEM PROMPT ---
                         system_prompt = f"""
                         You are the Senior QA & Compliance AI Officer for CBTL India / Ekaagra Retail Operations.
                         
-                        === FULL APPLICATION LIVE DATASETS ===
-                        
-                        [STORE MASTER PORTFOLIO]
-                        {summary_stores}
-                        
-                        [NSF QUARTERLY AUDIT RECORDS]
-                        {summary_nsf}
-                        
-                        [DAILY STORE FSSAI LOGS]
-                        {summary_daily}
-                        
-                        [VENDOR & SUPPLY CHAIN AUDITS]
-                        {summary_vendor}
-                        
-                        [STORE FEEDBACK & SUPPORT TICKETS]
-                        {summary_fb}
+                        === TARGETED LIVE DATASET ===
+                        {context_data}
                         
                         === OPERATIONAL & COMPLIANCE RULES ===
-                        1. CLASSIFICATION: Site codes starting with '189' (or '1891...') are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
-                        2. INTERNAL DATA GUARDRALL: Prioritize the provided tables above for internal company metrics, store performance, daily checklists, vendor scores, and support tickets. Never invent internal metrics.
-                        3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, temp/FIFO controls, or hygiene SOPs, utilize general QA/FSSAI industry knowledge to provide practical advice.
+                        1. CLASSIFICATION: Site codes starting with '189' are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
+                        2. INTERNAL DATA GUARDRALL: Prioritize the provided table above. Never invent internal metrics.
+                        3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, or hygiene SOPs, utilize general QA/FSSAI industry knowledge.
                         4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
                         """
 
@@ -1224,13 +1233,8 @@ elif nav_selection == "🤖 AI Support Assistant":
                     except Exception as e:
                         reply = f"Error processing query: {e}"
 
-
-
-                    
-
-                    st.markdown(reply)
-                    st.session_state["support_messages"].append({"role": "assistant", "content": reply})
-
+                st.markdown(reply)
+                st.session_state["support_messages"].append({"role": "assistant", "content": reply})
 elif nav_selection == "📦 Shelf-Life Manager":
     import pandas as pd
     import streamlit as st
