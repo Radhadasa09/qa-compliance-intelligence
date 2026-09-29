@@ -1260,7 +1260,7 @@ elif nav_selection == "📦 Shelf-Life Manager":
 
     live_df = load_shelf_life_data()
 
-    # --- 3. CSV Bulk Uploader (NEW SECTION ADDED HERE) ---
+    # --- 3. CSV Bulk Uploader ---
     with st.expander("⬆️ Bulk Upload via CSV (Supabase Import)"):
         st.info("Upload the 'Shelf Life Master' CSV. Columns must exactly match your Supabase table.")
         uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -1270,8 +1270,10 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 with st.spinner("Uploading records..."):
                     import_df = pd.read_csv(uploaded_file)
                     
-                    # Ensure NaN is converted to None for Supabase JSON compatibility
-                    import_df = import_df.where(pd.notnull(import_df), None)
+                    # FIX: Explicitly convert NaN values to Python None for JSON compliance
+                    import_df = import_df.fillna("")
+                    import_df = import_df.replace({"": None})
+                    
                     records = import_df.to_dict(orient="records")
                     
                     try:
@@ -1285,31 +1287,3 @@ elif nav_selection == "📦 Shelf-Life Manager":
                         st.rerun()
                     except Exception as e:
                         st.error(f"⚠️ Upload failed: {e}")
-
-    # --- 4. Editable UI ---
-    st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
-    
-    edited_df = st.data_editor(
-        live_df, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # --- 5. Save Live Edits to Cloud Button ---
-    if st.button("💾 Save Live Edits to Supabase", type="primary"):
-        with st.spinner("Syncing to cloud..."):
-            clean_df = edited_df.where(pd.notnull(edited_df), None)
-            records = clean_df.to_dict(orient="records")
-            
-            try:
-                supabase.table("shelf_life_master").upsert(
-                    records, 
-                    on_conflict="product_name"
-                ).execute()
-                
-                st.success("✅ Database updated successfully!")
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"⚠️ Error saving to database: {e}")
