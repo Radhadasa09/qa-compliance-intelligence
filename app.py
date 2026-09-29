@@ -255,7 +255,7 @@ with st.sidebar:
             "📚 Resources Vault",
             "💳 Finance Invoices",
             "⚙️ System Administration",
-            "🤖 AI Support Assistant"
+            "🤖 AI Support Assistant",
             "📦 Shelf-Life Manager"
         ],
         label_visibility="collapsed"
