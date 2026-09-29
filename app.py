@@ -1270,7 +1270,7 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 with st.spinner("Uploading records..."):
                     import_df = pd.read_csv(uploaded_file)
                     
-                    # FIX: Explicitly convert NaN values to Python None for JSON compliance
+                    # Explicitly convert NaN values to Python None for JSON compliance
                     import_df = import_df.fillna("")
                     import_df = import_df.replace({"": None})
                     
@@ -1287,3 +1287,33 @@ elif nav_selection == "📦 Shelf-Life Manager":
                         st.rerun()
                     except Exception as e:
                         st.error(f"⚠️ Upload failed: {e}")
+
+    # --- 4. Editable UI (Individual Manual Entry) ---
+    st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
+    
+    edited_df = st.data_editor(
+        live_df, 
+        num_rows="dynamic", 
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --- 5. Save Live Edits to Cloud Button ---
+    if st.button("💾 Save Live Edits to Supabase", type="primary"):
+        with st.spinner("Syncing to cloud..."):
+            # Apply the same NaN fix for manual entries
+            clean_df = edited_df.fillna("")
+            clean_df = clean_df.replace({"": None})
+            records = clean_df.to_dict(orient="records")
+            
+            try:
+                supabase.table("shelf_life_master").upsert(
+                    records, 
+                    on_conflict="product_name"
+                ).execute()
+                
+                st.success("✅ Database updated successfully!")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"⚠️ Error saving to database: {e}")
