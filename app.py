@@ -1190,11 +1190,9 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                         # --- FAILOVER MODEL SELECTION LOOP ---
                         model_candidates = [
-                            "models/gemini-3.8-flash",
-                            "gemini-3.8-flash",
-                            "models/gemini-1.5-flash",
-                            "gemini-1.5-flash",
-                            "models/gemini-1.5-pro"
+                        "gemini-2.5-flash",
+                        "gemini-1.5-flash",
+                        "gemini-2.5-pro"
                         ]
 
                         reply = None
