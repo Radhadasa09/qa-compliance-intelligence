@@ -1231,7 +1231,7 @@ elif nav_selection == "🤖 AI Support Assistant":
                     st.markdown(reply)
                     st.session_state["support_messages"].append({"role": "assistant", "content": reply})
 
-elif menu_selection == "📦 Shelf-Life Manager":
+elif nav_selection == "📦 Shelf-Life Manager":
     import pandas as pd
     import streamlit as st
     from supabase import create_client, Client
@@ -1240,23 +1240,20 @@ elif menu_selection == "📦 Shelf-Life Manager":
     st.markdown("Walk the cafe, check the physical items, and update the database live. Changes save directly to Supabase.")
 
     # --- 1. Connect to Supabase ---
-    # (Assuming you already have these in your .streamlit/secrets.toml from your main app)
     supabase_url = st.secrets["SUPABASE_URL"]
     supabase_key = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(supabase_url, supabase_key)
 
     # --- 2. Fetch Live Data ---
-    # We use caching so it doesn't query the database on every single keystroke
     @st.cache_data(ttl=10)
     def load_shelf_life_data():
-        response = supabase.table("shelf_life_master").select("category, item_code, product_name, brand, storage_conditions, primary_shelf_life, secondary_shelf_life, notes").execute()
+        response = supabase.table("shelf_life_master").select("category, item_code, product_name, primary_brand, alternative_brand, storage_conditions, primary_shelf_life, secondary_shelf_life, notes").execute()
         
-        # If table has data, load it. If empty, create the empty structure.
         if response.data:
             return pd.DataFrame(response.data)
         else:
             return pd.DataFrame(columns=[
-                "category", "item_code", "product_name", "brand", 
+                "category", "item_code", "product_name", "primary_brand", "alternative_brand", 
                 "storage_conditions", "primary_shelf_life", 
                 "secondary_shelf_life", "notes"
             ])
@@ -1266,7 +1263,6 @@ elif menu_selection == "📦 Shelf-Life Manager":
     # --- 3. Editable UI ---
     st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
     
-    # st.data_editor lets you edit the dataframe directly on the screen
     edited_df = st.data_editor(
         live_df, 
         num_rows="dynamic", 
@@ -1277,19 +1273,17 @@ elif menu_selection == "📦 Shelf-Life Manager":
     # --- 4. Save to Cloud Button ---
     if st.button("💾 Save Updates to Supabase", type="primary"):
         with st.spinner("Syncing to cloud..."):
-            # Clean up the dataframe (convert NaN to None for Supabase)
             clean_df = edited_df.where(pd.notnull(edited_df), None)
             records = clean_df.to_dict(orient="records")
             
             try:
-                # Upsert updates existing items or inserts new ones based on product_name
                 supabase.table("shelf_life_master").upsert(
                     records, 
                     on_conflict="product_name"
                 ).execute()
                 
                 st.success("✅ Database updated successfully!")
-                st.cache_data.clear() # Clears cache to show fresh data
-                st.rerun()            # Reloads the app
+                st.cache_data.clear()
+                st.rerun()
             except Exception as e:
                 st.error(f"⚠️ Error saving to database: {e}")
