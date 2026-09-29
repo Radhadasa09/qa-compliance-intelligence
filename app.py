@@ -1260,7 +1260,33 @@ elif nav_selection == "📦 Shelf-Life Manager":
 
     live_df = load_shelf_life_data()
 
-    # --- 3. Editable UI ---
+    # --- 3. CSV Bulk Uploader (NEW SECTION ADDED HERE) ---
+    with st.expander("⬆️ Bulk Upload via CSV (Supabase Import)"):
+        st.info("Upload the 'Shelf Life Master' CSV. Columns must exactly match your Supabase table.")
+        uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+        
+        if uploaded_file is not None:
+            if st.button("Process & Upload to Database"):
+                with st.spinner("Uploading records..."):
+                    import_df = pd.read_csv(uploaded_file)
+                    
+                    # Ensure NaN is converted to None for Supabase JSON compatibility
+                    import_df = import_df.where(pd.notnull(import_df), None)
+                    records = import_df.to_dict(orient="records")
+                    
+                    try:
+                        # Use upsert to overwrite existing items or add new ones
+                        supabase.table("shelf_life_master").upsert(
+                            records, 
+                            on_conflict="product_name"
+                        ).execute()
+                        st.success(f"✅ Successfully uploaded {len(records)} items to Supabase!")
+                        st.cache_data.clear() # Clear cache to refresh the table below
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ Upload failed: {e}")
+
+    # --- 4. Editable UI ---
     st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
     
     edited_df = st.data_editor(
@@ -1270,8 +1296,8 @@ elif nav_selection == "📦 Shelf-Life Manager":
         hide_index=True
     )
 
-    # --- 4. Save to Cloud Button ---
-    if st.button("💾 Save Updates to Supabase", type="primary"):
+    # --- 5. Save Live Edits to Cloud Button ---
+    if st.button("💾 Save Live Edits to Supabase", type="primary"):
         with st.spinner("Syncing to cloud..."):
             clean_df = edited_df.where(pd.notnull(edited_df), None)
             records = clean_df.to_dict(orient="records")
