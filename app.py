@@ -1404,78 +1404,177 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     st.warning("No valid records to save.")
             except Exception as e:
                 st.error(f"⚠️ Error saving to database: {e}")
-elif nav_selection == "✅ Inbound QC Checker":
+elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
+    from supabase import create_client, Client
+
+    st.header("store-Level Receiving & Inbound QC")
+    st.markdown("Verify incoming deliveries against FDU specifications and log material acceptance or rejection.")
+
+    # 1. Connect to Supabase
+    supabase_url = st.secrets["SUPABASE_URL"]
+    supabase_key = st.secrets["SUPABASE_KEY"]
+    supabase: Client = create_client(supabase_url, supabase_key)
+
+    # 2. Controlled Store Dropdown Setup (Modify list as your cafe locations scale)
+    STORE_LOCATIONS = [
+        "Select Store Location...",
+        "189 - Select City Walk, Delhi",
+        "Platina, Gurugram",
+        "DLF CyberHub, Gurugram",
+        "Khan Market, Delhi"
+    ]
     
-    st.header("📦 Store Team: Inbound Material QC")
-    st.markdown("Cross-check received FDU items against brand specifications before accepting delivery.")
-    
-    # 1. Load the FDU Specifications Document from the local folder
-    @st.cache_data
-    def load_specifications():
-        # Make sure this name exactly matches the file in your folder
-        file_path = "FDU Specification(30 Sept 2026) 2.0.xlsx"
-        df = pd.read_excel(file_path, sheet_name="FDU")
-        # Drop empty rows
-        df = df.dropna(subset=['Item Name'])
-        return df
-        
-    try:
-        spec_df = load_specifications()
-        
-        # 2. Search & Select Item
-        item_list = sorted(spec_df['Item Name'].astype(str).str.strip().unique().tolist())
-        selected_item = st.selectbox("🔍 Search & Select Item Received:", options=["-- Select Item --"] + item_list)
-        
-        if selected_item != "-- Select Item --":
-            item_data = spec_df[spec_df['Item Name'] == selected_item].iloc[0]
+    selected_store = st.selectbox("Select Store Location", STORE_LOCATIONS)
+
+    if selected_store == "Select Store Location...":
+        st.warning("⚠️ Please select your store location to begin receiving inspections.")
+    else:
+        # 3. Load Specification & Master Data
+        @st.cache_data
+        def load_spec_and_master():
+            # Load FDU specification excel
+            spec_df = pd.read_excel("FDU Specification(30 Sept 2026) 2.0.xlsx", sheet_name="FDU")
+            spec_df = spec_df.dropna(subset=['Item Name'])
             
-            st.divider()
-            st.subheader(f"Standards for: {selected_item}")
+            # Fetch Shelf Life Master from Supabase to pull Item Code & Vendor mapping
+            res = supabase.table("shelf_life_master").select("item_code, product_name, primary_brand").execute()
+            master_df = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["item_code", "product_name", "primary_brand"])
             
-            # Display Key Specs
-            col1, col2, col3 = st.columns([1, 1, 2])
-            with col1:
-                st.metric(label="🏷️ Category", value=str(item_data.get('Category', 'N/A')))
-            with col2:
-                st.metric(label="⚖️ Portion Size", value=str(item_data.get('Portion Size', 'N/A')))
-            with col3:
-                st.markdown("**📏 Physical Dimensions:**")
-                st.info(item_data.get('Specification', 'No specifications provided.'))
-                
-            st.divider()
+            return spec_df, master_df
+
+        try:
+            spec_df, master_df = load_spec_and_master()
             
-            # 3. Pass/Fail QC Logging
-            st.markdown("### 📝 Log Delivery Audit")
+            # Merge or map Item Codes securely (Fallback if item_code missing in excel)
+            # Assuming spec sheet can be matched or mapped by Item Name
+            spec_df['Item Name Clean'] = spec_df['Item Name'].astype(str).str.strip().str.lower()
+            if not master_df.empty:
+                master_df['product_name_clean'] = master_df['product_name'].astype(str).str.strip().str.lower()
+                merged_df = pd.merge(spec_df, master_df[['product_name_clean', 'item_code', 'primary_brand']], 
+                                     on='product_name_clean', how='left')
+            else:
+                merged_df = spec_df
+                merged_df['item_code'] = "Unassigned"
+                merged_df['primary_brand'] = "Pending Vendor"
+
+            # Dropdown populated by Item Code + Name to eliminate double-name impact
+            merged_df['Display Label'] = merged_df.apply(
+                lambda row: f"[{row.get('item_code', 'NO-CODE')}] {row['Item Name']} (Vendor: {row.get('primary_brand', 'N/A')})", 
+                axis=1
+            )
             
-            with st.form("qc_form"):
-                store_code = st.text_input("Store Name / Site Code", placeholder="e.g., 189 - Direct Outlet")
+            item_options = sorted(merged_df['Display Label'].dropna().unique().tolist())
+            selected_display = st.selectbox("🔍 Search & Select Received Item (by Code & Name):", options=["-- Select Item --"] + item_options)
+            
+            if selected_display != "-- Select Item --":
+                # Extract matching row
+                row_data = merged_df[merged_df['Display Label'] == selected_display].iloc0
+                item_code = row_data.get('item_code', 'N/A')
+                item_name = row_data['Item Name']
+                vendor_name = row_data.get('primary_brand', 'N/A')
                 
-                qc_status = st.radio(
-                    "Does the received item meet the physical specifications?", 
-                    ["Pending Review", "✅ Pass (Accept)", "❌ Fail (Reject)"], 
-                    index=0, 
-                    horizontal=True
-                )
+                st.divider()
+                col_spec1, col_spec2, col_spec3 = st.columns(3)
+                with col_spec1:
+                    st.metric(label="🆔 Item Code", value=str(item_code))
+                with col_spec2:
+                    st.metric(label="🏢 Linked Vendor / Brand", value=str(vendor_name))
+                with col_spec3:
+                    st.metric(label="⚖️ Portion Size", value=str(row_data.get('Portion Size', 'N/A')))
                 
-                qc_notes = st.text_input("QC Notes / Reason for Rejection (Required if failed):")
+                st.info(f"📏 **Standard Specifications:** {row_data.get('Specification', 'No spec notes available.')}")
                 
-                submit_audit = st.form_submit_button("Submit QC Audit", type="primary")
+                st.divider()
                 
-                if submit_audit:
-                    if qc_status == "Pending Review":
-                        st.warning("⚠️ Please select Pass or Fail before submitting.")
-                    elif "Fail" in qc_status and not qc_notes:
-                        st.error("⚠️ Please provide a reason for rejection in the notes.")
-                    elif not store_code:
-                        st.error("⚠️ Please enter the Store Name / Site Code.")
-                    else:
-                        # Future step: We can link this to Supabase just like the Shelf Life master!
-                        st.success(f"✅ Audit successfully logged for {selected_item} at {store_code}!")
+                # 4. Receiving Inspection Form
+                with st.form("receiving_inspection_form"):
+                    st.subheader("📝 Material Acceptance & Inspection")
                     
-    except FileNotFoundError:
-        st.error("⚠️ Specification file not found.")
-        st.info("Please ensure 'FDU Specification(30 Sept 2026) 2.0.xlsx' is uploaded to the exact same folder as your app.py file.")
+                    batch_no = st.text_input("Vendor Batch / Invoice Number")
+                    
+                    inspection_status = st.radio(
+                        "Inspection Decision:",
+                        ["✅ Accepted (Pass)", "❌ Rejected (Store Rejection)"],
+                        index=0,
+                        horizontal=True
+                    )
+                    
+                    rejection_reason = st.text_area("Rejection Remarks / Reason (Mandatory if rejected):")
+                    
+                    # Optional Photo via Cloudinary
+                    photo = st.camera_input("📸 Capture Delivery / Defect Photo (Optional)")
+                    
+                    submit_receiving = st.form_submit_button("Submit Receiving Record", type="primary")
+                    
+                    if submit_receiving:
+                        if "Rejected" in inspection_status and not rejection_reason.strip():
+                            st.error("⚠️ Rejection requires a mandatory explanation in the remarks field.")
+                        else:
+                            try:
+                                photo_url = None
+                                if photo is not None:
+                                    import cloudinary
+                                    import cloudinary.uploader
+                                    cloudinary.config(
+                                        cloud_name=st.secrets["CLOUDINARY_CLOUD_NAME"],
+                                        api_key=st.secrets["CLOUDINARY_API_KEY"],
+                                        api_secret=st.secrets["CLOUDINARY_API_SECRET"]
+                                    )
+                                    upload_res = cloudinary.uploader.upload(photo)
+                                    photo_url = upload_res.get("secure_url")
+                                
+                                log_payload = {
+                                    "store_code": selected_store,
+                                    "item_code": str(item_code),
+                                    "item_name": item_name,
+                                    "vendor_name": str(vendor_name),
+                                    "batch_no": batch_no,
+                                    "qc_status": inspection_status,
+                                    "qc_notes": rejection_reason,
+                                    "photo_url": photo_url
+                                }
+                                
+                                supabase.table("qc_logs").insert(log_payload).execute()
+                                st.success(f"✅ Receiving record saved successfully for {item_name} at {selected_store}!")
+                            except Exception as e:
+                                st.error(f"⚠️ Error saving receiving record: {e}")
+
+        except Exception as e:
+            st.error(f"⚠️ Error loading specifications: {e}")
+
+    # 5. Store-Specific & Central Reporting View with Print Option
+    st.divider()
+    st.subheader(f"📋 Receiving & Rejection Log History ({selected_store})")
+    
+    try:
+        # Fetch logs
+        res_logs = supabase.table("qc_logs").select("*").order("created_at", desc=True).execute()
+        if res_logs.data:
+            df_logs = pd.DataFrame(res_logs.data)
+            
+            # Store app view restricts to selected store; Central view can toggle
+            if selected_store != "Select Store Location...":
+                store_filtered_df = df_logs[df_logs["store_code"] == selected_store]
+            else:
+                store_filtered_df = df_logs
+                
+            if not store_filtered_df.empty:
+                st.dataframe(store_filtered_df, use_container_width=True, hide_index=True)
+                
+                # Print / Download Report Option
+                csv_data = store_filtered_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="🖨️ Download / Print Store Receiving Report (CSV)",
+                    data=csv_data,
+                    file_name=f"Receiving_Report_{selected_store.replace(' ', '_')}.csv",
+                    mime="text/csv",
+                    type="secondary"
+                )
+            else:
+                st.info("No receiving records found for this location.")
+        else:
+            st.info("No logs recorded in the database yet.")
     except Exception as e:
-        st.error(f"⚠️ Error loading document: {e}")
+        st.error(f"⚠️ Error loading history logs: {e}")
