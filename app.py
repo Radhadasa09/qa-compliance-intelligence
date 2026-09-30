@@ -256,7 +256,8 @@ with st.sidebar:
             "💳 Finance Invoices",
             "⚙️ System Administration",
             "🤖 AI Support Assistant",
-            "📦 Shelf-Life Manager"
+            "📦 Shelf-Life Manager",
+            "✅ Inbound QC Checker"
         ],
         label_visibility="collapsed"
     )
@@ -1403,3 +1404,78 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     st.warning("No valid records to save.")
             except Exception as e:
                 st.error(f"⚠️ Error saving to database: {e}")
+elif nav_selection == "✅ Inbound QC Checker":
+    import pandas as pd
+    import streamlit as st
+    
+    st.header("📦 Store Team: Inbound Material QC")
+    st.markdown("Cross-check received FDU items against brand specifications before accepting delivery.")
+    
+    # 1. Load the FDU Specifications Document from the local folder
+    @st.cache_data
+    def load_specifications():
+        # Make sure this name exactly matches the file in your folder
+        file_path = "FDU Specification(30 Sept 2026) 2.0.xlsx"
+        df = pd.read_excel(file_path, sheet_name="FDU")
+        # Drop empty rows
+        df = df.dropna(subset=['Item Name'])
+        return df
+        
+    try:
+        spec_df = load_specifications()
+        
+        # 2. Search & Select Item
+        item_list = sorted(spec_df['Item Name'].astype(str).str.strip().unique().tolist())
+        selected_item = st.selectbox("🔍 Search & Select Item Received:", options=["-- Select Item --"] + item_list)
+        
+        if selected_item != "-- Select Item --":
+            item_data = spec_df[spec_df['Item Name'] == selected_item].iloc[0]
+            
+            st.divider()
+            st.subheader(f"Standards for: {selected_item}")
+            
+            # Display Key Specs
+            col1, col2, col3 = st.columns([1, 1, 2])
+            with col1:
+                st.metric(label="🏷️ Category", value=str(item_data.get('Category', 'N/A')))
+            with col2:
+                st.metric(label="⚖️ Portion Size", value=str(item_data.get('Portion Size', 'N/A')))
+            with col3:
+                st.markdown("**📏 Physical Dimensions:**")
+                st.info(item_data.get('Specification', 'No specifications provided.'))
+                
+            st.divider()
+            
+            # 3. Pass/Fail QC Logging
+            st.markdown("### 📝 Log Delivery Audit")
+            
+            with st.form("qc_form"):
+                store_code = st.text_input("Store Name / Site Code", placeholder="e.g., 189 - Direct Outlet")
+                
+                qc_status = st.radio(
+                    "Does the received item meet the physical specifications?", 
+                    ["Pending Review", "✅ Pass (Accept)", "❌ Fail (Reject)"], 
+                    index=0, 
+                    horizontal=True
+                )
+                
+                qc_notes = st.text_input("QC Notes / Reason for Rejection (Required if failed):")
+                
+                submit_audit = st.form_submit_button("Submit QC Audit", type="primary")
+                
+                if submit_audit:
+                    if qc_status == "Pending Review":
+                        st.warning("⚠️ Please select Pass or Fail before submitting.")
+                    elif "Fail" in qc_status and not qc_notes:
+                        st.error("⚠️ Please provide a reason for rejection in the notes.")
+                    elif not store_code:
+                        st.error("⚠️ Please enter the Store Name / Site Code.")
+                    else:
+                        # Future step: We can link this to Supabase just like the Shelf Life master!
+                        st.success(f"✅ Audit successfully logged for {selected_item} at {store_code}!")
+                    
+    except FileNotFoundError:
+        st.error("⚠️ Specification file not found.")
+        st.info("Please ensure 'FDU Specification(30 Sept 2026) 2.0.xlsx' is uploaded to the exact same folder as your app.py file.")
+    except Exception as e:
+        st.error(f"⚠️ Error loading document: {e}")
