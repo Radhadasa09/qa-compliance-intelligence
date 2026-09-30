@@ -1263,33 +1263,72 @@ elif nav_selection == "📦 Shelf-Life Manager":
     live_df = load_shelf_life_data()
 
     # --- 3. CSV Bulk Uploader ---
-    with st.expander("⬆️ Bulk Upload via CSV (Supabase Import)"):
-        st.info("Upload the 'Shelf Life Master' CSV. Columns must exactly match your Supabase table.")
-        uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+    # --- SMART VENDOR DOCUMENT EXTRACTOR ---
+    with st.expander("📄 Upload Vendor / Raw Master Document for Auto-Extraction"):
+        st.info("Upload your raw vendor CSV or Excel sheet. The system will automatically parse product names, brands, and storage conditions to seed your Shelf-Life Master database.")
         
-        if uploaded_file is not None:
-            if st.button("Process & Upload to Database"):
-                with st.spinner("Uploading records..."):
-                    import_df = pd.read_csv(uploaded_file)
+        uploaded_doc = st.file_uploader("Upload Vendor Document", type=["csv", "xlsx"])
+        
+        if uploaded_doc is not None:
+            try:
+                # Read CSV or Excel dynamically
+                if uploaded_doc.name.endswith('.csv'):
+                    raw_import_df = pd.read_csv(uploaded_doc)
+                else:
+                    raw_import_df = pd.read_excel(uploaded_doc)
+                
+                st.write("🔍 **Raw Document Preview (First 5 rows):**")
+                st.dataframe(raw_import_df.head(5))
+                
+                # Column Mapping Controls so you can match your columns if names differ
+                st.markdown("### Map Columns to Shelf-Life Master Schema")
+                cols = raw_import_df.columns.tolist()
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    prod_col = st.selectbox("Select Product Name Column", cols, index=0 if len(cols) > 0 else 0)
+                with col2:
+                    brand_col = st.selectbox("Select Brand Column", ["None"] + cols, index=0)
+                with col3:
+                    storage_col = st.selectbox("Select Storage Condition Column", ["None"] + cols, index=0)
+                
+                if st.button("Extract & Map Data to Master"):
+                    # Build mapped dataframe matching Supabase schema
+                    mapped_df = pd.DataFrame()
+                    mapped_df["product_name"] = raw_import_df[prod_col].astype(str)
+                    mapped_df["category"] = "Raw Ingredient" # Default category
                     
-                    # Explicitly convert NaN values to Python None for JSON compliance
-                    import_df = import_df.fillna("")
-                    import_df = import_df.replace({"": None})
+                    if brand_col != "None":
+                        mapped_df["primary_brand"] = raw_import_df[brand_col].astype(str)
+                    else:
+                        mapped_df["primary_brand"] = None
+                        
+                    if storage_col != "None":
+                        mapped_df["storage_conditions"] = raw_import_df[storage_col].astype(str)
+                    else:
+                        mapped_df["storage_conditions"] = None
+                        
+                    # Initialize empty fields for manual completion later
+                    mapped_df["item_code"] = None
+                    mapped_df["alternative_brand"] = None
+                    mapped_df["primary_shelf_life"] = None
+                    mapped_df["secondary_shelf_life"] = None
+                    mapped_df["notes"] = "Imported from vendor document - pending review"
                     
-                    records = import_df.to_dict(orient="records")
+                    # Clean NaN for JSON / Supabase
+                    mapped_df = mapped_df.fillna("")
+                    mapped_df = mapped_df.replace({"": None})
                     
-                    try:
-                        # Use upsert to overwrite existing items or add new ones
-                        supabase.table("shelf_life_master").upsert(
-                            records, 
-                            on_conflict="product_name"
-                        ).execute()
-                        st.success(f"✅ Successfully uploaded {len(records)} items to Supabase!")
-                        st.cache_data.clear() # Clear cache to refresh the table below
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"⚠️ Upload failed: {e}")
-
+                    # Save extracted records to Supabase
+                    records = mapped_df.to_dict(orient="records")
+                    supabase.table("shelf_life_master").upsert(records, on_conflict="product_name").execute()
+                    
+                    st.success(f"✅ Successfully extracted and mapped {len(records)} items into Supabase! You can now complete the remaining fields manually in the grid below.")
+                    st.cache_data.clear()
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"⚠️ Error processing document: {e}")
     # --- 4. Editable UI (Individual Manual Entry) ---
     st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
     
