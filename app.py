@@ -257,7 +257,7 @@ with st.sidebar:
             "⚙️ System Administration",
             "🤖 AI Support Assistant",
             "📦 Shelf-Life Manager",
-            "✅ Inbound QC Checker"
+            "📦 Receiving & Inbound Spec Check"
         ],
         label_visibility="collapsed"
     )
