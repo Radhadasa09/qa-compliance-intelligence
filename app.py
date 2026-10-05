@@ -842,8 +842,15 @@ elif nav_selection == "📜 License Summary":
             st.error(f"Sync failed: {e}")
 
 elif nav_selection == "📈 NSF Audit Intelligence":
+    import re
+    import datetime
+    import pandas as pd
+    import plotly.express as px
+    import streamlit as st
+
     st.subheader("📈 NSF Audit Intelligence & Network Performance")
     upload_tab, manual_tab = st.tabs(["📂 Upload Master Summary Report", "✍️ Log Individual Store Score"])
+    
     with upload_tab:
         summary_file = st.file_uploader("Upload Master Summary Report (Excel / CSV)", type=["xlsx", "csv"])
         if summary_file and st.button("📤 Parse & Sync Master Report", type="primary"):
@@ -853,21 +860,35 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 succ = 0
                 if supabase is not None:
                     for _, row in df_summary.iterrows():
+                        # --- FIX: Safe Score Conversion ---
+                        raw_score = str(row.get('score', 0)).strip()
+                        try:
+                            # Strip out spaces, %, or any non-numeric characters before converting
+                            clean_score = re.sub(r'[^0-9.]', '', raw_score)
+                            final_score = float(clean_score) if clean_score else 0.0
+                        except ValueError:
+                            final_score = 0.0
+                        # ----------------------------------
+
                         payload = {
                             "audit_code": str(row.get('audit_code', row.get('audit code', ''))),
                             "site_code": str(row.get('site_code', row.get('site code', ''))),
                             "store_name": str(row.get('store_name', row.get('site name', ''))),
-                            "score": float(row.get('score', 0)),
+                            "score": final_score,
                             "result": str(row.get('result', '')),
                             "audit_date": str(row.get('audit_date', row.get('audit date', datetime.date.today()))),
                             "car_status": str(row.get('car_status', row.get('car status', ''))),
                             "remarks": "Bulk uploaded from summary sheet"
                         }
-                        if not payload["site_code"] or payload["site_code"] == "nan": continue
+                        
+                        if not payload["site_code"] or payload["site_code"] == "nan": 
+                            continue
+                            
                         supabase.table("nsf_audits").upsert(payload).execute()
                         succ += 1
-                    st.success(f"✅ Synced {succ} records!")
-                    st.rerun()
+                        
+                st.success(f"✅ Synced {succ} records!")
+                st.rerun()
             except Exception as e:
                 st.error(f"Sync error: {e}")
 
@@ -876,19 +897,35 @@ elif nav_selection == "📈 NSF Audit Intelligence":
             col_n1, col_n2 = st.columns(2)
             with col_n1:
                 acode = st.text_input("NSF Audit Code")
-                store_opt = ["189001 - Janakpuri, Delhi", "189002 - GK1, Delhi", "189003 - Oberoi SkyCity, Mumbai", "189004 - M3M Atrium, Gurgaon", "189005 - Secor 50 Noida, Noida", "189006 - Malcha, Delhi", "189007 - Platina, Gurgaon", "189008 - Season Mall Pune, Pune", "189009 - BRS Nagar Ludhiana, Ludhiana", "189010 - DLF Moti Nagar, Delhi", "189011 - Goldust Patiala, Patiala", "189012 - Neelkanth - Murthal", "189013 - Creek Side, Ludhiana", "189014 - Chembur, Mumbai"]
+                store_opt = [
+                    "189001 - Janakpuri, Delhi", "189002 - GK1, Delhi", "189003 - Oberoi SkyCity, Mumbai", 
+                    "189004 - M3M Atrium, Gurgaon", "189005 - Secor 50 Noida, Noida", "189006 - Malcha, Delhi", 
+                    "189007 - Platina, Gurgaon", "189008 - Season Mall Pune, Pune", "189009 - BRS Nagar Ludhiana, Ludhiana", 
+                    "189010 - DLF Moti Nagar, Delhi", "189011 - Goldust Patiala, Patiala", "189012 - Neelkanth - Murthal", 
+                    "189013 - Creek Side, Ludhiana", "189014 - Chembur, Mumbai"
+                ]
                 sel_store = st.selectbox("Select Store", store_opt)
                 sc_val = st.number_input("Score (%)", 0.0, 100.0, 85.0)
             with col_n2:
                 adt = st.date_input("Audit Date", value=datetime.date.today())
                 ares = st.selectbox("Result", ["PASS", "FAIL"])
                 arem = st.text_area("Remarks")
+                
             if st.form_submit_button("🚀 Sync Store Record", type="primary") and acode.strip():
                 if supabase is not None:
+                    # --- FIX: Stop list insertion bug in DB ---
+                    parts = sel_store.split(" - ")
+                    store_code_val = parts[0]
+                    store_name_val = parts[1] if len(parts) > 1 else parts[0]
+                    
                     supabase.table("nsf_audits").insert({
-                        "audit_code": acode.strip(), "site_code": sel_store.split(" - ")[0],
-                        "store_name": sel_store.split(" - "), "score": sc_val, "result": ares,
-                        "audit_date": str(adt), "remarks": arem
+                        "audit_code": acode.strip(), 
+                        "site_code": store_code_val,
+                        "store_name": store_name_val, 
+                        "score": sc_val, 
+                        "result": ares,
+                        "audit_date": str(adt), 
+                        "remarks": arem
                     }).execute()
                     st.success("Synced record!")
                     st.rerun()
@@ -927,7 +964,6 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 st.success("🎉 All network audits have approved Corrective Actions.")
         else:
             st.info("CAR status tracking columns not detected in current data feed.")
-
 elif nav_selection == "📑 Reports & Archive":
     st.subheader("📑 Executive PDF Report Generation")
     if st.button("Generate Executive PDF Report", type="primary") and FPDF:
