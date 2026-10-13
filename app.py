@@ -860,14 +860,25 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 succ = 0
                 if supabase is not None:
                     for _, row in df_summary.iterrows():
-                        # --- FIX: Safe Score Conversion ---
+                        
+                        # --- FIX 1: Safe Score Conversion ---
                         raw_score = str(row.get('score', 0)).strip()
                         try:
-                            # Strip out spaces, %, or any non-numeric characters before converting
                             clean_score = re.sub(r'[^0-9.]', '', raw_score)
                             final_score = float(clean_score) if clean_score else 0.0
                         except ValueError:
                             final_score = 0.0
+
+                        # --- FIX 2: Safe Date Conversion ---
+                        raw_date = str(row.get('audit_date', row.get('audit date', ''))).strip()
+                        if raw_date.lower() in ['nan', 'nat', '', 'none']:
+                            # If date cell is blank/missing, safely default to today's date
+                            final_date = str(datetime.date.today())
+                        else:
+                            try:
+                                final_date = pd.to_datetime(raw_date).strftime('%Y-%m-%d')
+                            except Exception:
+                                final_date = str(datetime.date.today())
                         # ----------------------------------
 
                         payload = {
@@ -876,7 +887,7 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                             "store_name": str(row.get('store_name', row.get('site name', ''))),
                             "score": final_score,
                             "result": str(row.get('result', '')),
-                            "audit_date": str(row.get('audit_date', row.get('audit date', datetime.date.today()))),
+                            "audit_date": final_date,  # <--- Now uses the cleaned date
                             "car_status": str(row.get('car_status', row.get('car status', ''))),
                             "remarks": "Bulk uploaded from summary sheet"
                         }
@@ -891,7 +902,6 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 st.rerun()
             except Exception as e:
                 st.error(f"Sync error: {e}")
-
     with manual_tab:
         with st.form("single_store_form"):
             col_n1, col_n2 = st.columns(2)
