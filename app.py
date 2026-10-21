@@ -1,3 +1,4 @@
+import ast
 try:
     import google.generativeai as genai
 except ImportError:
@@ -18,6 +19,7 @@ try:
     from fpdf import FPDF
 except ImportError:
     FPDF = None
+
 # --- 🔒 PASSWORD GATE ---
 if "ADMIN_PASSWORD" in st.secrets:
     if "logged_in" not in st.session_state:
@@ -38,6 +40,7 @@ if "ADMIN_PASSWORD" in st.secrets:
         # This completely stops the rest of your app from loading until authenticated
         st.stop() 
 # ------------------------
+
 # --- PAGE CONFIG ---
 st.set_page_config(
     page_title="QA Intelligence Command Center", 
@@ -85,7 +88,9 @@ st.markdown("""
             max-width: 1200px;
         }
     </style>
-""", unsafe_allow_html=True)# --- CLOUDINARY CONFIGURATION & HELPER ---
+""", unsafe_allow_html=True)
+
+# --- CLOUDINARY CONFIGURATION & HELPER ---
 try:
     cloudinary.config(
         cloud_name=st.secrets.get("CLOUDINARY_CLOUD_NAME", os.environ.get("CLOUDINARY_CLOUD_NAME")),
@@ -144,6 +149,7 @@ def load_nsf_audits():
         return pd.DataFrame()
 
 df_db = load_nsf_audits()
+
 @st.cache_data(ttl=300)
 def load_store_master():
     if supabase is None:
@@ -292,6 +298,7 @@ if selected_month == "Present Quarter (Q3 2026)":
         df_db['Type'] = df_db['site_code_str'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") and x != "1891004" else "Sub Franchise") # adjusting for specific overrides if needed
         ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
         subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
+
 # --- PDF GENERATOR HELPERS ---
 def generate_pdf(month_str, records, vendors, nsf_data):
     if FPDF is None: return None
@@ -407,10 +414,11 @@ def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, p
         return bytes(pdf.output())
     except TypeError:
         return bytes(pdf.output(dest='S')).encode('latin-1')
+
 # ==========================================
 # MAIN ROUTER SWITCH
 # ==========================================
-elif nav_selection == "📊 Executive Dashboard":
+if nav_selection == "📊 Executive Dashboard":
     st.subheader(f"📈 Cloud Database Summary ({selected_month})")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -681,6 +689,7 @@ elif nav_selection == "🏬 Retail Operations":
                     st.info("No FDU transfers logged.")
         except Exception as e:
             st.error(f"Error loading FDU compliance data: {e}")
+
 elif nav_selection == "🚚 Vendor & Supply Chain":
     st.subheader(f"Vendor Audit Management — {selected_month}")
     sub_tab_view, sub_tab_create = st.tabs(["📋 Recorded Audits", "📝 New Manufacturing Audit Checklist"])
@@ -996,6 +1005,7 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 st.success("🎉 All network audits have approved Corrective Actions.")
         else:
             st.info("CAR status tracking columns not detected in current data feed.")
+
 elif nav_selection == "📑 Reports & Archive":
     st.subheader("📑 Executive PDF Report Generation")
     if st.button("Generate Executive PDF Report", type="primary") and FPDF:
@@ -1150,6 +1160,7 @@ elif nav_selection == "⚙️ System Administration":
                     st.rerun()
         else:
             st.info("No store feedback yet.")            
+
 elif nav_selection == "🤖 AI Support Assistant":
     import pandas as pd
     import streamlit as st
@@ -1302,6 +1313,7 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
+
 elif nav_selection == "📦 Shelf-Life Manager":
     import pandas as pd
     import streamlit as st
@@ -1489,7 +1501,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     st.warning("No valid records to save.")
             except Exception as e:
                 st.error(f"⚠️ Error saving to database: {e}")
-
 
 elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
