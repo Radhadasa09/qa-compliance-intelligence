@@ -1298,18 +1298,25 @@ elif nav_selection == "📦 Shelf-Life Manager":
     def load_shelf_life_data():
         response = supabase.table("shelf_life_master").select("category, item_code, product_name, primary_brand, alternative_brand, storage_conditions, primary_shelf_life, secondary_shelf_life, notes").execute()
         
+        # FIX: Enforce strict column ordering so the grid never misaligns
+        ordered_cols = [
+            "category", "item_code", "product_name", "primary_brand", 
+            "alternative_brand", "storage_conditions", "primary_shelf_life", 
+            "secondary_shelf_life", "notes"
+        ]
+        
         if response.data:
-            return pd.DataFrame(response.data)
+            df = pd.DataFrame(response.data)
+            for col in ordered_cols:
+                if col not in df.columns:
+                    df[col] = None
+            return df[ordered_cols]
         else:
-            return pd.DataFrame(columns=[
-                "category", "item_code", "product_name", "primary_brand", "alternative_brand", 
-                "storage_conditions", "primary_shelf_life", 
-                "secondary_shelf_life", "notes"
-            ])
+            return pd.DataFrame(columns=ordered_cols)
 
     live_df = load_shelf_life_data()
 
-    # --- 3. SMART VENDOR DOCUMENT EXTRACTOR (Uploads to Supabase) ---
+    # --- 3. SMART VENDOR DOCUMENT EXTRACTOR ---
     with st.expander("📄 Upload Vendor / Raw Master Document for Auto-Extraction"):
         st.info("Upload your raw vendor CSV or Excel sheet. The system will automatically map product names and push them to Supabase.")
         
@@ -1344,14 +1351,21 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 storage_idx = guess_col_index(['storage', 'temp', 'condition'])
                 storage_idx = (storage_idx + 1) if storage_idx != -1 else 0
 
+                # FIX: Added Shelf Life Guessing
+                shelf_idx = guess_col_index(['shelf', 'life', 'days', 'expiry'])
+                shelf_idx = (shelf_idx + 1) if shelf_idx != -1 else 0
+
                 st.markdown("### Map Columns to Shelf-Life Master Schema")
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    prod_col = st.selectbox("Select Product Name Column", cols, index=prod_idx)
+                    prod_col = st.selectbox("Select Product Name", cols, index=prod_idx)
                 with col2:
-                    brand_col = st.selectbox("Select Brand Column", ["None"] + cols, index=brand_idx)
+                    brand_col = st.selectbox("Select Brand", ["None"] + cols, index=brand_idx)
                 with col3:
-                    storage_col = st.selectbox("Select Storage Condition Column", ["None"] + cols, index=storage_idx)
+                    storage_col = st.selectbox("Select Storage", ["None"] + cols, index=storage_idx)
+                with col4:
+                    # FIX: Added Shelf Life Selection Dropdown
+                    shelf_col = st.selectbox("Select Shelf Life", ["None"] + cols, index=shelf_idx)
                 
                 if st.button("Extract & Map Data to Master"):
                     mapped_df = pd.DataFrame()
@@ -1367,10 +1381,15 @@ elif nav_selection == "📦 Shelf-Life Manager":
                         mapped_df["storage_conditions"] = raw_import_df[storage_col].astype(str).str.strip()
                     else:
                         mapped_df["storage_conditions"] = None
+
+                    # FIX: Map Shelf Life Properly
+                    if shelf_col != "None":
+                        mapped_df["primary_shelf_life"] = raw_import_df[shelf_col].astype(str).str.strip()
+                    else:
+                        mapped_df["primary_shelf_life"] = None
                         
                     mapped_df["item_code"] = None
                     mapped_df["alternative_brand"] = None
-                    mapped_df["primary_shelf_life"] = None
                     mapped_df["secondary_shelf_life"] = None
                     mapped_df["notes"] = "Imported from vendor document - pending review"
                     
@@ -1388,7 +1407,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     
                     records = mapped_df.to_dict(orient="records")
                     if records:
-                        # THIS LINE UPLOADS TO SUPABASE
                         supabase.table("shelf_life_master").upsert(records, on_conflict="product_name").execute()
                         st.success(f"✅ Successfully extracted and mapped {len(records)} valid items into Supabase!")
                         st.cache_data.clear()
@@ -1423,13 +1441,12 @@ elif nav_selection == "📦 Shelf-Life Manager":
         hide_index=True
     )
 
-    # --- 6. SAVE LIVE EDITS BUTTON (Uploads manual changes to Supabase) ---
+    # --- 6. SAVE LIVE EDITS BUTTON ---
     if st.button("💾 Save Live Edits to Supabase", type="primary"):
         with st.spinner("Syncing to cloud..."):
             clean_df = edited_df.fillna("")
             clean_df = clean_df.replace({"": None})
             
-            # Drop any empty rows added by mistake in the grid before saving
             clean_df = clean_df[
                 (clean_df["product_name"].notna()) & 
                 (clean_df["product_name"] != "")
@@ -1450,20 +1467,20 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     st.warning("No valid records to save.")
             except Exception as e:
                 st.error(f"⚠️ Error saving to database: {e}")
+
+
 elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
     from supabase import create_client, Client
 
-    st.header("store-Level Receiving & Inbound QC")
+    st.header("Store-Level Receiving & Inbound QC")
     st.markdown("Verify incoming deliveries against FDU specifications and log material acceptance or rejection.")
 
-    # 1. Connect to Supabase
     supabase_url = st.secrets["SUPABASE_URL"]
     supabase_key = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(supabase_url, supabase_key)
 
-    # 2. Controlled Store Dropdown Setup (Modify list as your cafe locations scale)
     STORE_LOCATIONS = [
         "Select Store Location...",
         "189 - Select City Walk, Delhi",
@@ -1477,14 +1494,11 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
     if selected_store == "Select Store Location...":
         st.warning("⚠️ Please select your store location to begin receiving inspections.")
     else:
-        # 3. Load Specification & Master Data
         @st.cache_data
         def load_spec_and_master():
-            # Load FDU specification excel
             spec_df = pd.read_excel("FDU Specification(30 Sept 2026) 2.0.xlsx", sheet_name="FDU")
             spec_df = spec_df.dropna(subset=['Item Name'])
             
-            # Fetch Shelf Life Master from Supabase to pull Item Code & Vendor mapping
             res = supabase.table("shelf_life_master").select("item_code, product_name, primary_brand").execute()
             master_df = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["item_code", "product_name", "primary_brand"])
             
@@ -1493,8 +1507,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
         try:
             spec_df, master_df = load_spec_and_master()
             
-            # Merge or map Item Codes securely (Fallback if item_code missing in excel)
-            # Assuming spec sheet can be matched or mapped by Item Name
             spec_df['Item Name Clean'] = spec_df['Item Name'].astype(str).str.strip().str.lower()
             if not master_df.empty:
                 master_df['product_name_clean'] = master_df['product_name'].astype(str).str.strip().str.lower()
@@ -1505,7 +1517,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
                 merged_df['item_code'] = "Unassigned"
                 merged_df['primary_brand'] = "Pending Vendor"
 
-            # Dropdown populated by Item Code + Name to eliminate double-name impact
             merged_df['Display Label'] = merged_df.apply(
                 lambda row: f"[{row.get('item_code', 'NO-CODE')}] {row['Item Name']} (Vendor: {row.get('primary_brand', 'N/A')})", 
                 axis=1
@@ -1515,8 +1526,10 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
             selected_display = st.selectbox("🔍 Search & Select Received Item (by Code & Name):", options=["-- Select Item --"] + item_options)
             
             if selected_display != "-- Select Item --":
-                # Extract matching row
-                row_data = merged_df[merged_df['Display Label'] == selected_display].iloc0
+                
+                # FIX: Changed .iloc0 to .iloc[0]
+                row_data = merged_df[merged_df['Display Label'] == selected_display].iloc[0]
+                
                 item_code = row_data.get('item_code', 'N/A')
                 item_name = row_data['Item Name']
                 vendor_name = row_data.get('primary_brand', 'N/A')
@@ -1534,7 +1547,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
                 
                 st.divider()
                 
-                # 4. Receiving Inspection Form
                 with st.form("receiving_inspection_form"):
                     st.subheader("📝 Material Acceptance & Inspection")
                     
@@ -1549,7 +1561,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
                     
                     rejection_reason = st.text_area("Rejection Remarks / Reason (Mandatory if rejected):")
                     
-                    # Optional Photo via Cloudinary
                     photo = st.camera_input("📸 Capture Delivery / Defect Photo (Optional)")
                     
                     submit_receiving = st.form_submit_button("Submit Receiving Record", type="primary")
@@ -1590,17 +1601,14 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
         except Exception as e:
             st.error(f"⚠️ Error loading specifications: {e}")
 
-    # 5. Store-Specific & Central Reporting View with Print Option
     st.divider()
     st.subheader(f"📋 Receiving & Rejection Log History ({selected_store})")
     
     try:
-        # Fetch logs
         res_logs = supabase.table("qc_logs").select("*").order("created_at", desc=True).execute()
         if res_logs.data:
             df_logs = pd.DataFrame(res_logs.data)
             
-            # Store app view restricts to selected store; Central view can toggle
             if selected_store != "Select Store Location...":
                 store_filtered_df = df_logs[df_logs["store_code"] == selected_store]
             else:
@@ -1609,7 +1617,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
             if not store_filtered_df.empty:
                 st.dataframe(store_filtered_df, use_container_width=True, hide_index=True)
                 
-                # Print / Download Report Option
                 csv_data = store_filtered_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="🖨️ Download / Print Store Receiving Report (CSV)",
