@@ -507,7 +507,9 @@ elif nav_selection == "📊 Executive Dashboard":
             else:
                 st.info("📂 No compliance data found.")
     except Exception as e:
-        st.error(f"❌ Could not load compliance data from the cloud: {e}")elif nav_selection == "🏬 Retail Operations":
+        st.error(f"❌ Could not load compliance data from the cloud: {e}")
+
+elif nav_selection == "🏬 Retail Operations":
     st.header("🏪 Retail Operations & Logistics")
     st.markdown("---")
     try:
@@ -679,7 +681,6 @@ elif nav_selection == "📊 Executive Dashboard":
                     st.info("No FDU transfers logged.")
         except Exception as e:
             st.error(f"Error loading FDU compliance data: {e}")
-
 elif nav_selection == "🚚 Vendor & Supply Chain":
     st.subheader(f"Vendor Audit Management — {selected_month}")
     sub_tab_view, sub_tab_create = st.tabs(["📋 Recorded Audits", "📝 New Manufacturing Audit Checklist"])
