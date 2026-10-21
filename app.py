@@ -410,7 +410,7 @@ def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, p
 # ==========================================
 # MAIN ROUTER SWITCH
 # ==========================================
-if nav_selection == "📊 Executive Dashboard":
+elif nav_selection == "📊 Executive Dashboard":
     st.subheader(f"📈 Cloud Database Summary ({selected_month})")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -434,11 +434,21 @@ if nav_selection == "📊 Executive Dashboard":
         
         with tab_ekaagra:
             if not ekaagra_df.empty:
+                # Make sure audit_date is treated as a string for clean hovering
+                if 'audit_date' in ekaagra_df.columns:
+                    ekaagra_df['audit_date_str'] = ekaagra_df['audit_date'].astype(str).str.split(' ').str[0]
+                    hover_cols = ['audit_date_str']
+                else:
+                    hover_cols = None
+
                 fig_nsf_e = px.bar(
                     ekaagra_df, x='store_name', y='score', text='score',
                     title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
                     color='result' if 'result' in ekaagra_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
+                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
+                    barmode='group', # FIX: Prevents stacking scores
+                    category_orders={"result": ["FAIL", "PASS"]}, # FIX: Forces Fail/Red to always appear before Pass/Green
+                    hover_data=hover_cols # ENHANCEMENT: Adds date to tooltip
                 )
                 fig_nsf_e.update_traces(textposition='outside')
                 fig_nsf_e.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
@@ -448,11 +458,21 @@ if nav_selection == "📊 Executive Dashboard":
 
         with tab_sub:
             if not subfranchise_df.empty:
+                # Make sure audit_date is treated as a string for clean hovering
+                if 'audit_date' in subfranchise_df.columns:
+                    subfranchise_df['audit_date_str'] = subfranchise_df['audit_date'].astype(str).str.split(' ').str[0]
+                    hover_cols = ['audit_date_str']
+                else:
+                    hover_cols = None
+
                 fig_nsf_s = px.bar(
                     subfranchise_df, x='store_name', y='score', text='score',
                     title="Sub Franchise Outlets Cumulative/Historical NSF Scores",
                     color='result' if 'result' in subfranchise_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'}
+                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
+                    barmode='group', # FIX: Prevents stacking scores
+                    category_orders={"result": ["FAIL", "PASS"]}, # FIX: Forces Fail/Red to always appear before Pass/Green
+                    hover_data=hover_cols # ENHANCEMENT: Adds date to tooltip
                 )
                 fig_nsf_s.update_traces(textposition='outside')
                 fig_nsf_s.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
@@ -461,6 +481,7 @@ if nav_selection == "📊 Executive Dashboard":
                 st.info("No Sub Franchise NSF data available in the selected period.")
     else:
         st.info("No NSF data available in the cloud database yet.")
+        
     st.markdown("### 👥 Store-by-Store Staff Compliance Status")
     try:
         if supabase is not None:
@@ -485,7 +506,6 @@ if nav_selection == "📊 Executive Dashboard":
                 st.info("📂 No compliance data found.")
     except Exception as e:
         st.error(f"❌ Could not load compliance data from the cloud: {e}")
-
 elif nav_selection == "🏬 Retail Operations":
     st.header("🏪 Retail Operations & Logistics")
     st.markdown("---")
