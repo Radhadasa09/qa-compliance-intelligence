@@ -406,7 +406,7 @@ def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, p
     try:
         return bytes(pdf.output())
     except TypeError:
-        return pdf.output(dest='S').encode('latin-1')
+        return bytes(pdf.output(dest='S')).encode('latin-1')
 # ==========================================
 # MAIN ROUTER SWITCH
 # ==========================================
