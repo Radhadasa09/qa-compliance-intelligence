@@ -434,9 +434,10 @@ elif nav_selection == "📊 Executive Dashboard":
         
         with tab_ekaagra:
             if not ekaagra_df.empty:
-                # Make sure audit_date is treated as a string for clean hovering
+                # Sort by date so older audits form the base of the stack
                 if 'audit_date' in ekaagra_df.columns:
                     ekaagra_df['audit_date_str'] = ekaagra_df['audit_date'].astype(str).str.split(' ').str[0]
+                    ekaagra_df = ekaagra_df.sort_values(by='audit_date', ascending=True)
                     hover_cols = ['audit_date_str']
                 else:
                     hover_cols = None
@@ -446,11 +447,11 @@ elif nav_selection == "📊 Executive Dashboard":
                     title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
                     color='result' if 'result' in ekaagra_df.columns else 'score', 
                     color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='group', # FIX: Prevents stacking scores
-                    category_orders={"result": ["FAIL", "PASS"]}, # FIX: Forces Fail/Red to always appear before Pass/Green
-                    hover_data=hover_cols # ENHANCEMENT: Adds date to tooltip
+                    barmode='stack', # Restores your preferred stacked look
+                    category_orders={"result": ["FAIL", "PASS"]}, 
+                    hover_data=hover_cols 
                 )
-                fig_nsf_e.update_traces(textposition='outside')
+                fig_nsf_e.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
                 fig_nsf_e.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
                 st.plotly_chart(fig_nsf_e, width='stretch')
             else:
@@ -458,9 +459,10 @@ elif nav_selection == "📊 Executive Dashboard":
 
         with tab_sub:
             if not subfranchise_df.empty:
-                # Make sure audit_date is treated as a string for clean hovering
+                # Sort by date so older audits form the base of the stack
                 if 'audit_date' in subfranchise_df.columns:
                     subfranchise_df['audit_date_str'] = subfranchise_df['audit_date'].astype(str).str.split(' ').str[0]
+                    subfranchise_df = subfranchise_df.sort_values(by='audit_date', ascending=True)
                     hover_cols = ['audit_date_str']
                 else:
                     hover_cols = None
@@ -470,11 +472,11 @@ elif nav_selection == "📊 Executive Dashboard":
                     title="Sub Franchise Outlets Cumulative/Historical NSF Scores",
                     color='result' if 'result' in subfranchise_df.columns else 'score', 
                     color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='group', # FIX: Prevents stacking scores
-                    category_orders={"result": ["FAIL", "PASS"]}, # FIX: Forces Fail/Red to always appear before Pass/Green
-                    hover_data=hover_cols # ENHANCEMENT: Adds date to tooltip
+                    barmode='stack', # Restores your preferred stacked look
+                    category_orders={"result": ["FAIL", "PASS"]}, 
+                    hover_data=hover_cols 
                 )
-                fig_nsf_s.update_traces(textposition='outside')
+                fig_nsf_s.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
                 fig_nsf_s.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
                 st.plotly_chart(fig_nsf_s, width='stretch')
             else:
@@ -505,8 +507,7 @@ elif nav_selection == "📊 Executive Dashboard":
             else:
                 st.info("📂 No compliance data found.")
     except Exception as e:
-        st.error(f"❌ Could not load compliance data from the cloud: {e}")
-elif nav_selection == "🏬 Retail Operations":
+        st.error(f"❌ Could not load compliance data from the cloud: {e}")elif nav_selection == "🏬 Retail Operations":
     st.header("🏪 Retail Operations & Logistics")
     st.markdown("---")
     try:
