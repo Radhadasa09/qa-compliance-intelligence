@@ -7,6 +7,12 @@ import cloudinary.uploader
 import json
 from PIL import Image, ImageDraw
 import io
+import requests
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 # --- PAGE CONFIGURATION (Must be first) ---
 st.set_page_config(
@@ -506,48 +512,110 @@ def store_dashboard():
     # TAB 3: RECEIVING & INVOICE LOG
     # ==========================================
     with tab3:
-        st.subheader("📦 Goods Receiving & Verification")
-        st.caption("Log incoming deliveries, temperatures, and vendor challans.")
+        st.subheader("🧾 Smart Invoice Management")
         
-        with st.form("receiving_form"):
-            vendor_name = st.text_input("Vendor Name / Supplier")
-            invoice_number = st.text_input("Invoice / Chalan Number")
-            received_temp = st.number_input("Delivery Core Temperature (°C)", step=0.1, format="%.1f")
+        if "GEMINI_API_KEY" in st.secrets:
+            if genai is not None:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        else:
+            st.warning("⚠️ Gemini API Key missing for AI extraction.")
+
+        tab_capture, tab_review = st.tabs(["📸 Fast Capture", "📝 Pending Review & Feed"])
+        
+        with tab_capture:
+            st.info("Capture vendor invoice now. AI extraction happens later.")
+            invoice_photo = st.file_uploader("📂 Capture or Upload Invoice", type=['png', 'jpg', 'jpeg'], key="fast_capture_cam")
             
-            invoice_photo = st.file_uploader("📂 Upload Invoice / Chalan Image (Camera or Gallery)", type=['png', 'jpg', 'jpeg'], key="recv_file")
-            remarks = st.text_area("Receiving Remarks / Quality Check Notes")
-            
-            if st.form_submit_button("✅ Save Receiving Log", type="primary"):
-                if not vendor_name or not invoice_number:
-                    st.error("❌ Please fill in the Vendor Name and Invoice Number.")
+            if invoice_photo and st.button("🚀 Upload Invoice to Queue", type="primary"):
+                with st.spinner("Uploading securely..."):
+                    try:
+                        img_url = upload_photo(invoice_photo, st.session_state["store_id"], "invoices")
+                        if img_url and supabase is not None:
+                            supabase.table("pending_invoices").insert({
+                                "store_code": st.session_state["store_id"],
+                                "invoice_url": img_url,
+                                "status": "Pending AI Extraction"
+                            }).execute()
+                            st.success("✅ Invoice safely queued for later processing!")
+                    except Exception as e:
+                        st.error(f"⚠️ Upload failed: {e}")
+
+        with tab_review:
+            if supabase is not None:
+                pending_res = supabase.table("pending_invoices").select("*").eq("store_code", st.session_state["store_id"]).eq("status", "Pending AI Extraction").execute()
+                
+                if pending_res.data:
+                    df_pending = pd.DataFrame(pending_res.data)
+                    
+                    sl_res = supabase.table("shelf_life_master").select("product_name, category, primary_shelf_life").execute()
+                    df_shelf_life = pd.DataFrame(sl_res.data) if sl_res.data else pd.DataFrame(columns=["product_name", "category", "primary_shelf_life"])
+                    if not df_shelf_life.empty:
+                        df_shelf_life['product_name_lower'] = df_shelf_life['product_name'].astype(str).str.lower()
+                    
+                    for _, row in df_pending.iterrows():
+                        with st.expander(f"🧾 Invoice Logged: {str(row['created_at'])[:16]}"):
+                            col_img, col_action = st.columns([1, 2])
+                            with col_img:
+                                st.image(row['invoice_url'], use_container_width=True)
+                            with col_action:
+                                if st.button(f"🤖 Run AI Extraction", key=f"extract_{row['id']}"):
+                                    with st.spinner("Gemini is reading the invoice..."):
+                                        try:
+                                            img_response = requests.get(row['invoice_url'])
+                                            img_buffer = Image.open(io.BytesIO(img_response.content))
+                                            
+                                            vision_model = genai.GenerativeModel("gemini-1.5-flash")
+                                            extraction_prompt = """
+                                            Read this vendor invoice and extract all line items. 
+                                            Return ONLY a valid JSON array of objects without markdown formatting.
+                                            Keys required: "item_name", "vendor_name", "batch_no", "quantity".
+                                            """
+                                            response = vision_model.generate_content([extraction_prompt, img_buffer])
+                                            raw_json_text = response.text.strip().replace('```json', '').replace('```', '')
+                                            extracted_data = json.loads(raw_json_text)
+                                            df_invoice = pd.DataFrame(extracted_data)
+                                            
+                                            if not df_shelf_life.empty:
+                                                df_invoice['lookup_name'] = df_invoice['item_name'].astype(str).str.lower()
+                                                df_merged = pd.merge(
+                                                    df_invoice, 
+                                                    df_shelf_life[['product_name_lower', 'category', 'primary_shelf_life']], 
+                                                    left_on='lookup_name', 
+                                                    right_on='product_name_lower', 
+                                                    how='left'
+                                                )
+                                                df_merged['shelf_life_tracked'] = df_merged['primary_shelf_life'].notna()
+                                                df_merged.drop(columns=['lookup_name', 'product_name_lower'], inplace=True, errors='ignore')
+                                            else:
+                                                df_merged = df_invoice
+                                                df_merged['shelf_life_tracked'] = False
+                                            
+                                            st.session_state[f"extracted_df_{row['id']}"] = df_merged
+                                        except Exception as e:
+                                            st.error(f"⚠️ Extraction error: {e}")
+                                            
+                                if f"extracted_df_{row['id']}" in st.session_state:
+                                    st.markdown("### Verify & Correct Data")
+                                    edited_invoice_df = st.data_editor(
+                                        st.session_state[f"extracted_df_{row['id']}"],
+                                        num_rows="dynamic",
+                                        use_container_width=True,
+                                        key=f"editor_{row['id']}"
+                                    )
+                                    if st.button("💾 Confirm & Feed Central Ledger", key=f"commit_{row['id']}", type="primary"):
+                                        clean_payload = edited_invoice_df.fillna("").to_dict(orient="records")
+                                        for record in clean_payload:
+                                            record["store_code"] = st.session_state["store_id"]
+                                            record["source_invoice_url"] = row['invoice_url']
+                                        
+                                        supabase.table("store_inventory_ledger").insert(clean_payload).execute()
+                                        supabase.table("pending_invoices").update({"status": "Processed & Ledger Fed"}).eq("id", row['id']).execute()
+                                        st.success("📦 Inventory fed centrally! Invoice cleared from queue.")
+                                        del st.session_state[f"extracted_df_{row['id']}"]
+                                        st.rerun()
                 else:
-                    with st.spinner("Uploading proof and saving receiving log..."):
-                        try:
-                            image_url = ""
-                            if invoice_photo is not None and cloudinary_configured:
-                                upload_result = cloudinary.uploader.upload(
-                                    invoice_photo, 
-                                    folder=f"cbtl/{st.session_state.get('store_id', 'store')}/receiving"
-                                )
-                                image_url = upload_result.get("secure_url", "")
-                            
-                            receiving_data = {
-                                "store_id": st.session_state.get("store_id", "Default Store"),
-                                "vendor_name": vendor_name,
-                                "invoice_number": invoice_number,
-                                "received_temp": received_temp,
-                                "image_url": image_url,
-                                "remarks": remarks
-                            }
-                            
-                            if supabase is not None:
-                                supabase.table("store_receiving_logs").insert(receiving_data).execute()
-                                st.success("✅ Receiving log saved successfully!")
-                            else:
-                                st.error("Database connection is not active.")
-                        except Exception as e:
-                            st.error(f"❌ Failed to save receiving log: {e}")
-    
+                    st.info("No pending invoices in the queue for this location.")
+
     # ==========================================
     # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
