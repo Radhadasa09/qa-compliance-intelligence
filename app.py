@@ -1,1666 +1,791 @@
-import ast
+import streamlit as st
+import datetime
+import pandas as pd
+from supabase import create_client, Client
+import cloudinary
+import cloudinary.uploader
+import json
+from PIL import Image, ImageDraw
+import io
+import requests
+
 try:
     import google.generativeai as genai
 except ImportError:
     genai = None
-import streamlit as st
-from supabase import create_client, Client
-import pandas as pd
-import plotly.express as px
-import os
-import datetime
-import io
-import copy
-import cloudinary
-import cloudinary.uploader
-import pdfplumber
 
-try:
-    from fpdf import FPDF
-except ImportError:
-    FPDF = None
-
-# --- 🔒 PASSWORD GATE ---
-if "ADMIN_PASSWORD" in st.secrets:
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-
-    if not st.session_state["logged_in"]:
-        st.title("🔒 Ekaagra Command Center")
-        st.caption("Please enter the admin password to access the QA & Compliance dashboards.")
-        
-        pwd = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if pwd == st.secrets["ADMIN_PASSWORD"]:
-                st.session_state["logged_in"] = True
-                st.rerun()  # Reloads the app showing the full dashboard
-            else:
-                st.error("⚠️ Incorrect password. Access denied.")
-        
-        # This completely stops the rest of your app from loading until authenticated
-        st.stop() 
-# ------------------------
-
-# --- PAGE CONFIG ---
+# --- PAGE CONFIGURATION (Must be first) ---
 st.set_page_config(
-    page_title="QA Intelligence Command Center", 
-    layout="wide", 
-    page_icon="🛡️",
-    initial_sidebar_state="expanded"
+    page_title="CBTL Store Operations", 
+    layout="centered", 
+    initial_sidebar_state="collapsed",
+    page_icon="☕"
 )
 
-# --- UNIFIED BRANDING REMOVAL & SPACING FIX ---
-st.markdown("""
- <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        
-        section[data-testid="stSidebar"] {
-            background-color: #FFFFFF;
-            border-right: 1px solid #E2E8F0;
-        }
-
-        div[data-testid="stExpander"] {
-            background-color: #EAF2F8;
-            border-radius: 10px;
-            border: 1px solid #D6EAF8;
-        }
-        div[data-testid="stExpander"] summary {
-            background-color: #EAF2F8;
-            border-radius: 10px;
-        }
-        
-        [data-testid="stMetric"] {
-            background-color: #EAF2F8;
-            border-radius: 8px;
-            padding: 10px 15px;
-            border: none;
-        }
-        [data-testid="stMetric"]:has(label:contains("Score")), 
-        [data-testid="stMetric"]:has(label:contains("Grade")) {
-            background: linear-gradient(135deg, #E0F8E9 0%, #C8F0D6 100%);
-            border-left: 4px solid #2ECC71;
-        }
-        
-        .block-container {
-            padding-top: 1.5rem; 
-            padding-bottom: 2rem;
-            max-width: 1200px;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- CLOUDINARY CONFIGURATION & HELPER ---
+# --- SECURE CLOUDINARY INIT ---
 try:
     cloudinary.config(
-        cloud_name=st.secrets.get("CLOUDINARY_CLOUD_NAME", os.environ.get("CLOUDINARY_CLOUD_NAME")),
-        api_key=st.secrets.get("CLOUDINARY_API_KEY", os.environ.get("CLOUDINARY_API_KEY")),
-        api_secret=st.secrets.get("CLOUDINARY_API_SECRET", os.environ.get("CLOUDINARY_API_SECRET")),
-        secure=True
+        cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+        api_key = st.secrets["CLOUDINARY_API_KEY"],
+        api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+        secure = True
     )
+    cloudinary_configured = True
 except Exception:
-    pass
+    cloudinary_configured = False
+    st.warning("Cloudinary configuration missing. Photo uploads will be disabled.")
 
-cloudinary_configured = (
-    bool(cloudinary.config().cloud_name) and 
-    bool(cloudinary.config().api_key) and 
-    bool(cloudinary.config().api_secret)
-)
+# --- INITIALIZATION (DB) ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
-def upload_photo(file_buffer, folder_name, sub_folder):
+try:
+    supabase = init_supabase()
+except Exception:
+    supabase = None
+    st.error("⚠️ Database configuration missing or invalid.")
+
+@st.cache_data(ttl=3600)
+def load_master_reference():
     try:
-        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{folder_name}/{sub_folder}")
+        if supabase:
+            response = supabase.table("master_item_reference").select("*").eq("is_active", True).execute()
+            return response.data
+    except Exception as e:
+        st.error(f"Failed to load master reference: {e}")
+    return []
+
+def upload_photo(file_buffer, store_id, folder_name):
+    """Uploads file to Cloudinary and returns the secure URL"""
+    try:
+        res = cloudinary.uploader.upload(file_buffer, folder=f"cbtl/{store_id}/{folder_name}")
         return res.get("secure_url")
     except Exception as e:
         st.error(f"Upload failed: {e}")
         return None
 
-# --- 1. SECURE DATABASE CONNECTION ---
-try:
-    URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL"))
-    KEY = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY"))
-    if not URL or not KEY:
-        raise ValueError("Missing Supabase credentials")
-    supabase: Client = create_client(URL, KEY)
-except Exception:
-    supabase = None
+def get_draft_key(store_id):
+    return f"draft_{store_id}_daily"
 
-@st.cache_data(ttl=30)
-def load_daily_audits():
-    if supabase is None:
-        return pd.DataFrame()
-    try:
-        response = supabase.table("daily_audits").select("*").order("id", desc=True).execute()
-        return pd.DataFrame(response.data)
-    except Exception:
-        return pd.DataFrame()
-
-df_daily_live = load_daily_audits()
-
-# --- 2. DATA FETCHING (From Cloud) ---
-@st.cache_data(ttl=60)
-def load_nsf_audits():
-    if supabase is None:
-        return pd.DataFrame()
-    try:
-        response = supabase.table("nsf_audits").select("*").execute()
-        return pd.DataFrame(response.data)
-    except Exception:
-        return pd.DataFrame()
-
-df_db = load_nsf_audits()
-
-@st.cache_data(ttl=300)
-def load_store_master():
-    if supabase is None:
-        return pd.DataFrame()
-    try:
-        response = supabase.table("store_master").select("*").eq("is_active", True).order("site_code").execute()
-        return pd.DataFrame(response.data)
-    except Exception:
-        return pd.DataFrame()
-
-df_stores_dynamic = load_store_master()
-
-# Dynamically generate the mapping dictionary and dropdown list
-if not df_stores_dynamic.empty:
-    store_name_map = dict(zip(df_stores_dynamic['site_code'], df_stores_dynamic['store_name']))
-    store_opt = [f"{row['site_code']} - {row['store_name']}" for _, row in df_stores_dynamic.iterrows()]
-else:
-    store_name_map = {}
-    store_opt = []
-
-def load_vendor_audits():
-    if supabase is None:
-        return pd.DataFrame()
-    try:
-        response = supabase.table("vendor_audits").select("*").execute()
-        return pd.DataFrame(response.data)
-    except Exception:
-        return pd.DataFrame()
-
-df_vendors_live = load_vendor_audits()
-
-# Process dynamic categorizations for Ekaagra Direct (189 series) vs Sub Franchise
-if not df_db.empty and 'site_code' in df_db.columns:
-    df_db['site_code'] = df_db['site_code'].astype(str)
-    df_db['Type'] = df_db['site_code'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") else "Sub Franchise")
-    ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
-    subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
-else:
-    ekaagra_df = pd.DataFrame()
-    subfranchise_df = pd.DataFrame()
-
-# --- 4. DATA LOADING (Local Session State for non-Supabase data) ---
-if 'master_stores' not in st.session_state:
-    st.session_state['master_stores'] = [
-        {'name': 'Janakpuri, Delhi', 'is_outstation': False},
-        {'name': 'GK1, Delhi', 'is_outstation': False},
-        {'name': 'Oberoi SkyCity, Mumbai', 'is_outstation': True},
-        {'name': 'M3M Atrium, Gurgoan', 'is_outstation': True},
-        {'name': 'Secor 50 Noida, Noida', 'is_outstation': False},
-        {'name': 'Malcha, Delhi', 'is_outstation': False},
-        {'name': 'Platina, Gurgoan', 'is_outstation': True},
-        {'name': 'Season Mall Pune, Pune', 'is_outstation': True},
-        {'name': 'BRS Nagar Ludhiana, Ludhiana', 'is_outstation': True},
-        {'name': 'DLF Moti Nagar, Delhi', 'is_outstation': False},
-        {'name': 'Goldust Patiala, Patiala', 'is_outstation': True},
-        {'name': 'Warehouse, Delhi', 'is_outstation': False},
-        {'name': 'Creek Side, Ludhiana', 'is_outstation': True},
-        {'name': 'Chembur, Mumbai', 'is_outstation': True}
-    ]
-df_stores = pd.DataFrame(st.session_state['master_stores'])
-
-if 'monthly_db' not in st.session_state:
-    st.session_state['monthly_db'] = {}
-
-if 'vendor_db' not in st.session_state:
-    st.session_state['vendor_db'] = {
-        "July 2026": [
-            {"vendor": "ABC Pest Control", "category": "Pest Control", "score": "95%", "status": "Passed", "remark": "All guidelines met"},
-            {"vendor": "FreshFoods Logistics", "category": "Supply Chain", "score": "88%", "status": "Conditionally Approved", "remark": "CA pending for handwash procedures"}
-        ]
+# --- AESTHETICS & CSS ---
+premium_style = """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Montserrat', sans-serif;
     }
-
-if 'pdf_archive' not in st.session_state:
-    st.session_state['pdf_archive'] = {}
-
-def get_store_monthly(store_name, month):
-    key = (store_name, month)
-    if key in st.session_state['monthly_db']:
-        return copy.deepcopy(st.session_state['monthly_db'][key])
-    else:
-        return {
-            "fostac_pending": 0, "medical_pending": 0, "nsf_score": 0,
-            "self_audit_done": "No", "self_audit_score": 0, "remark": "",
-            "licenses": {
-                "FSSAI": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 12, 31)},
-                "Trade License": {"applicable": True, "status": "Valid", "expiry": datetime.date(2027, 6, 30)},
-                "Fire NOC": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
-                "Pollution CTO": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)},
-                "Signage License": {"applicable": False, "status": "N/A", "expiry": datetime.date(2027, 1, 1)}
-            }
-        }
-
-# --- SIDEBAR COMMAND NAV ---
-with st.sidebar:
-    st.markdown("### 🛡️ CBTL India Command")
-    st.caption("Ekaagra Master Franchise • QA Hub")
-    selected_month = st.selectbox("Global Period Filter", ["Live Data", "Present Quarter (Q3 2026)", "August 2026", "September 2026", "October 2026"])
     
-    st.markdown("---")
-    nav_selection = st.radio(
-        "Navigation",
-        [
-            "📊 Executive Dashboard",
-            "🏬 Retail Operations",
-            "🚚 Vendor & Supply Chain",
-            "📜 License Summary",
-            "📈 NSF Audit Intelligence",
-            "📑 Reports & Archive",
-            "📚 Resources Vault",
-            "💳 Finance Invoices",
-            "⚙️ System Administration",
-            "🤖 AI Support Assistant",
-            "📦 Shelf-Life Manager",
-            "📦 Receiving & Inbound Spec Check"
-        ],
-        label_visibility="collapsed"
-    )
-    st.markdown("---")
-    st.caption("Admin: Girish Kumar | v2.4 Live")
-
-monthly_records = []
-for idx, row in df_stores.iterrows():
-    s_name = row['name']
-    m_data = get_store_monthly(s_name, selected_month if selected_month != "Live Data" else "August 2026")
-    is_comp = (m_data['fostac_pending'] == 0) and (m_data['medical_pending'] == 0)
-    lics = m_data['licenses']
-    any_lic_issue = any(l_val['applicable'] and l_val['status'] != 'Valid' for l_val in lics.values())
+    .stApp {
+        background-color: #F5F7FA;
+    }
     
-    monthly_records.append({
-        'name': s_name, 'is_outstation': row['is_outstation'], 'month': selected_month,
-        'fostac_pending': m_data['fostac_pending'], 'medical_pending': m_data['medical_pending'],
-        'is_compliant': is_comp, 'nsf_score': m_data['nsf_score'], 'self_audit_done': m_data['self_audit_done'],
-        'self_audit_score': m_data['self_audit_score'], 'remark': m_data['remark'],
-        'has_license_issue': any_lic_issue, 'licenses': lics
-    })
-
-df_monthly_filtered = pd.DataFrame(monthly_records)
-
-# --- Filter only the base cloud data for Q3 if selected ---
-if selected_month == "Present Quarter (Q3 2026)":
-    if not df_db.empty and 'audit_date' in df_db.columns:
-        df_db['audit_date'] = pd.to_datetime(df_db['audit_date'], errors='coerce')
-        df_db = df_db[(df_db['audit_date'].dt.year == 2026) & (df_db['audit_date'].dt.quarter == 3)]
-        # Re-apply strict classification to keep Ekaagra Direct isolated for the Executive Dashboard
-        df_db['site_code_str'] = df_db['site_code'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-        df_db['Type'] = df_db['site_code_str'].apply(lambda x: "Ekaagra Direct" if x.startswith("189") and x != "1891004" else "Sub Franchise") # adjusting for specific overrides if needed
-        ekaagra_df = df_db[df_db['Type'] == "Ekaagra Direct"]
-        subfranchise_df = df_db[df_db['Type'] == "Sub Franchise"]
-
-# --- PDF GENERATOR HELPERS ---
-def generate_pdf(month_str, records, vendors, nsf_data):
-    if FPDF is None: return None
-    pdf = FPDF()
-    pdf.add_page()
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .block-container {padding-top: 2rem; padding-bottom: 2rem;}
     
-    pdf.set_font("Arial", size=15, style='B')
-    pdf.cell(200, 8, txt="The Coffee Bean & Tea Leaf (CBTL) India", ln=1, align='C')
-    pdf.set_font("Arial", size=10, style='I')
-    pdf.cell(200, 5, txt="Ekaagra Ostalaritza Private Limited - QA & Compliance Vault", ln=1, align='C')
-    pdf.ln(2)
+    /* Gold & Espresso Buttons */
+    .stButton>button {
+        background-color: #C5A059; 
+        color: #1A110A; 
+        border-radius: 8px;
+        border: none;
+        padding: 15px;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .stButton>button:hover {
+        background-color: #B78727;
+        color: #ffffff;
+        box-shadow: 0px 4px 10px rgba(197, 160, 89, 0.4);
+    }
     
-    pdf.set_font("Arial", size=11, style='B')
-    pdf.cell(200, 7, txt=f"Executive Briefing Report | Period: {month_str}", ln=1, align='C')
-    pdf.set_font("Arial", size=9)
-    pdf.cell(200, 5, txt=f"Generated On: {datetime.date.today().strftime('%d-%b-%Y')} | Admin: Girish Kumar", ln=1, align='C')
-    pdf.ln(6)
+    /* Premium Header Banner */
+    .premium-banner {
+        background: linear-gradient(135deg, #1A110A 0%, #2A1B12 100%);
+        padding: 25px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid #C5A059;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        margin-bottom: 30px;
+    }
+    .premium-banner h2 {
+        color: #C5A059;
+        margin: 0;
+        font-weight: 600;
+        font-size: 26px;
+        letter-spacing: 1px;
+    }
+    .premium-banner p {
+        color: #D3D3D3;
+        margin: 10px 0 0 0;
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
     
-    pdf.set_font("Arial", size=11, style='B')
-    pdf.cell(200, 6, txt="1. Store Network & Staff Compliance Status", ln=1, align='L')
-    pdf.set_font("Arial", size=9)
-    if records:
-        for record in records:
-            store_name = record.get('name', 'Unknown')
-            fostac = record.get('fostac_pending', 0)
-            med = record.get('medical_pending', 0)
-            is_comp = "Yes" if record.get('is_compliant') else "No"
-            row_text = f" - {store_name} | Compliant: {is_comp} | FoSTaC Pending: {fostac} | Medical: {med}"
-            pdf.cell(200, 5, txt=row_text, ln=1, align='L')
-    else:
-        pdf.cell(200, 5, txt=" - No store data available.", ln=1, align='L')
-        
-    pdf.ln(4)
-    pdf.set_font("Arial", size=11, style='B')
-    pdf.cell(200, 6, txt="2. NSF Audit Performance Summary (Cloud Records)", ln=1, align='L')
-    pdf.set_font("Arial", size=9)
-    if not nsf_data.empty and 'store_name' in nsf_data.columns:
-        valid_nsf = nsf_data.dropna(subset=['score']).copy()
-        valid_nsf = valid_nsf[valid_nsf['score'] > 0]
-        if not valid_nsf.empty:
-            for _, row in valid_nsf.head(15).iterrows():
-                s_name = row.get('store_name', 'Unknown')
-                s_score = row.get('score', 0)
-                s_result = row.get('result', 'N/A')
-                row_text = f" - {s_name} | Score: {s_score}% | Result: {s_result}"
-                pdf.cell(200, 5, txt=row_text, ln=1, align='L')
-        else:
-            pdf.cell(200, 5, txt=" - No valid NSF scores available in the database.", ln=1, align='L')
-    else:
-        pdf.cell(200, 5, txt=" - No NSF audit records found.", ln=1, align='L')
-        
-    pdf.ln(4)
-    pdf.set_font("Arial", size=11, style='B')
-    pdf.cell(200, 6, txt="3. Vendor Operations & Supply Chain Status", ln=1, align='L')
-    pdf.set_font("Arial", size=9)
-    if vendors:
-        for v in vendors:
-            v_name = v.get('vendor', 'Unknown')
-            v_cat = v.get('category', 'General')
-            v_score = v.get('score', 'N/A')
-            v_status = v.get('status', 'N/A')
-            v_remark = v.get('remark', 'None')
-            v_text = f" - [{v_cat}] {v_name} | Status: {v_status} | Score: {v_score}"
-            pdf.cell(200, 5, txt=v_text, ln=1, align='L')
-            pdf.cell(200, 4, txt=f"   Remark: {v_remark}", ln=1, align='L')
-    else:
-        pdf.cell(200, 5, txt=" - No vendor audits recorded for this period.", ln=1, align='L')
+    /* Light Blue Informational Cards */
+    div[data-testid="stExpander"] {
+        background-color: #EAF2F8;
+        border-radius: 10px;
+        border: 1px solid #D6EAF8;
+        margin-bottom: 10px;
+    }
+    
+    /* Form Styling */
+    div[data-testid="stForm"] {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 20px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    
+    [data-testid="stFileUploadDropzone"] {
+        background-color: #ffffff;
+        border: 2px dashed #63B3ED;
+        border-radius: 10px;
+        padding: 15px;
+    }
+    </style>
+"""
+st.markdown(premium_style, unsafe_allow_html=True)
 
-    pdf.ln(4)
-    pdf.set_font("Arial", size=11, style='B')
-    pdf.cell(200, 6, txt="4. Active License Compliance Flags", ln=1, align='L')
-    pdf.set_font("Arial", size=9)
-    flagged_stores = [r for r in records if r.get('has_license_issue')]
-    if flagged_stores:
-        for store in flagged_stores:
-            pdf.cell(200, 5, txt=f" - {store['name']} has pending or expired statutory licenses.", ln=1, align='L')
-    else:
-        pdf.cell(200, 5, txt=" - All store statutory licenses are currently valid and up to date.", ln=1, align='L')
+# --- PROFESSIONAL CORPORATE BANNER ---
+st.markdown(
+    """
+    <div class="premium-banner">
+        <h2>☕ The Coffee Bean & Tea Leaf</h2>
+        <p>Ekaagra Ostalaritza Private Limited &bull; QA & Compliance Vault</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
+# --- SESSION STATE ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "store_id" not in st.session_state:
+    st.session_state["store_id"] = ""
+if "store_name" not in st.session_state:
+    st.session_state["store_name"] = ""
+
+# --- LOGIN SCREEN ---
+def login_screen():
+    st.markdown("<h3 style='text-align: center; color: #1A110A;'>Store Authentication</h3>", unsafe_allow_html=True)
+    st.caption("<div style='text-align: center; margin-bottom: 20px;'>Authorized Personnel Only</div>", unsafe_allow_html=True)
+    
     try:
-        return bytes(pdf.output())
-    except TypeError:
-        return pdf.output(dest='S').encode('latin-1')
+        if supabase is None:
+            return
+            
+        response = supabase.table("stores").select("store_id, store_name, secure_pin").execute()
+        
+        if not response.data:
+            st.warning("⚠️ Connected to database, but no stores found. Please populate the 'stores' table.")
+            return
 
-def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, pct, grade, rem, proof):
-    if FPDF is None: return b""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=14, style='B')
-    pdf.cell(200, 8, txt="General Manufacturing Vendor Audit Report", ln=1, align='C')
-    pdf.set_font("Arial", size=10)
-    pdf.cell(200, 6, txt=f"Vendor: {name} | FSO: {fso} | License: {lic}", ln=1, align='C')
-    pdf.cell(200, 6, txt=f"Address: {addr} | Date: {audit_dt} | Score: {pct:.1f}% ({grade})", ln=1, align='C')
-    pdf.ln(5)
-    pdf.set_font("Arial", size=9)
-    
-    for q_key, data in responses.items():
-        # Combine the text
-        raw_text = f"[{data['status']}] {q_key} - Note: {data.get('comment', '')}"
-        # Strip unsupported emojis/unicode that crash FPDF Arial font
-        safe_text = raw_text.encode('latin-1', 'ignore').decode('latin-1')
+        store_dict = {f"{row['store_id']} - {row['store_name']}": row for row in response.data}
         
-        # Use explicit width 190 (Standard A4 width minus margins) instead of 0
-        pdf.multi_cell(190, 5, txt=safe_text)
-        pdf.ln(1) # Add a small visual gap between questions
+        selected_display = st.selectbox("Select Your Location", options=list(store_dict.keys()))
         
-    if rem:
-        pdf.ln(3)
-        safe_rem = f"Overall Remarks: {rem}".encode('latin-1', 'ignore').decode('latin-1')
-        pdf.multi_cell(190, 5, txt=safe_rem)
-        
-    try:
-        return bytes(pdf.output())
-    except TypeError:
-        return bytes(pdf.output(dest='S')).encode('latin-1')
-
-# ==========================================
-# MAIN ROUTER SWITCH
-# ==========================================
-if nav_selection == "📊 Executive Dashboard":
-    st.subheader(f"📈 Cloud Database Summary ({selected_month})")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    total_db_audits = len(df_db) if not df_db.empty else 0
-    ekaagra_avg = ekaagra_df['score'].mean() if not ekaagra_df.empty and 'score' in ekaagra_df else 0
-    sub_avg = subfranchise_df['score'].mean() if not subfranchise_df.empty and 'score' in subfranchise_df else 0
-    
-    col1.metric("Total Network Audits (Cloud)", total_db_audits)
-    col2.metric("Ekaagra Direct Avg Score", f"{ekaagra_avg:.1f}%" if ekaagra_avg > 0 else "N/A")
-    col3.metric("Sub Franchise Avg Score", f"{sub_avg:.1f}%" if sub_avg > 0 else "N/A")
-    
-    stores_with_lic_issues = int(df_monthly_filtered['has_license_issue'].sum()) if not df_monthly_filtered.empty else 0
-    col4.metric("Stores with License Flags", f"{stores_with_lic_issues}", delta=f"{stores_with_lic_issues} Flags", delta_color="inverse")
-
-    st.markdown("---")
-
-    if not df_db.empty and 'score' in df_db.columns and 'store_name' in df_db.columns:
-        st.markdown("### 🏬 Network Operations (Historical Journey Stack)")
-        
-        tab_ekaagra, tab_sub = st.tabs(["🏢 Ekaagra Direct", "🏪 Sub Franchise"])
-        
-        with tab_ekaagra:
-            if not ekaagra_df.empty:
-                # Sort by date so older audits form the base of the stack
-                if 'audit_date' in ekaagra_df.columns:
-                    ekaagra_df['audit_date_str'] = ekaagra_df['audit_date'].astype(str).str.split(' ').str[0]
-                    ekaagra_df = ekaagra_df.sort_values(by='audit_date', ascending=True)
-                    hover_cols = ['audit_date_str']
+        with st.form("login_form"):
+            confirm_store = st.checkbox(f"I confirm I am logging in for {selected_display}")
+            entered_pin = st.text_input("Enter 4-Digit Secure PIN", type="password", max_chars=4)
+            
+            if st.form_submit_button("Secure Login"):
+                correct_pin = str(store_dict[selected_display]['secure_pin'])
+                
+                if not confirm_store:
+                    st.error("❌ Please confirm your location selection.")
+                elif entered_pin != correct_pin:
+                    st.error("❌ Incorrect PIN. Access denied.")
                 else:
-                    hover_cols = None
-
-                fig_nsf_e = px.bar(
-                    ekaagra_df, x='store_name', y='score', text='score',
-                    title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
-                    color='result' if 'result' in ekaagra_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='stack', # Restores your preferred stacked look
-                    category_orders={"result": ["FAIL", "PASS"]}, 
-                    hover_data=hover_cols 
-                )
-                fig_nsf_e.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
-                fig_nsf_e.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-                st.plotly_chart(fig_nsf_e, width='stretch')
-            else:
-                st.info("No Ekaagra Direct NSF data available in the selected period.")
-
-        with tab_sub:
-            if not subfranchise_df.empty:
-                # Sort by date so older audits form the base of the stack
-                if 'audit_date' in subfranchise_df.columns:
-                    subfranchise_df['audit_date_str'] = subfranchise_df['audit_date'].astype(str).str.split(' ').str[0]
-                    subfranchise_df = subfranchise_df.sort_values(by='audit_date', ascending=True)
-                    hover_cols = ['audit_date_str']
-                else:
-                    hover_cols = None
-
-                fig_nsf_s = px.bar(
-                    subfranchise_df, x='store_name', y='score', text='score',
-                    title="Sub Franchise Outlets Cumulative/Historical NSF Scores",
-                    color='result' if 'result' in subfranchise_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='stack', # Restores your preferred stacked look
-                    category_orders={"result": ["FAIL", "PASS"]}, 
-                    hover_data=hover_cols 
-                )
-                fig_nsf_s.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
-                fig_nsf_s.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-                st.plotly_chart(fig_nsf_s, width='stretch')
-            else:
-                st.info("No Sub Franchise NSF data available in the selected period.")
-    else:
-        st.info("No NSF data available in the cloud database yet.")
-        
-    st.markdown("### 👥 Store-by-Store Staff Compliance Status")
-    try:
-        if supabase is not None:
-            comp_response = supabase.table("store_monthly_compliance").select("*").execute()
-            if comp_response.data:
-                df_comp = pd.DataFrame(comp_response.data).sort_values(by='id', ascending=False)
-                st.dataframe(
-                    df_comp[['store_name', 'month_year', 'fostac_pending', 'medical_pending', 'fully_compliant', 'self_audit_done', 'self_audit_score', 'remark']],
-                    use_container_width=True, hide_index=True,
-                    column_config={
-                        "store_name": st.column_config.TextColumn("Store Name", width="medium"),
-                        "month_year": st.column_config.TextColumn("Audit Month"),
-                        "fostac_pending": st.column_config.NumberColumn("FoSTaC Pending", format="%d ⚠️"),
-                        "medical_pending": st.column_config.NumberColumn("Medical Pending", format="%d ⚠️"),
-                        "fully_compliant": st.column_config.CheckboxColumn("Fully Compliant?", default=False),
-                        "self_audit_done": st.column_config.TextColumn("Self Audit Done?"),
-                        "self_audit_score": st.column_config.NumberColumn("Self Audit Score (%)"),
-                        "remark": st.column_config.TextColumn("Remarks")
-                    }
-                )
-            else:
-                st.info("📂 No compliance data found.")
+                    st.session_state["logged_in"] = True
+                    st.session_state["store_id"] = store_dict[selected_display]['store_id']
+                    st.session_state["store_name"] = store_dict[selected_display]['store_name']
+                    st.rerun()
+                    
     except Exception as e:
-        st.error(f"❌ Could not load compliance data from the cloud: {e}")
+        st.error(f"Database connection error: {e}")
 
-elif nav_selection == "🏬 Retail Operations":
-    st.header("🏪 Retail Operations & Logistics")
+# --- MAIN OUTLET DASHBOARD ---
+def store_dashboard():
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f"<h3 style='color: #1A110A;'>📍 {st.session_state['store_name']}</h3>", unsafe_allow_html=True)
+    with col2:
+        st.button("🔒 Logout", on_click=lambda: st.session_state.update({"logged_in": False}))
+    
     st.markdown("---")
+    
+    # ==========================================
+    # --- 🌟 STORE PROGRESS & MOTIVATION TRACKER ---
+    # ==========================================
+    st.markdown("### 🌟 Your QA Excellence Tracker")
     try:
         if supabase is not None:
-            leader_res = supabase.table("daily_audits").select("store_id, created_at").order("created_at", desc=True).execute()
-            if leader_res.data:
-                df_leader = pd.DataFrame(leader_res.data)
-                df_leader['created_at'] = pd.to_datetime(df_leader['created_at'])
-                df_leader['date_only'] = df_leader['created_at'].dt.date
-                df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'], keep='first')
-                submission_counts = df_unique_days['store_id'].value_counts()
-                if not submission_counts.empty:
-                    max_score = submission_counts.max()
-                    top_store_ids = submission_counts[submission_counts == max_score].index.tolist()
-                    champion_names = []
-                    for s_id in top_store_ids:
-                        store_info = supabase.table("stores").select("store_name").eq("store_id", s_id).execute()
-                        champion_names.append(store_info.data[0]['store_name'] if store_info.data else f"Store {s_id}")
-                    champions_display = " & ".join(champion_names)
-                    st.markdown(
-                        f"""
-                        <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
-                            <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
-                            <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champions: <b>{champions_display}</b></h4>
-                            <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Days: <b>{max_score}</b></p>
-                        </div>
-                        """, 
-                        unsafe_allow_html=True
-                    )
+            my_audits = supabase.table("daily_audits").select("created_at").eq("store_id", st.session_state["store_id"]).execute()
+            if my_audits.data:
+                df_my = pd.DataFrame(my_audits.data)
+                df_my['created_at'] = pd.to_datetime(df_my['created_at'])
+                df_my['date_only'] = df_my['created_at'].dt.date
+                total_compliant_days = df_my['date_only'].nunique()
+                
+                st.info(f"🔥 **Keep it up!** Your store has successfully completed **{total_compliant_days} Days** of QA Compliance!")
+                st.progress(min(total_compliant_days / 30, 1.0), text="Monthly Goal Progress")
+            else:
+                st.info("👋 Welcome! Submit your first QA audit today to start your compliance streak!")
     except Exception:
         pass
-
-    st.subheader("📡 Live Store Analytics Feed")
-    view_audit, view_recv, view_waste = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage"])
-    
-    with view_audit:
-        try:
-            if supabase is not None:
-                audit_res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(200).execute()
-                if audit_res.data:
-                    df_audits = pd.DataFrame(audit_res.data)
-                    df_audits['created_at'] = pd.to_datetime(df_audits['created_at'])
-                    df_audits['date_only'] = df_audits['created_at'].dt.date
-                    df_latest_audits = df_audits.drop_duplicates(subset=['store_id', 'date_only'], keep='first').copy()
-                    
-                    store_name_map = {
-                        "189001": "Janakpuri, Delhi", "189002": "GK1, Delhi", "189003": "Oberoi SkyCity, Mumbai",
-                        "189004": "M3M Atrium, Gurgaon", "189005": "Secor 50 Noida, Noida", "189006": "Malcha, Delhi",
-                        "189007": "Platina, Gurgaon", "189008": "Season Mall Pune, Pune", "189009": "BRS Nagar Ludhiana, Ludhiana",
-                        "189010": "DLF Moti Nagar, Delhi", "189011": "Goldust Patiala, Patiala", "189012": "Warehouse, Delhi",
-                        "189013": "Creek Side, Ludhiana", "189014": "Chembur, Mumbai"
-                    }
-                    df_latest_audits['store_id_str'] = df_latest_audits['store_id'].astype(str)
-                    df_latest_audits['Store Name'] = df_latest_audits['store_id_str'].map(store_name_map).fillna(df_latest_audits['store_id_str'])
-                    audit_counts = df_latest_audits['Store Name'].value_counts().reset_index()
-                    audit_counts.columns = ['Store Name', 'Total Valid Submissions']
-                    fig_audit = px.bar(audit_counts, x='Store Name', y='Total Valid Submissions', title="Valid Daily Audits by Store", text_auto=True, color='Total Valid Submissions', color_continuous_scale='Blues')
-                    fig_audit.update_layout(xaxis_type='category')
-                    st.plotly_chart(fig_audit, use_container_width=True)
-                    
-                    with st.expander("🔍 View & Download Detailed Audit Reports"):
-                        df_display = df_latest_audits.copy()
-                        df_display['created_at'] = df_display['created_at'].dt.strftime('%Y-%m-%d %H:%M')
-                        cols_to_show = ['created_at', 'Store Name', 'manager_name', 'shift', 'admin_proof_url', 'hygiene_proof_url', 'sanitation_proof_url', 'product_proof_url', 'facility_proof_url']
-                        valid_cols = [c for c in cols_to_show if c in df_display.columns]
-                        st.dataframe(
-                            df_display[valid_cols],
-                            column_config={
-                                "admin_proof_url": st.column_config.LinkColumn("Admin Photo", display_text="🔗 View"),
-                                "hygiene_proof_url": st.column_config.LinkColumn("Hygiene Photo", display_text="🔗 View"),
-                                "sanitation_proof_url": st.column_config.LinkColumn("Sanitizer Photo", display_text="🔗 View"),
-                                "product_proof_url": st.column_config.LinkColumn("Product Photo", display_text="🔗 View"),
-                                "facility_proof_url": st.column_config.LinkColumn("Facility Photo", display_text="🔗 View")
-                            },
-                            use_container_width=True, hide_index=True
-                        )
-                        st.download_button("📥 Download Raw Audit CSV", data=df_display.to_csv(index=False).encode('utf-8'), file_name="audits.csv", mime="text/csv")
-        except Exception as e:
-            st.error(f"Error loading audits: {e}")
-
-    with view_recv:
-        try:
-            if supabase is not None:
-                recv_res = supabase.table("store_receiving_logs").select("*").order("created_at", desc=True).limit(100).execute()
-                if recv_res.data:
-                    df_recv = pd.DataFrame(recv_res.data)
-                    fig_recv = px.scatter(df_recv, x='created_at', y='received_temp', color='store_id', title="Vendor Delivery Temperatures (°C)", size_max=10, hover_data=['vendor_name', 'invoice_number'])
-                    fig_recv.add_hline(y=5.0, line_dash="dot", annotation_text="Max Acceptable Temp (5°C)", annotation_position="bottom right", line_color="red")
-                    st.plotly_chart(fig_recv, use_container_width=True)
-                    with st.expander("🔍 View Detailed Receiving Logs"):
-                        st.dataframe(df_recv[['created_at', 'store_id', 'vendor_name', 'invoice_number', 'received_temp']], use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error(f"Error loading receiving logs: {e}")
-
-    with view_waste:
-        try:
-            if supabase is not None:
-                waste_res = supabase.table("store_wastage").select("*").order("created_at", desc=True).limit(100).execute()
-                if waste_res.data:
-                    df_waste = pd.DataFrame(waste_res.data)
-                    waste_counts = df_waste['reason'].value_counts().reset_index()
-                    waste_counts.columns = ['Reason', 'Count']
-                    fig_waste = px.pie(waste_counts, names='Reason', values='Count', title="Wastage Breakdown by Reason", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                    st.plotly_chart(fig_waste, use_container_width=True)
-                    with st.expander("🔍 View Detailed Wastage Records"):
-                        st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error(f"Error loading wastage logs: {e}")
-
     st.markdown("---")
-    st.subheader("📋 Store Staff Compliance Entry")
-    FULL_STORE_LIST = [
-        "DLF Mid Town Plaza, Moti Nagar", "Janakpuri, Delhi", "GK1, Delhi",
-        "Oberoi SkyCity, Mumbai", "M3M Atrium, Gurgaon", "Sector 50 Noida, Noida",
-        "Malcha, Delhi", "Platina, Gurgaon", "Season Mall Pune, Pune", "BRS Nagar Ludhiana, Ludhiana"
-    ]
-    with st.expander("📝 Enter New Compliance Record", expanded=False):
-        with st.form("compliance_entry_form"):
-            selected_store_name = st.selectbox("Select Store Location", FULL_STORE_LIST)
-            current_month_val = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
-            col1, col2 = st.columns(2)
-            with col1:
-                input_fostac = st.number_input("FoSTaC Pending (Count)", min_value=0, step=1)
-                self_audit_done = st.selectbox("Self Audit Completed?", ["Yes", "No"])
-            with col2:
-                input_medical = st.number_input("Medical Pending (Count)", min_value=0, step=1)
-                self_audit_score = st.number_input("Self Audit Score (%)", min_value=0.0, max_value=100.0, step=0.1)
-            is_compliant = st.checkbox("✅ Mark as Fully Compliant (No pending FoSTaC/Medical)")
-            remark = st.text_area("Additional Remarks / Action Plan")
-            if st.form_submit_button("🚀 Save Store Compliance Data", type="primary"):
-                try:
-                    compliance_data = {
-                        "store_name": selected_store_name, "fostac_pending": input_fostac,
-                        "medical_pending": input_medical, "fully_compliant": is_compliant,
-                        "self_audit_done": self_audit_done, "self_audit_score": self_audit_score,
-                        "remark": remark, "month_year": current_month_val
-                    }
-                    if supabase is not None:
-                        supabase.table("store_monthly_compliance").insert(compliance_data).execute()
-                        st.success(f"✅ Compliance data for {selected_store_name} successfully saved!")
-                except Exception as e:
-                    st.error(f"❌ Failed to save data: {e}")
-
-    st.markdown("---")
-    st.subheader("🔄 Real-Time Logistics & FDU Compliance")
-    col3, col4 = st.columns(2)
-    with col3:
-        st.markdown("### Inter-Store Dispatches")
-        try:
-            if supabase is not None:
-                transfers_res = supabase.table("store_transfers").select("*").order("created_at", desc=True).limit(50).execute()
-                if transfers_res.data:
-                    df_transfers = pd.DataFrame(transfers_res.data)
-                    df_transfers['created_at'] = pd.to_datetime(df_transfers['created_at']).dt.strftime('%Y-%m-%d %H:%M')
-                    st.dataframe(df_transfers[['created_at', 'store_id', 'destination', 'dispatch_temp', 'items']], use_container_width=True, hide_index=True)
-                else:
-                    st.info("No inter-store dispatches logged.")
-        except Exception as e:
-            st.error(f"Error loading dispatch data: {e}")
-    with col4:
-        st.markdown("### FDU Thaw Compliance (MRD Matrix)")
-        try:
-            if supabase is not None:
-                fdu_res = supabase.table("store_fdu_transfers").select("*").order("created_at", desc=True).limit(50).execute()
-                if fdu_res.data:
-                    df_fdu = pd.DataFrame(fdu_res.data)
-                    st.dataframe(df_fdu[['store_id', 'store_name', 'quantity', 'thaw_start_time', 'discard_time']], use_container_width=True, hide_index=True)
-                else:
-                    st.info("No FDU transfers logged.")
-        except Exception as e:
-            st.error(f"Error loading FDU compliance data: {e}")
-
-elif nav_selection == "🚚 Vendor & Supply Chain":
-    st.subheader(f"Vendor Audit Management — {selected_month}")
-    sub_tab_view, sub_tab_create = st.tabs(["📋 Recorded Audits", "📝 New Manufacturing Audit Checklist"])
     
-    with sub_tab_view:
-        if not df_vendors_live.empty and 'audit_month' in df_vendors_live.columns:
-            month_vendors = df_vendors_live[df_vendors_live['audit_month'] == selected_month]
-            if not month_vendors.empty:
-                for _, row in month_vendors.iterrows():
-                    with st.expander(f"🏢 {row['vendor_name']} — Status: {row.get('status', 'N/A')} (Score: {row.get('score', 'N/A')})"):
-                        st.write(f"**Category:** {row.get('category', 'N/A')}")
-                        st.write(f"**Remark:** {row.get('remark', 'None')}")
-                        proof = row.get('proof_url')
-                        if proof and isinstance(proof, str):
-                            for idx, u in enumerate([u.strip() for u in proof.split(",")]):
-                                if "http" in u: st.markdown(f"🔗 [Photo Proof {idx+1}]({u})")
-                        if st.button(f"🗑️ Delete Record ({row['vendor_name']})", key=f"del_v_{row.get('id', _)}"):
-                            if supabase is not None:
-                                supabase.table("vendor_audits").delete().eq("id", row['id']).execute()
-                                st.rerun()
-            else:
-                st.info(f"No vendor audits for {selected_month}.")
+    # ==========================================
+    # --- 🎯 DAILY PROGRESS TRACKER ---
+    # ==========================================
+    st.markdown("### 🎯 Today's Morning Mission")
+    
+    audit_done = False
+    readiness_done = False
+    
+    try:
+        if supabase is not None:
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            audit_res = supabase.table("daily_audits").select("id").eq("store_id", st.session_state["store_id"]).gte("created_at", today_str).execute()
+            if len(audit_res.data) > 0:
+                audit_done = True
+                
+            read_res = supabase.table("store_readiness_logs").select("id").eq("store_id", st.session_state["store_id"]).gte("created_at", today_str).execute()
+            if len(read_res.data) > 0:
+                readiness_done = True
+    except Exception:
+        pass
+        
+    progress = 0
+    if audit_done: progress += 50
+    if readiness_done: progress += 50
+    
+    st.progress(progress / 100.0)
+    
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        if audit_done:
+            st.success("✅ Daily Audit (Completed)")
         else:
-            st.info("No vendor audit records found.")
+            st.warning("⏳ Daily Audit (Pending)")
+    with col_t2:
+        if readiness_done:
+            st.success("✅ Readiness Proofs (Completed)")
+        else:
+            st.warning("⏳ Readiness Proofs (Pending)")
+            
+    st.markdown("---")
+    
+    # Initialize 6 tabs
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "📋 Daily Audit", 
+        "📸 Readiness Proofs",
+        "📥 Receiving", 
+        "🔄 Transfer", 
+        "🗑️ Wastage",
+        "📚 Resources"
+    ])
+    
+    # ==========================================
+    # TAB 1: DAILY AUDIT (Gallery/File Uploader Enabled)
+    # ==========================================
+    with tab1:
+        st.subheader("☀️ Daily Opening Checklist")
+        st.caption("Upload clear photos from your phone camera or gallery as proof.")
+        
+        draft_key = get_draft_key(st.session_state['store_id'])
+        
+        if draft_key not in st.session_state:
+            st.session_state[draft_key] = {
+                "manager_name": "", "shift_idx": 0,
+                "c_fssai": False, "c_med": False, "c_water": False,
+                "c_soap": False, "c_temp": False, "c_uni": False, "c_jewel": False, "c_glove": False,
+                "c_sink": False, "c_ppm": False, "c_cloth": False, "c_mop": False, "c_trash": False, "c_chem": False,
+                "c_cold": False, "c_6in": False, "c_mrd": False, "c_ice": False, "c_tool": False, "c_esp": False,
+                "c_pest": False, "c_gask": False, "c_drain": False, "c_struct": False
+            }
 
-    with sub_tab_create:
-        st.markdown("### 📝 General Manufacturing Vendor Audit Tool")
-        with st.form("manufacturing_audit_form"):
-            col_v1, col_v2 = st.columns(2)
-            with col_v1:
-                audit_vendor_name = st.text_input("Vendor / FBO Name")
-                audit_fso = st.text_input("Food Safety Officer / Auditor Name")
-                audit_date = st.date_input("Actual Audit Date", value=datetime.date.today())
-            with col_v2:
-                audit_lic_no = st.text_input("FBO License No.")
-                audit_address = st.text_input("Facility Address")
+        draft = st.session_state[draft_key]
+        status_msg = st.empty()
+
+        with st.form("daily_checklist_form"):
+            manager_name = st.text_input("Manager on Duty Name", value=draft["manager_name"])
+            shift = st.selectbox("Shift", ["Morning", "Evening"], index=draft["shift_idx"])
+            
+            st.markdown("### A. Admin & Documentation")
+            c_fssai = st.checkbox("FSSAI License & Display Board prominently visible", value=draft["c_fssai"])
+            c_med = st.checkbox("Current medical certificates available on-site", value=draft["c_med"])
+            c_water = st.checkbox("IS-10500:2012 Water Analysis report on file", value=draft["c_water"])
+            proof_a = st.file_uploader("📂 Upload Admin Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_a")
+            
+            st.markdown("### B. Team Hygiene")
+            c_soap = st.checkbox("Handwash sinks fully stocked with paper towels & soap", value=draft["c_soap"])
+            c_temp = st.checkbox("Handwash water temperature reaches 38°C (±2°C)", value=draft["c_temp"])
+            c_uni = st.checkbox("Staff in clean, approved uniforms with aprons tied", value=draft["c_uni"])
+            c_jewel = st.checkbox("Zero Jewellery policy strictly enforced", value=draft["c_jewel"])
+            c_glove = st.checkbox("Gloves and bright bandages stocked and used", value=draft["c_glove"])
+            proof_b = st.file_uploader("📂 Upload Hygiene Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_b")
+            
+            st.markdown("### C. Sanitation")
+            c_sink = st.checkbox("3-Compartment sink set up correctly", value=draft["c_sink"])
+            c_ppm = st.checkbox("Sanitizer maintained at 50-100 PPM", value=draft["c_ppm"])
+            c_cloth = st.checkbox("Wiping cloths submerged in sanitizer", value=draft["c_cloth"])
+            c_mop = st.checkbox("Mops stored clean and elevated", value=draft["c_mop"])
+            c_trash = st.checkbox("Trash bins covered and foot-operated", value=draft["c_trash"])
+            c_chem = st.checkbox("Chemical spray bottles clearly labeled", value=draft["c_chem"])
+            proof_c = st.file_uploader("📂 Upload Sanitation Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_c")
+            
+            st.markdown("### D. Product & Equipment")
+            c_cold = st.checkbox("Cold holding maintained < 5°C / 41°F", value=draft["c_cold"])
+            c_6in = st.checkbox("All goods stored 6 inches off floor", value=draft["c_6in"])
+            c_mrd = st.checkbox("Zero expired goods; MRD labels applied", value=draft["c_mrd"])
+            c_ice = st.checkbox("Ice machine 100% mold-free", value=draft["c_ice"])
+            c_tool = st.checkbox("Thermometers calibrated & scoops available", value=draft["c_tool"])
+            c_esp = st.checkbox("Espresso calibrated 18-26s (14g dose)", value=draft["c_esp"])
+            proof_d = st.file_uploader("📂 Upload Product Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_d")
+            
+            st.markdown("### E. Facility Integrity")
+            c_pest = st.checkbox("Zero pests; fly catchers ON", value=draft["c_pest"])
+            c_gask = st.checkbox("Refrigeration gaskets clean/untorn", value=draft["c_gask"])
+            c_drain = st.checkbox("Drains unclogged and odor-free", value=draft["c_drain"])
+            c_struct = st.checkbox("No structural seepage or peeling paint", value=draft["c_struct"])
+            proof_e = st.file_uploader("📂 Upload Facility Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_e")
             
             st.markdown("---")
-            def render_sec(title, qlist):
-                st.markdown(f"#### {title}")
-                res = {}
-                for q_text, pts, is_star in qlist:
-                    lbl = f"⭐ {q_text} ({pts} pts)" if is_star else f"{q_text} ({pts} pts)"
-                    c1, c2 = st.columns(2)
-                    st_val = c1.selectbox(lbl, ["Compliance (C)", "Noncompliance (NC)", "Partial Compliance (PC)", "Not Applicable (NA)"], key=f"s_{q_text}")
-                    comm = c2.text_input("Note (if NC/PC)", key=f"c_{q_text}")
-                    res[q_text] = {"status": st_val, "points": pts, "is_star": is_star, "comment": comm}
-                return res
-
-            q_design = render_sec("1. Design & Facilities", [
-                ("Q1: Food establishment location is away from environmental pollution", 2, False),
-                ("Q2: Premises is clean, adequately lighted, and ventilated", 2, False),
-                ("Q3: Walls, floors, ceilings are smooth, impervious, and easy to clean", 2, False),
-                ("Q4: Windows and doors are fitted with insect and pest proof screens", 2, False),
-                ("Q5: Drainage system is adequate and sloped appropriately", 2, False),
-                ("Q6: Food contact surfaces are made of non-toxic, non-corrosive materials", 2, False),
-                ("Q7: Adequate facilities for cleaning and disinfecting equipment", 2, False),
-                ("Q8: Proper storage facilities for raw materials and finished goods", 2, False),
-                ("Q9: Separate storage under lock & key for hazardous chemicals", 2, False),
-                ("Q10: Adequate potable water supply available with test reports", 4, True)
-            ])
             
-            q_ops = render_sec("2. Control of Operation", [
-                ("Q11: Raw materials purchased from approved/licensed vendors", 2, False),
-                ("Q12: Raw materials inspected for quality and safety before use", 2, False),
-                ("Q13: Segregation of raw and cooked food to prevent cross-contamination", 4, True),
-                ("Q14: Time and temperature controls maintained during processing", 4, True),
-                ("Q15: Food additives used are permitted and within legal limits", 4, True),
-                ("Q16: Packaging materials are food grade and safe", 2, False),
-                ("Q17: FIFO/FEFO method used for inventory rotation", 2, False),
-                ("Q18: Transport vehicles are clean and maintain required temperature", 2, False),
-                ("Q19: Traceability system is in place for forward and backward tracking", 2, False),
-                ("Q20: Product recall procedure is documented and tested", 2, False)
-            ])
-            
-            q_maint = render_sec("3. Maintenance & Sanitation", [
-                ("Q21: Cleaning and sanitation schedule documented and followed", 2, False),
-                ("Q22: Preventive maintenance program in place for machinery", 2, False),
-                ("Q23: Equipment calibration records maintained", 2, False),
-                ("Q24: Documented pest control program with authorized agency", 4, True),
-                ("Q25: No signs of pest activity or harborages", 2, False),
-                ("Q26: Waste is disposed of scientifically without attracting pests", 2, False),
-                ("Q27: Drains are covered and equipped with traps", 2, False)
-            ])
+            col_a, col_b = st.columns(2)
+            with col_a:
+                btn_save_draft = st.form_submit_button("💾 Save Draft Progress")
+            with col_b:
+                btn_submit = st.form_submit_button("🚀 Submit Final Audit")
 
-            q_hyg = render_sec("4. Personal Hygiene", [
-                ("Q28: Annual medical examination records for all food handlers", 2, False),
-                ("Q29: Daily fitness/illness screening for food handlers", 2, False),
-                ("Q30: Food handlers wear clean uniforms, aprons, and hairnets", 2, False),
-                ("Q31: Handwashing stations have soap, water, and drying facilities", 4, True),
-                ("Q32: Strict policy against smoking, spitting, chewing in production", 2, False),
-                ("Q33: Nails kept short, clean, and no jewelry worn by handlers", 2, False)
-            ])
-            
-            q_train = render_sec("5. Training & Complaints", [
-                ("Q34: At least one FOSTAC trained supervisor on premises", 4, True),
-                ("Q35: Routine food safety training provided to all staff", 2, False),
-                ("Q36: Documented consumer complaint handling procedure", 2, False),
-                ("Q37: Corrective actions taken on complaints and documented", 2, False)
-            ])
+            if btn_save_draft or btn_submit:
+                st.session_state[draft_key] = {
+                    "manager_name": manager_name, "shift_idx": 0 if shift == "Morning" else 1,
+                    "c_fssai": c_fssai, "c_med": c_med, "c_water": c_water,
+                    "c_soap": c_soap, "c_temp": c_temp, "c_uni": c_uni, "c_jewel": c_jewel, "c_glove": c_glove,
+                    "c_sink": c_sink, "c_ppm": c_ppm, "c_cloth": c_cloth, "c_mop": c_mop, "c_trash": c_trash, "c_chem": c_chem,
+                    "c_cold": c_cold, "c_6in": c_6in, "c_mrd": c_mrd, "c_ice": c_ice, "c_tool": c_tool, "c_esp": c_esp,
+                    "c_pest": c_pest, "c_gask": c_gask, "c_drain": c_drain, "c_struct": c_struct
+                }
+                
+                if btn_save_draft:
+                    status_msg.success("✅ Progress saved locally.")
 
-            audit_responses = {**q_design, **q_ops, **q_maint, **q_hyg, **q_train}
-
-            audit_photos = st.file_uploader("Upload Inspection Snaps", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-            audit_remarks = st.text_area("Overall Audit Remarks")
-
-            if st.form_submit_button("Calculate Score & Submit Audit", type="primary"):
-                if not audit_vendor_name:
-                    st.error("❌ Vendor Name is required.")
-                else:
-                    photo_urls = []
-                    if audit_photos and cloudinary_configured:
-                        for idx, pfile in enumerate(audit_photos):
-                            url = upload_photo(pfile, "vendor_audits", f"{audit_vendor_name.replace(' ', '_')}_{idx+1}")
-                            if url: photo_urls.append(url)
-                    earned = sum(d['points'] if d['status'] == "Compliance (C)" else (d['points']/2 if d['status'] == "Partial Compliance (PC)" else 0) for d in audit_responses.values())
-                    max_pts = sum(d['points'] for d in audit_responses.values()) if audit_responses else 90
-                    pct = (earned / max_pts) * 100 if max_pts > 0 else 0
-                    grade = "A+ (Exemplar)" if pct >= 80 else ("A (Satisfactory)" if pct >= 72 else ("B (Needs Improvement)" if pct >= 45 else "Non Compliance"))
-                    status_res = "Passed" if pct >= 72 else ("Conditionally Approved" if pct >= 45 else "Failed")
-                    payload = {
-                        "vendor_name": audit_vendor_name, "category": "General Manufacturing",
-                        "score": f"{pct:.1f}% ({earned}/{max_pts} - Grade: {grade})",
-                        "status": status_res,
-                        "remark": f"Auditor: {audit_fso} | License: {audit_lic_no} | Date: {audit_date.strftime('%d-%b-%Y')} | Remarks: {audit_remarks}",
-                        "audit_month": selected_month, "proof_url": ", ".join(photo_urls) if photo_urls else None
-                    }
-                    if supabase is not None:
-                        supabase.table("vendor_audits").insert(payload).execute()
-                        pdf_bytes = generate_detailed_checklist_pdf(audit_vendor_name, audit_fso, audit_lic_no, audit_address, audit_date, audit_responses, pct, grade, audit_remarks, payload["proof_url"])
-                        st.session_state['latest_generated_audit_pdf'] = {"name": audit_vendor_name, "data": pdf_bytes}
-                        st.success(f"✅ Audit Completed! Score: {pct:.1f}% | Grade: {grade}")
-
-        if 'latest_generated_audit_pdf' in st.session_state:
-            latest = st.session_state['latest_generated_audit_pdf']
-            st.download_button(label=f"📥 Download Itemized PDF Report ({latest['name']})", data=latest['data'], file_name=f"Audit_{latest['name']}.pdf", mime="application/pdf", type="primary")
-
-elif nav_selection == "📜 License Summary":
-    st.subheader("📜 License Compliance Summary & Digital Vault")
-    df_lic = pd.DataFrame()
-    try:
-        if supabase is not None:
-            resp = supabase.table("license_tracker").select("*").execute()
-            if resp.data:
-                df_lic = pd.DataFrame(resp.data)[['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']]
-                df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
-    except Exception as e:
-        st.error(f"Could not fetch license data: {e}")
-
-    if df_lic.empty:
-        st.info("📂 No license data found in cloud database.")
-    else:
-        st.metric("🏢 Total Tracked Facilities", f"{len(df_lic)} Stores")
-        st.markdown("---")
-        for _, row in df_lic.iterrows():
-            with st.expander(f"📍 {row['Location']} ({row['City']})"):
-                cols = st.columns(5)
-                for idx, c in enumerate(['FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage']):
-                    cols[idx].metric(c, str(row[c])[:10] if pd.notna(row[c]) else "N/A")
-                if pd.notna(row['Remark']) and str(row['Remark']).strip() not in ['nan', 'none', '']:
-                    st.warning(f"⚠️ **Remarks:** {row['Remark']}")
-
-    st.markdown("---")
-    st.markdown("### 📂 Permanent Cloud License Excel Sync")
-    up_lic = st.file_uploader("Upload Master License Tracker Excel", type=["xlsx", "xls"], key="cloud_lic_up")
-    if up_lic and st.button("🚀 Sync Permanently to Cloud Database", type="primary"):
-        try:
-            df_up = pd.read_excel(up_lic).iloc[1:].reset_index(drop=True)
-            df_up.columns = ['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']
-            for c in ['fssai', 'trade', 'fire', 'pollution_cto', 'signage']:
-                if c in df_up.columns: df_up[c] = pd.to_datetime(df_up[c], errors='coerce').dt.strftime('%Y-%m-%d')
-            clean_recs = []
-            for r in df_up.astype(str).to_dict(orient="records"):
-                clean_recs.append({k: (None if pd.isna(v) or v.lower() in ['nan', 'nat', 'none', ''] else v.strip()) for k, v in r.items()})
-            if supabase is not None:
-                supabase.table("license_tracker").delete().neq("id", 0).execute()
-                supabase.table("license_tracker").insert(clean_recs).execute()
-                st.success("✅ Synced license tracker!")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Sync failed: {e}")
-
-elif nav_selection == "📈 NSF Audit Intelligence":
-    import re
-    import datetime
-    import pandas as pd
-    import plotly.express as px
-    import streamlit as st
-
-    st.subheader("📈 NSF Audit Intelligence & Network Performance")
-    upload_tab, manual_tab = st.tabs(["📂 Upload Master Summary Report", "✍️ Log Individual Store Score"])
-    
-    with upload_tab:
-        summary_file = st.file_uploader("Upload Master Summary Report (Excel / CSV)", type=["xlsx", "csv"])
-        if summary_file and st.button("📤 Parse & Sync Master Report", type="primary"):
-            try:
-                df_summary = pd.read_csv(summary_file) if summary_file.name.endswith('.csv') else pd.read_excel(summary_file)
-                df_summary.columns = [str(c).strip().lower() for c in df_summary.columns]
-                succ = 0
-                if supabase is not None:
-                    for _, row in df_summary.iterrows():
-                        
-                        # --- FIX 1: Safe Score Conversion ---
-                        raw_score = str(row.get('score', 0)).strip()
-                        try:
-                            clean_score = re.sub(r'[^0-9.]', '', raw_score)
-                            final_score = float(clean_score) if clean_score else 0.0
-                        except ValueError:
-                            final_score = 0.0
-
-                        # --- FIX 2: Safe Date Conversion ---
-                        raw_date = str(row.get('audit_date', row.get('audit date', ''))).strip()
-                        if raw_date.lower() in ['nan', 'nat', '', 'none']:
-                            # If date cell is blank/missing, safely default to today's date
-                            final_date = str(datetime.date.today())
-                        else:
-                            try:
-                                final_date = pd.to_datetime(raw_date).strftime('%Y-%m-%d')
-                            except Exception:
-                                final_date = str(datetime.date.today())
-                        # ----------------------------------
-
-                        payload = {
-                            "audit_code": str(row.get('audit_code', row.get('audit code', ''))),
-                            "site_code": str(row.get('site_code', row.get('site code', ''))),
-                            "store_name": str(row.get('store_name', row.get('site name', ''))),
-                            "score": final_score,
-                            "result": str(row.get('result', '')),
-                            "audit_date": final_date,  # <--- Now uses the cleaned date
-                            "car_status": str(row.get('car_status', row.get('car status', ''))),
-                            "remarks": "Bulk uploaded from summary sheet"
-                        }
-                        
-                        if not payload["site_code"] or payload["site_code"] == "nan": 
-                            continue
+                if btn_submit:
+                    if not manager_name:
+                        st.error("❌ Manager Name is required for final submission.")
+                    else:
+                        with st.spinner("Encrypting data & pushing to Central QA Vault..."):
+                            url_a = upload_photo(proof_a, st.session_state["store_id"], "admin") if proof_a else None
+                            url_b = upload_photo(proof_b, st.session_state["store_id"], "hygiene") if proof_b else None
+                            url_c = upload_photo(proof_c, st.session_state["store_id"], "sanitation") if proof_c else None
+                            url_d = upload_photo(proof_d, st.session_state["store_id"], "product") if proof_d else None
+                            url_e = upload_photo(proof_e, st.session_state["store_id"], "facility") if proof_e else None
                             
-                        supabase.table("nsf_audits").upsert(payload).execute()
-                        succ += 1
-                        
-                st.success(f"✅ Synced {succ} records!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Sync error: {e}")
-    with manual_tab:
-        with st.form("single_store_form"):
-            col_n1, col_n2 = st.columns(2)
-            with col_n1:
-                acode = st.text_input("NSF Audit Code")
-                store_opt = [
-                    "189001 - Janakpuri, Delhi", "189002 - GK1, Delhi", "189003 - Oberoi SkyCity, Mumbai", 
-                    "189004 - M3M Atrium, Gurgaon", "189005 - Secor 50 Noida, Noida", "189006 - Malcha, Delhi", 
-                    "189007 - Platina, Gurgaon", "189008 - Season Mall Pune, Pune", "189009 - BRS Nagar Ludhiana, Ludhiana", 
-                    "189010 - DLF Moti Nagar, Delhi", "189011 - Goldust Patiala, Patiala", "189012 - Neelkanth - Murthal", 
-                    "189013 - Creek Side, Ludhiana", "189014 - Chembur, Mumbai"
-                ]
-                sel_store = st.selectbox("Select Store", store_opt)
-                sc_val = st.number_input("Score (%)", 0.0, 100.0, 85.0)
-            with col_n2:
-                adt = st.date_input("Audit Date", value=datetime.date.today())
-                ares = st.selectbox("Result", ["PASS", "FAIL"])
-                arem = st.text_area("Remarks")
-                
-            if st.form_submit_button("🚀 Sync Store Record", type="primary") and acode.strip():
-                if supabase is not None:
-                    # --- FIX: Stop list insertion bug in DB ---
-                    parts = sel_store.split(" - ")
-                    store_code_val = parts[0]
-                    store_name_val = parts[1] if len(parts) > 1 else parts[0]
-                    
-                    supabase.table("nsf_audits").insert({
-                        "audit_code": acode.strip(), 
-                        "site_code": store_code_val,
-                        "store_name": store_name_val, 
-                        "score": sc_val, 
-                        "result": ares,
-                        "audit_date": str(adt), 
-                        "remarks": arem
-                    }).execute()
-                    st.success("Synced record!")
-                    st.rerun()
-
-    st.markdown("---")
-    st.markdown("### 📊 Performance by Ownership Type")
-    if not df_db.empty and 'score' in df_db.columns and 'Type' in df_db.columns:
-        c1, c2 = st.columns(2)
-        with c1:
-            avg_scores = df_db.groupby('Type')['score'].mean().reset_index()
-            fig_avg = px.bar(avg_scores, x='Type', y='score', color='Type', text='score', title="Average Score (%) by Ownership")
-            fig_avg.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-            st.plotly_chart(fig_avg, use_container_width=True)
-        with c2:
-            st_col = 'result' if 'result' in df_db.columns else 'status' if 'status' in df_db.columns else None
-            if st_col:
-                res_dist = df_db.groupby(['Type', st_col]).size().reset_index(name='Count')
-                fig_dist = px.bar(res_dist, x='Type', y='Count', color=st_col, barmode='group', text='Count', title="Audit Status Distribution")
-                st.plotly_chart(fig_dist, use_container_width=True)
-
-    st.markdown("---")
-    st.markdown("### 🚨 Corrective Action Request (CAR) Pending Tracker")
-    st.caption("Monitoring stores with outstanding Corrective Actions and calculating delay days since audit generation.")
-    if not df_db.empty:
-        car_col = 'car_status' if 'car_status' in df_db.columns else 'CAR Status' if 'CAR Status' in df_db.columns else None
-        date_col = 'audit_date' if 'audit_date' in df_db.columns else 'Audit Date' if 'Audit Date' in df_db.columns else None
-        if car_col and date_col:
-            df_car = df_db.copy()
-            df_car[date_col] = pd.to_datetime(df_car[date_col], errors='coerce')
-            df_car['Days_Elapsed'] = (pd.Timestamp(datetime.date.today()) - df_car[date_col]).dt.days
-            df_pending = df_car[df_car[car_col].astype(str).str.contains("PENDING", case=False, na=False)].sort_values(by='Days_Elapsed', ascending=False)
-            if not df_pending.empty:
-                st.warning(f"⚠️ There are **{len(df_pending)}** audit records across the network with pending Corrective Actions.")
-                st.dataframe(df_pending[['store_name', date_col, 'score', car_col, 'Days_Elapsed']], use_container_width=True, hide_index=True)
-            else:
-                st.success("🎉 All network audits have approved Corrective Actions.")
-        else:
-            st.info("CAR status tracking columns not detected in current data feed.")
-
-elif nav_selection == "📑 Reports & Archive":
-    st.subheader("📑 Executive PDF Report Generation")
-    if st.button("Generate Executive PDF Report", type="primary") and FPDF:
-        v_data = st.session_state.get('vendor_db', {}).get(selected_month, [])
-        pdf_bytes = generate_pdf(selected_month, monthly_records, v_data, df_db)
-        if pdf_bytes:
-            st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("✅ Executive PDF generated successfully!")
-    if selected_month in st.session_state['pdf_archive']:
-        st.download_button("📥 Download Executive PDF Report", data=st.session_state['pdf_archive'][selected_month], file_name=f"CBTL_Executive_Report_{selected_month}.pdf", mime="application/pdf")
-
-elif nav_selection == "📚 Resources Vault":
-    st.subheader("📚 Central Resources & Document Management")
-    
-    pub_scope = st.radio("Publication Scope", ["Global (All Stores)", "Specific Outlet (Water Test, Pest Map, etc.)"], horizontal=True)
-    
-    target_store_val = "ALL"
-    if pub_scope == "Specific Outlet (Water Test, Pest Map, etc.)":
-        store_names_list = df_stores['name'].tolist() if not df_stores.empty else ["Janakpuri, Delhi"]
-        target_store_val = st.selectbox("Select Target Outlet", store_names_list)
-
-    with st.form("upload_master_resource", clear_on_submit=True):
-        cat = st.selectbox("Category", [
-            "QA SOPs & Safety", "Menu & Nutrition Booklet", "Shelf Life Chart", 
-            "Chemical Info Sheet", "Water Test Report", "Pest Control Layout / Map"
-        ])
-        dfile = st.file_uploader("Upload Document (PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
-        btn_label = f"🚀 Publish to {target_store_val if target_store_val != 'ALL' else 'All Stores'}"
-        
-        if st.form_submit_button(btn_label, type="primary") and dfile and cloudinary_configured:
-            folder_scope = target_store_val.replace(' ', '_') if target_store_val != 'ALL' else "global"
-            folder_path = f"cbtl/central_resources/{folder_scope}"
-            ures = cloudinary.uploader.upload(dfile, folder=folder_path, resource_type="auto")
-            
-            if supabase is not None:
-                supabase.table("central_resources").insert({
-                    "category": cat, 
-                    "file_name": dfile.name, 
-                    "file_url": ures.get("secure_url", ""), 
-                    "updated_at": str(datetime.date.today()),
-                    "target_store": target_store_val
-                }).execute()
-                st.success(f"✅ Published `{dv if 'dv' in locals() else dfile.name}` for **{target_store_val}**!")
-                st.rerun()
-
-    if supabase is not None:
-        rquery = supabase.table("central_resources").select("*").order("updated_at", desc=True).execute()
-        if rquery.data:
-            df_res = pd.DataFrame(rquery.data)
-            if 'target_store' not in df_res.columns:
-                df_res['target_store'] = 'ALL'
-                
-            filter_view = st.selectbox("Filter Vault View", ["All Records", "Global Only", "Outlet Specific Only"])
-            if filter_view == "Global Only":
-                df_res = df_res[df_res['target_store'] == 'ALL']
-            elif filter_view == "Outlet Specific Only":
-                df_res = df_res[df_res['target_store'] != 'ALL']
-                
-            st.dataframe(
-                df_res[['category', 'target_store', 'file_name', 'updated_at', 'file_url']],
-                column_config={
-                    "target_store": st.column_config.TextColumn("Scope / Outlet"),
-                    "file_url": st.column_config.LinkColumn("Document", display_text="🔗 Open")
-                },
-                width='stretch', hide_index=True
-            )
-        else:
-            st.info("No documents published in vault yet.")
-
-elif nav_selection == "💳 Finance Invoices":
-    st.subheader("💳 Central Invoices & Finance Clearance")
-    with st.expander("➕ Add New Central Invoice"):
-        with st.form("cent_inv"):
-            ic = st.selectbox("Category", ["Medical (Health Certs)", "Pest Control", "FOSTAC (Training)", "Liasoning / Licensing", "Utilities & Maintenance", "Other"])
-            vn = st.text_input("Vendor Name")
-            inumb = st.text_input("Invoice Number")
-            iamt = st.number_input("Amount (INR)", 0.0, step=100.0)
-            ifile = st.file_uploader("Upload Doc", type=["pdf", "jpg", "jpeg", "png"])
-            irem = st.text_area("Remarks")
-            if st.form_submit_button("Submit to Ledger", type="primary") and vn and inumb:
-                iurl = ""
-                if ifile and cloudinary_configured:
-                    iurl = cloudinary.uploader.upload(ifile, folder="cbtl/central_finance_invoices", resource_type="auto").get("secure_url", "")
-                if supabase is not None:
-                    supabase.table("central_finance_invoices").insert({"invoice_category": ic, "vendor_name": vn, "invoice_number": inumb, "invoice_amount": iamt, "invoice_url": iurl, "remarks": irem, "submitted_to_finance": False, "payment_done": False}).execute()
-                    st.success("Logged invoice!")
-                    st.rerun()
-    if supabase is not None:
-        inv_res = supabase.table("central_finance_invoices").select("*").order("created_at", desc=True).execute()
-        if inv_res.data:
-            st.dataframe(pd.DataFrame(inv_res.data), use_container_width=True)
-
-elif nav_selection == "⚙️ System Administration":
-    st.subheader("⚙️ Store Portfolio & System Administration")
-    with st.expander("➕ Add a New Store Location"):
-        with st.form("new_store"):
-            nn = st.text_input("Store Name")
-            isout = st.checkbox("Is Outstation?")
-            if st.form_submit_button("Add Store") and nn:
-                st.session_state['master_stores'].append({'name': nn, 'is_outstation': isout})
-                st.success("Added store!")
-                st.rerun()
-
-    st.markdown("### 📦 Supply Chain Terminology Unification Management")
-    try:
-        if supabase is not None:
-            response = supabase.table("master_item_reference").select("*").order("id").execute()
-            if response.data:
-                df_items = pd.DataFrame(response.data)
-                total_items = len(df_items)
-                unified_items = df_items['is_name_unified'].sum()
-                completion_rate = (unified_items / total_items) if total_items > 0 else 0
-                st.progress(completion_rate, text=f"Overall Unification Progress: {int(unified_items)} out of {total_items} items unified.")
-                edited_df = st.data_editor(
-                    df_items[['id', 'warehouse_item_name', 'store_retail_name', 'item_category', 'is_name_unified']],
-                    width='stretch', hide_index=True,
-                    disabled=['id', 'warehouse_item_name', 'store_retail_name', 'item_category'],
-                    column_config={
-                        "id": None, "warehouse_item_name": st.column_config.TextColumn("Current Invoice Name"),
-                        "store_retail_name": st.column_config.TextColumn("Target Retail Name"),
-                        "item_category": st.column_config.TextColumn("Category"),
-                        "is_name_unified": st.column_config.CheckboxColumn("Unified?", default=False)
-                    }, key="unification_tracker"
-                )
-                if st.button("💾 Save Compliance Updates", type="primary"):
-                    updates_made = 0
-                    for index, row in edited_df.iterrows():
-                        if df_items.loc[index, 'is_name_unified'] != row['is_name_unified']:
-                            supabase.table("master_item_reference").update({"is_name_unified": row['is_name_unified']}).eq("id", row['id']).execute()
-                            updates_made += 1
-                    if updates_made > 0:
-                        st.success(f"✅ Updated {updates_made} records.")
-                        st.rerun()
-    except Exception as e:
-        st.error(f"Failed to load terminology data: {e}")
-
-    st.markdown("### 💬 Store Feedback & Support Tickets")
-    if supabase is not None:
-        fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
-        if fb_res.data:
-            df_fb = pd.DataFrame(fb_res.data)
-            for idx, r in df_fb.iterrows():
-                col_text, col_btn = st.columns([3, 1])  # adjust ratio/count as needed
-                date_str = str(r.get('created_at', 'N/A'))[:10]
-                store_val = r.get('store_id', r.get('store_name', 'N/A'))
-                msg_val = r.get('feedback_text', r.get('message', 'No text'))
-                
-                col_text.markdown(f"**[{date_str}] Store {store_val}**: {msg_val}")
-                if col_btn.button("🗑️ Delete", key=f"del_fb_{r.get('id', idx)}"):
-                    supabase.table("store_feedback").delete().eq("id", r['id']).execute()
-                    st.success("✅ Ticket deleted!")
-                    st.rerun()
-        else:
-            st.info("No store feedback yet.")            
-
-elif nav_selection == "🤖 AI Support Assistant":
-    import pandas as pd
-    import streamlit as st
-    import google.generativeai as genai
-
-    st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
-    st.caption("Powered by Gemini • Intelligent Context Routing + FSSAI Guidance")
-
-    # 1. API Key Setup
-    gemini_ready = False
-    if "GEMINI_API_KEY" in st.secrets and st.secrets["GEMINI_API_KEY"].strip():
-        try:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            gemini_ready = True
-        except Exception as e:
-            st.error(f"Failed to configure Gemini API: {e}")
-    else:
-        st.warning("⚠️ `GEMINI_API_KEY` not detected in Streamlit Secrets. Please configure `.streamlit/secrets.toml`.")
-
-    # 2. Session Chat History Initialization
-    if "support_messages" not in st.session_state:
-        st.session_state["support_messages"] = [
-            {"role": "assistant", "content": "Hello! I am your QA & Compliance Assistant. Ask me anything across NSF audits, daily store FSSAI logs, vendor audits, shelf-life items, or general FSSAI guidelines."}
-        ]
-
-    for msg in st.session_state["support_messages"]:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # 3. Handle Prompt Input
-    if prompt := st.chat_input("Ask a question across any operational module or compliance policy..."):
-        st.session_state["support_messages"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            if not gemini_ready:
-                reply = "⚠️ API Key is missing. Please check your Streamlit secrets."
-                st.markdown(reply)
-                st.session_state["support_messages"].append({"role": "assistant", "content": reply})
-            else:
-                # --- THE INTELLIGENT ROUTER (Fixes the Speed Issue) ---
-                query_lower = prompt.lower()
-                context_data = ""
-                source_used = ""
-                
-                with st.spinner("Intelligently routing query and analyzing specific module..."):
-                    try:
-                        def safe_to_string(df, preferred_cols, fallback_text="None"):
-                            if df.empty:
-                                return fallback_text
-                            existing_cols = [c for c in preferred_cols if c in df.columns]
-                            if existing_cols:
-                                return df[existing_cols].to_string(index=False)
-                            return df.to_string(index=False)
-
-                        # Route 1: Shelf Life / Menu
-                        if any(kw in query_lower for kw in ["menu", "food", "item", "shelf life", "expire", "brand"]):
-                            source_used = "Shelf-Life Master"
-                            res = supabase.table("shelf_life_master").select("*").execute() if supabase else None
-                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
-                            context_data = f"[SHELF-LIFE DATA]\n{safe_to_string(df, ['category', 'product_name', 'primary_shelf_life', 'secondary_shelf_life'], 'No data')}"
-                        
-                        # Route 2: Audits / NSF
-                        elif any(kw in query_lower for kw in ["audit", "nsf", "score", "car"]):
-                            source_used = "NSF Audits"
-                            res = supabase.table("nsf_audits").select("*").order("audit_date", desc=True).limit(40).execute() if supabase else None
-                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
-                            context_data = f"[NSF AUDITS]\n{safe_to_string(df, ['site_code', 'store_name', 'score', 'result', 'audit_date'], 'No data')}"
-                        
-                        # Route 3: Vendors
-                        elif "vendor" in query_lower or "supply" in query_lower:
-                            source_used = "Vendor Audits"
-                            res = supabase.table("vendor_audits").select("*").order("created_at", desc=True).limit(20).execute() if supabase else None
-                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
-                            context_data = f"[VENDOR AUDITS]\n{safe_to_string(df, ['vendor_name', 'score', 'grade'], 'No data')}"
-                        
-                        # Route 4: FSSAI Daily Logs
-                        elif any(kw in query_lower for kw in ["fssai", "daily", "temperature"]):
-                            source_used = "Daily FSSAI Logs"
-                            res = supabase.table("daily_audits").select("*").order("created_at", desc=True).limit(30).execute() if supabase else None
-                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
-                            context_data = f"[DAILY FSSAI LOGS]\n{safe_to_string(df, ['store_name', 'compliance_score', 'status'], 'No data')}"
-                        
-                        # Route 5: General / Fallback
-                        else:
-                            source_used = "General FSSAI Knowledge & Store Master"
-                            res = supabase.table("store_master").select("*").execute() if supabase else None
-                            df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
-                            context_data = f"[STORE MASTER]\n{safe_to_string(df, ['site_code', 'store_name'], 'No data')}"
-
-                        st.caption(f"*(Query optimally routed to: {source_used})*")
-
-                        # --- SYSTEM PROMPT ---
-                        system_prompt = f"""
-                        You are the Senior QA & Compliance AI Officer for CBTL India / Ekaagra Retail Operations.
-                        
-                        === TARGETED LIVE DATASET ===
-                        {context_data}
-                        
-                        === OPERATIONAL & COMPLIANCE RULES ===
-                        1. CLASSIFICATION: Site codes starting with '189' are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
-                        2. INTERNAL DATA GUARDRALL: Prioritize the provided table above. Never invent internal metrics.
-                        3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, or hygiene SOPs, utilize general QA/FSSAI industry knowledge.
-                        4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
-                        """
-
-                        # --- FAILOVER MODEL SELECTION LOOP ---
-                        model_candidates = [
-                            "gemini-3.8-flash",
-                            "gemini-3.5-flash",
-                            "gemini-2.5-pro"
-                        ]
-
-                        reply = None
-                        last_exception = None
-
-                        for target_model in model_candidates:
+                            audit_data = {
+                                "store_id": st.session_state["store_id"],
+                                "manager_name": manager_name,
+                                "shift": shift,
+                                "admin_fssai_visible": c_fssai, "admin_medical_certs": c_med, "admin_water_report": c_water, "admin_proof_url": url_a,
+                                "hygiene_handwash_stocked": c_soap, "hygiene_water_temp": c_temp, "hygiene_uniforms": c_uni, "hygiene_zero_jewelry": c_jewel, "hygiene_gloves": c_glove, "hygiene_proof_url": url_b,
+                                "sanitation_sink_setup": c_sink, "sanitation_ppm_level": c_ppm, "sanitation_cloths_stored": c_cloth, "sanitation_mops_elevated": c_mop, "sanitation_trash_covered": c_trash, "sanitation_chemicals_labeled": c_chem, "sanitation_proof_url": url_c,
+                                "product_cold_holding": c_cold, "product_6_inch_rule": c_6in, "product_mrd_labels": c_mrd, "product_ice_machine": c_ice, "product_tools_calibrated": c_tool, "product_espresso_calibrated": c_esp, "product_proof_url": url_d,
+                                "facility_zero_pests": c_pest, "facility_gaskets_intact": c_gask, "facility_drains_clean": c_drain, "facility_structural_integrity": c_struct, "facility_proof_url": url_e
+                            }
                             try:
-                                model = genai.GenerativeModel(
-                                    model_name=target_model,
-                                    generation_config={"temperature": 0.2}
-                                )
-                                response = model.generate_content([system_prompt, f"User Question: {prompt}"])
-                                if response and response.text:
-                                    reply = response.text
-                                    break
-                            except Exception as model_err:
-                                last_exception = model_err
-                                continue
-
-                        if not reply:
-                            if last_exception and "429" in str(last_exception):
-                                reply = "⚠️ **Rate limit reached**. Please wait a moment before sending another query."
-                            else:
-                                reply = f"Error processing query: {last_exception}"
-
-                        # --- AUTOMATIC LOGGING TO SUPABASE CHAT_LOGS ---
-                        if supabase is not None and reply and not reply.startswith("Error"):
-                            try:
-                                supabase.table("chat_logs").insert({
-                                    "user_prompt": prompt,
-                                    "ai_response": reply
-                                }).execute()
-                            except Exception:
-                                pass
-
-                    except Exception as e:
-                        reply = f"Error processing query: {e}"
-
-                st.markdown(reply)
-                st.session_state["support_messages"].append({"role": "assistant", "content": reply})
-
-elif nav_selection == "📦 Shelf-Life Manager":
-    import pandas as pd
-    import streamlit as st
-    from supabase import create_client, Client
-
-    st.header("📱 Cafe Field Audit: Shelf-Life Master")
-    st.markdown("Walk the cafe, check physical items, update the database live, or auto-extract from vendor sheets.")
-
-    # --- 1. Connect to Supabase ---
-    supabase_url = st.secrets["SUPABASE_URL"]
-    supabase_key = st.secrets["SUPABASE_KEY"]
-    supabase: Client = create_client(supabase_url, supabase_key)
-
-    # --- 2. Fetch Live Data ---
-    @st.cache_data(ttl=10)
-    def load_shelf_life_data():
-        response = supabase.table("shelf_life_master").select("category, item_code, product_name, primary_brand, alternative_brand, storage_conditions, primary_shelf_life, secondary_shelf_life, notes").execute()
-        
-        # FIX: Enforce strict column ordering so the grid never misaligns
-        ordered_cols = [
-            "category", "item_code", "product_name", "primary_brand", 
-            "alternative_brand", "storage_conditions", "primary_shelf_life", 
-            "secondary_shelf_life", "notes"
-        ]
-        
-        if response.data:
-            df = pd.DataFrame(response.data)
-            for col in ordered_cols:
-                if col not in df.columns:
-                    df[col] = None
-            return df[ordered_cols]
-        else:
-            return pd.DataFrame(columns=ordered_cols)
-
-    live_df = load_shelf_life_data()
-
-    # --- 3. SMART VENDOR DOCUMENT EXTRACTOR ---
-    with st.expander("📄 Upload Vendor / Raw Master Document for Auto-Extraction"):
-        st.info("Upload your raw vendor CSV or Excel sheet. The system will automatically map product names and push them to Supabase.")
-        
-        uploaded_doc = st.file_uploader("Upload Vendor Document", type=["csv", "xlsx"])
-        
-        if uploaded_doc is not None:
-            try:
-                if uploaded_doc.name.endswith('.csv'):
-                    raw_import_df = pd.read_csv(uploaded_doc)
-                else:
-                    raw_import_df = pd.read_excel(uploaded_doc)
-                
-                st.write("🔍 **Raw Document Preview (First 5 rows):**")
-                st.dataframe(raw_import_df.head(5))
-                
-                # Intelligent Column Auto-Alignment
-                cols = raw_import_df.columns.tolist()
-                cols_lower = [str(c).lower() for c in cols]
-                
-                def guess_col_index(keywords):
-                    for i, col_name in enumerate(cols_lower):
-                        if any(kw in col_name for kw in keywords):
-                            return i
-                    return -1
-                
-                prod_idx = guess_col_index(['product', 'item', 'desc', 'name'])
-                prod_idx = prod_idx if prod_idx != -1 else 0
-                
-                brand_idx = guess_col_index(['brand', 'mfg', 'manufacturer', 'make'])
-                brand_idx = (brand_idx + 1) if brand_idx != -1 else 0
-                
-                storage_idx = guess_col_index(['storage', 'temp', 'condition'])
-                storage_idx = (storage_idx + 1) if storage_idx != -1 else 0
-
-                # FIX: Added Shelf Life Guessing
-                shelf_idx = guess_col_index(['shelf', 'life', 'days', 'expiry'])
-                shelf_idx = (shelf_idx + 1) if shelf_idx != -1 else 0
-
-                st.markdown("### Map Columns to Shelf-Life Master Schema")
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    prod_col = st.selectbox("Select Product Name", cols, index=prod_idx)
-                with col2:
-                    brand_col = st.selectbox("Select Brand", ["None"] + cols, index=brand_idx)
-                with col3:
-                    storage_col = st.selectbox("Select Storage", ["None"] + cols, index=storage_idx)
-                with col4:
-                    # FIX: Added Shelf Life Selection Dropdown
-                    shelf_col = st.selectbox("Select Shelf Life", ["None"] + cols, index=shelf_idx)
-                
-                if st.button("Extract & Map Data to Master"):
-                    mapped_df = pd.DataFrame()
-                    mapped_df["product_name"] = raw_import_df[prod_col].astype(str).str.strip()
-                    mapped_df["category"] = "Raw Ingredient" 
-                    
-                    if brand_col != "None":
-                        mapped_df["primary_brand"] = raw_import_df[brand_col].astype(str).str.strip()
-                    else:
-                        mapped_df["primary_brand"] = None
-                        
-                    if storage_col != "None":
-                        mapped_df["storage_conditions"] = raw_import_df[storage_col].astype(str).str.strip()
-                    else:
-                        mapped_df["storage_conditions"] = None
-
-                    # FIX: Map Shelf Life Properly
-                    if shelf_col != "None":
-                        mapped_df["primary_shelf_life"] = raw_import_df[shelf_col].astype(str).str.strip()
-                    else:
-                        mapped_df["primary_shelf_life"] = None
-                        
-                    mapped_df["item_code"] = None
-                    mapped_df["alternative_brand"] = None
-                    mapped_df["secondary_shelf_life"] = None
-                    mapped_df["notes"] = "Imported from vendor document - pending review"
-                    
-                    # Drop blank product rows
-                    mapped_df = mapped_df[
-                        (mapped_df["product_name"].notna()) & 
-                        (mapped_df["product_name"] != "") & 
-                        (mapped_df["product_name"] != "nan") & 
-                        (mapped_df["product_name"] != "None")
-                    ]
-                    
-                    # Clean NaN for JSON
-                    mapped_df = mapped_df.fillna("")
-                    mapped_df = mapped_df.replace({"": None})
-                    
-                    records = mapped_df.to_dict(orient="records")
-                    if records:
-                        supabase.table("shelf_life_master").upsert(records, on_conflict="product_name").execute()
-                        st.success(f"✅ Successfully extracted and mapped {len(records)} valid items into Supabase!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ No valid product names found.")
-            except Exception as e:
-                st.error(f"⚠️ Error processing document: {e}")
-
-    # --- 4. DOWNLOAD CLEAN MASTER BUTTON ---
-    st.divider()
-    col_dl1, col_dl2 = st.columns([0.7, 0.3])
-    with col_dl1:
-        st.subheader("📋 Live Master Database Grid")
-    with col_dl2:
-        csv_export = live_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Clean Master (CSV)",
-            data=csv_export,
-            file_name="Ekaagra_Clean_Shelf_Life_Master.csv",
-            mime="text/csv",
-            type="primary"
-        )
-
-    # --- 5. EDITABLE UI (Manual Entry) ---
-    st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
-    
-    edited_df = st.data_editor(
-        live_df, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # --- 6. SAVE LIVE EDITS BUTTON ---
-    if st.button("💾 Save Live Edits to Supabase", type="primary"):
-        with st.spinner("Syncing to cloud..."):
-            clean_df = edited_df.fillna("")
-            clean_df = clean_df.replace({"": None})
-            
-            clean_df = clean_df[
-                (clean_df["product_name"].notna()) & 
-                (clean_df["product_name"] != "")
-            ]
-            
-            records = clean_df.to_dict(orient="records")
-            
-            try:
-                if records:
-                    supabase.table("shelf_life_master").upsert(
-                        records, 
-                        on_conflict="product_name"
-                    ).execute()
-                    st.success("✅ Database updated successfully!")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.warning("No valid records to save.")
-            except Exception as e:
-                st.error(f"⚠️ Error saving to database: {e}")
-
-elif nav_selection == "📦 Receiving & Inbound Spec Check":
-    import pandas as pd
-    import streamlit as st
-    from supabase import create_client, Client
-
-    st.header("Store-Level Receiving & Inbound QC")
-    st.markdown("Verify incoming deliveries against FDU specifications and log material acceptance or rejection.")
-
-    supabase_url = st.secrets["SUPABASE_URL"]
-    supabase_key = st.secrets["SUPABASE_KEY"]
-    supabase: Client = create_client(supabase_url, supabase_key)
-
-    STORE_LOCATIONS = [
-        "Select Store Location...",
-        "189 - Select City Walk, Delhi",
-        "Platina, Gurugram",
-        "DLF CyberHub, Gurugram",
-        "Khan Market, Delhi"
-    ]
-    
-    selected_store = st.selectbox("Select Store Location", STORE_LOCATIONS)
-
-    if selected_store == "Select Store Location...":
-        st.warning("⚠️ Please select your store location to begin receiving inspections.")
-    else:
-        @st.cache_data
-        def load_spec_and_master():
-            spec_df = pd.read_excel("FDU Specification(30 Sept 2026) 2.0.xlsx", sheet_name="FDU")
-            spec_df = spec_df.dropna(subset=['Item Name'])
-            
-            res = supabase.table("shelf_life_master").select("item_code, product_name, primary_brand").execute()
-            master_df = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["item_code", "product_name", "primary_brand"])
-            
-            return spec_df, master_df
-
-        try:
-            spec_df, master_df = load_spec_and_master()
-            
-            spec_df['Item Name Clean'] = spec_df['Item Name'].astype(str).str.strip().str.lower()
-            if not master_df.empty:
-                master_df['product_name_clean'] = master_df['product_name'].astype(str).str.strip().str.lower()
-                merged_df = pd.merge(spec_df, master_df[['product_name_clean', 'item_code', 'primary_brand']], 
-                                     on='product_name_clean', how='left')
-            else:
-                merged_df = spec_df
-                merged_df['item_code'] = "Unassigned"
-                merged_df['primary_brand'] = "Pending Vendor"
-
-            merged_df['Display Label'] = merged_df.apply(
-                lambda row: f"[{row.get('item_code', 'NO-CODE')}] {row['Item Name']} (Vendor: {row.get('primary_brand', 'N/A')})", 
-                axis=1
-            )
-            
-            item_options = sorted(merged_df['Display Label'].dropna().unique().tolist())
-            selected_display = st.selectbox("🔍 Search & Select Received Item (by Code & Name):", options=["-- Select Item --"] + item_options)
-            
-            if selected_display != "-- Select Item --":
-                
-                # FIX: Changed .iloc0 to .iloc[0]
-                row_data = merged_df[merged_df['Display Label'] == selected_display].iloc[0]
-                
-                item_code = row_data.get('item_code', 'N/A')
-                item_name = row_data['Item Name']
-                vendor_name = row_data.get('primary_brand', 'N/A')
-                
-                st.divider()
-                col_spec1, col_spec2, col_spec3 = st.columns(3)
-                with col_spec1:
-                    st.metric(label="🆔 Item Code", value=str(item_code))
-                with col_spec2:
-                    st.metric(label="🏢 Linked Vendor / Brand", value=str(vendor_name))
-                with col_spec3:
-                    st.metric(label="⚖️ Portion Size", value=str(row_data.get('Portion Size', 'N/A')))
-                
-                st.info(f"📏 **Standard Specifications:** {row_data.get('Specification', 'No spec notes available.')}")
-                
-                st.divider()
-                
-                with st.form("receiving_inspection_form"):
-                    st.subheader("📝 Material Acceptance & Inspection")
-                    
-                    batch_no = st.text_input("Vendor Batch / Invoice Number")
-                    
-                    inspection_status = st.radio(
-                        "Inspection Decision:",
-                        ["✅ Accepted (Pass)", "❌ Rejected (Store Rejection)"],
-                        index=0,
-                        horizontal=True
-                    )
-                    
-                    rejection_reason = st.text_area("Rejection Remarks / Reason (Mandatory if rejected):")
-                    
-                    photo = st.camera_input("📸 Capture Delivery / Defect Photo (Optional)")
-                    
-                    submit_receiving = st.form_submit_button("Submit Receiving Record", type="primary")
-                    
-                    if submit_receiving:
-                        if "Rejected" in inspection_status and not rejection_reason.strip():
-                            st.error("⚠️ Rejection requires a mandatory explanation in the remarks field.")
-                        else:
-                            try:
-                                photo_url = None
-                                if photo is not None:
-                                    import cloudinary
-                                    import cloudinary.uploader
-                                    cloudinary.config(
-                                        cloud_name=st.secrets["CLOUDINARY_CLOUD_NAME"],
-                                        api_key=st.secrets["CLOUDINARY_API_KEY"],
-                                        api_secret=st.secrets["CLOUDINARY_API_SECRET"]
-                                    )
-                                    upload_res = cloudinary.uploader.upload(photo)
-                                    photo_url = upload_res.get("secure_url")
+                                supabase.table("daily_audits").insert(audit_data).execute()
+                                del st.session_state[draft_key]
+                                status_msg.success("🎉 Audit successfully locked in Central QA Vault!")
+                                st.balloons()
                                 
-                                log_payload = {
-                                    "store_code": selected_store,
-                                    "item_code": str(item_code),
-                                    "item_name": item_name,
-                                    "vendor_name": str(vendor_name),
-                                    "batch_no": batch_no,
-                                    "qc_status": inspection_status,
-                                    "qc_notes": rejection_reason,
-                                    "photo_url": photo_url
-                                }
-                                
-                                supabase.table("qc_logs").insert(log_payload).execute()
-                                st.success(f"✅ Receiving record saved successfully for {item_name} at {selected_store}!")
+                                st.session_state["latest_audit_photos"] = [proof_a, proof_b, proof_c, proof_d, proof_e]
+                                st.session_state["latest_manager_name"] = manager_name
+                                st.rerun()
                             except Exception as e:
-                                st.error(f"⚠️ Error saving receiving record: {e}")
+                                st.error(f"Database error: {e}")
 
-        except Exception as e:
-            st.error(f"⚠️ Error loading specifications: {e}")
-
-    st.divider()
-    st.subheader(f"📋 Receiving & Rejection Log History ({selected_store})")
-    
-    try:
-        res_logs = supabase.table("qc_logs").select("*").order("created_at", desc=True).execute()
-        if res_logs.data:
-            df_logs = pd.DataFrame(res_logs.data)
+        # --- QA HERO COLLAGE GENERATOR ---
+        if "latest_audit_photos" in st.session_state and any(st.session_state["latest_audit_photos"]):
+            st.markdown("---")
+            st.markdown("### 📸 Generate Your Daily QA Hero Collage!")
+            st.caption("Download a collage of today's audit to share with your team or regional manager.")
             
-            if selected_store != "Select Store Location...":
-                store_filtered_df = df_logs[df_logs["store_code"] == selected_store]
-            else:
-                store_filtered_df = df_logs
-                
-            if not store_filtered_df.empty:
-                st.dataframe(store_filtered_df, use_container_width=True, hide_index=True)
-                
-                csv_data = store_filtered_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="🖨️ Download / Print Store Receiving Report (CSV)",
-                    data=csv_data,
-                    file_name=f"Receiving_Report_{selected_store.replace(' ', '_')}.csv",
-                    mime="text/csv",
-                    type="secondary"
-                )
-            else:
-                st.info("No receiving records found for this location.")
+            qa_hero_name = st.text_input("Confirm Shift Manager / Hero Name:", value=st.session_state.get("latest_manager_name", ""))
+            
+            if st.button("🎨 Create Motivation Collage", type="primary"):
+                with st.spinner("Stitching your photos together..."):
+                    try:
+                        collage_width = 1200
+                        collage_height = 800
+                        collage = Image.new('RGB', (collage_width, collage_height), color=(245, 247, 250))
+                        
+                        valid_images = [img for img in st.session_state["latest_audit_photos"] if img is not None]
+                        
+                        for idx, img_file in enumerate(valid_images[:5]):
+                            img = Image.open(img_file).convert("RGB")
+                            img = img.resize((400, 400))
+                            x = (idx % 3) * 400
+                            y = (idx // 3) * 400
+                            collage.paste(img, (x, y))
+                            
+                        draw = ImageDraw.Draw(collage)
+                        text_x, text_y = 800, 400
+                        
+                        draw.rectangle([text_x, text_y, text_x + 400, text_y + 400], fill=(0, 51, 102))
+                        
+                        today_str = datetime.datetime.now().strftime('%d %b %Y')
+                        motivation_text = f"QA EXCELLENCE\n\nStore:\n{st.session_state['store_name']}\n\nQA Hero:\n{qa_hero_name}\n\nDate: {today_str}\nGreat Job Today!"
+                        
+                        draw.text((text_x + 30, text_y + 50), motivation_text, fill=(255, 255, 255), spacing=10)
+                        
+                        buf = io.BytesIO()
+                        collage.save(buf, format="JPEG", quality=90)
+                        collage_bytes = buf.getvalue()
+                        
+                        st.image(collage_bytes, caption=f"QA Hero Collage - {qa_hero_name}")
+                        
+                        st.download_button(
+                            label="📥 Download & Share Collage",
+                            data=collage_bytes,
+                            file_name=f"QA_Collage_{st.session_state['store_name'].replace(' ', '_')}.jpg",
+                            mime="image/jpeg"
+                        )
+                    except Exception as e:
+                        st.error(f"Could not generate collage: {e}")
+
+    # ==========================================
+    # TAB 2: STORE READINESS PROOFS (Gallery Enabled)
+    # ==========================================
+    with tab2:
+        st.subheader("📸 Opening Hygiene & Readiness Proofs")
+        st.caption("Upload required photo verification from camera or gallery.")
+        
+        with st.form("readiness_form"):
+            p1 = st.file_uploader("Sanitizer Prepared & Metered", type=["jpg", "jpeg", "png"], key="proof_sanitizer")
+            p2 = st.file_uploader("Dusters Dipped in Sanitizer Solution", type=["jpg", "jpeg", "png"], key="proof_dusters")
+            p3 = st.file_uploader("Wash Sink Loaded with Soap Solution", type=["jpg", "jpeg", "png"], key="proof_sink")
+            p4 = st.file_uploader("General Station Readiness / Counter Setup", type=["jpg", "jpeg", "png"], key="proof_general")
+            
+            readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
+            
+            st.markdown("---")
+            if st.form_submit_button("🚀 Submit Readiness Proofs", type="primary"):
+                if not readiness_photos:
+                    st.error("❌ Please upload at least one readiness photo.")
+                else:
+                    with st.spinner("Uploading proofs securely..."):
+                        image_urls = []
+                        if cloudinary_configured:
+                            for photo in readiness_photos:
+                                url = upload_photo(photo, st.session_state["store_id"], "readiness")
+                                if url:
+                                    image_urls.append(url)
+                        
+                        try:
+                            if supabase:
+                                supabase.table("store_readiness_logs").insert({
+                                    "store_id": st.session_state["store_id"],
+                                    "photo_urls": json.dumps(image_urls)
+                                }).execute()
+                            st.success("✅ Readiness proofs successfully uploaded to the vault!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 3: RECEIVING & INVOICE LOG
+    # ==========================================
+    with tab3:
+        st.subheader("🧾 Smart Invoice Management")
+        
+        if "GEMINI_API_KEY" in st.secrets:
+            if genai is not None:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         else:
-            st.info("No logs recorded in the database yet.")
-    except Exception as e:
-        st.error(f"⚠️ Error loading history logs: {e}")
+            st.warning("⚠️ Gemini API Key missing for AI extraction.")
+
+        tab_capture, tab_review = st.tabs(["📸 Fast Capture", "📝 Pending Review & Feed"])
+        
+        with tab_capture:
+            st.info("Capture vendor invoice now. AI extraction happens later.")
+            invoice_photo = st.file_uploader("📂 Capture or Upload Invoice", type=['png', 'jpg', 'jpeg'], key="fast_capture_cam")
+            
+            if invoice_photo and st.button("🚀 Upload Invoice to Queue", type="primary"):
+                with st.spinner("Uploading securely..."):
+                    try:
+                        img_url = upload_photo(invoice_photo, st.session_state["store_id"], "invoices")
+                        if img_url and supabase is not None:
+                            supabase.table("pending_invoices").insert({
+                                "store_code": st.session_state["store_id"],
+                                "invoice_url": img_url,
+                                "status": "Pending AI Extraction"
+                            }).execute()
+                            st.success("✅ Invoice safely queued for later processing!")
+                    except Exception as e:
+                        st.error(f"⚠️ Upload failed: {e}")
+
+        with tab_review:
+            if supabase is not None:
+                pending_res = supabase.table("pending_invoices").select("*").eq("store_code", st.session_state["store_id"]).eq("status", "Pending AI Extraction").execute()
+                
+                if pending_res.data:
+                    df_pending = pd.DataFrame(pending_res.data)
+                    
+                    sl_res = supabase.table("shelf_life_master").select("product_name, category, primary_shelf_life").execute()
+                    df_shelf_life = pd.DataFrame(sl_res.data) if sl_res.data else pd.DataFrame(columns=["product_name", "category", "primary_shelf_life"])
+                    if not df_shelf_life.empty:
+                        df_shelf_life['product_name_lower'] = df_shelf_life['product_name'].astype(str).str.lower()
+                    
+                    for _, row in df_pending.iterrows():
+                        with st.expander(f"🧾 Invoice Logged: {str(row['created_at'])[:16]}"):
+                            col_img, col_action = st.columns([1, 2])
+                            with col_img:
+                                st.image(row['invoice_url'], use_container_width=True)
+                            with col_action:
+                                if st.button(f"🤖 Run AI Extraction", key=f"extract_{row['id']}"):
+                                    with st.spinner("Gemini is reading the invoice..."):
+                                        try:
+                                            img_response = requests.get(row['invoice_url'])
+                                            img_buffer = Image.open(io.BytesIO(img_response.content))
+                                            
+                                            vision_model = genai.GenerativeModel("gemini-1.5-flash")
+                                            extraction_prompt = """
+                                            Read this vendor invoice and extract all line items. 
+                                            Return ONLY a valid JSON array of objects without markdown formatting.
+                                            Keys required: "item_name", "vendor_name", "batch_no", "quantity".
+                                            """
+                                            response = vision_model.generate_content([extraction_prompt, img_buffer])
+                                            raw_json_text = response.text.strip().replace('```json', '').replace('```', '')
+                                            extracted_data = json.loads(raw_json_text)
+                                            df_invoice = pd.DataFrame(extracted_data)
+                                            
+                                            if not df_shelf_life.empty:
+                                                df_invoice['lookup_name'] = df_invoice['item_name'].astype(str).str.lower()
+                                                df_merged = pd.merge(
+                                                    df_invoice, 
+                                                    df_shelf_life[['product_name_lower', 'category', 'primary_shelf_life']], 
+                                                    left_on='lookup_name', 
+                                                    right_on='product_name_lower', 
+                                                    how='left'
+                                                )
+                                                df_merged['shelf_life_tracked'] = df_merged['primary_shelf_life'].notna()
+                                                df_merged.drop(columns=['lookup_name', 'product_name_lower'], inplace=True, errors='ignore')
+                                            else:
+                                                df_merged = df_invoice
+                                                df_merged['shelf_life_tracked'] = False
+                                            
+                                            st.session_state[f"extracted_df_{row['id']}"] = df_merged
+                                        except Exception as e:
+                                            st.error(f"⚠️ Extraction error: {e}")
+                                            
+                                if f"extracted_df_{row['id']}" in st.session_state:
+                                    st.markdown("### Verify & Correct Data")
+                                    edited_invoice_df = st.data_editor(
+                                        st.session_state[f"extracted_df_{row['id']}"],
+                                        num_rows="dynamic",
+                                        use_container_width=True,
+                                        key=f"editor_{row['id']}"
+                                    )
+                                    if st.button("💾 Confirm & Feed Central Ledger", key=f"commit_{row['id']}", type="primary"):
+                                        clean_payload = edited_invoice_df.fillna("").to_dict(orient="records")
+                                        for record in clean_payload:
+                                            record["store_code"] = st.session_state["store_id"]
+                                            record["source_invoice_url"] = row['invoice_url']
+                                        
+                                        supabase.table("store_inventory_ledger").insert(clean_payload).execute()
+                                        supabase.table("pending_invoices").update({"status": "Processed & Ledger Fed"}).eq("id", row['id']).execute()
+                                        st.success("📦 Inventory fed centrally! Invoice cleared from queue.")
+                                        del st.session_state[f"extracted_df_{row['id']}"]
+                                        st.rerun()
+                else:
+                    st.info("No pending invoices in the queue for this location.")
+
+    # ==========================================
+    # TAB 4: STOCK & INTERNAL TRANSFERS
+    # ==========================================
+    with tab4:
+        st.subheader("🔄 Stock Transfer & Thaw Log")
+        transfer_type = st.radio("Select Transfer Protocol", ["Freezer to FDU Chiller (Internal Thaw)", "Inter-Store Dispatch (External)"])
+        
+        if transfer_type == "Freezer to FDU Chiller (Internal Thaw)":
+            master_data = load_master_reference()
+            ITEM_MAPPING = {item['warehouse_item_name']: item['store_retail_name'] for item in master_data}
+            SHELF_LIFE_HOURS = {item['store_retail_name']: item['shelf_life_hours'] for item in master_data}
+            TEMP_ZONES = {item['store_retail_name']: item['temperature_zone'] for item in master_data}
+            
+            with st.form("fdu_transfer_form"):
+                wh_item = st.selectbox("Select Warehouse Item (Invoice Name)", ["Select Item..."] + list(ITEM_MAPPING.keys()))
+                
+                if wh_item != "Select Item...":
+                    store_name = ITEM_MAPPING[wh_item]
+                    shelf_life = SHELF_LIFE_HOURS.get(store_name, 24)
+                    temp_zone = TEMP_ZONES.get(store_name, "Chiller Zone (1-5°C)")
+                    
+                    now = datetime.datetime.now()
+                    expiry_time = now + datetime.timedelta(hours=shelf_life)
+                    
+                    st.info(f"🏷️ **Store Retail Name:** {store_name}\n⏳ **FSSAI Shelf Life:** {shelf_life} hours\n🌡️ **Storage Requirement:** {temp_zone}")
+                    
+                    if shelf_life == 0:
+                        st.error("🚨 **RED-LINE PROTOCOL:** Do not thaw. Cook directly from Freezer Zone (<-18°C).")
+                    else:
+                        st.warning(f"🚨 **MRD Label Required:** Must be discarded by **{expiry_time.strftime('%d-%b-%Y %I:%M %p')}**")
+                
+                transfer_qty = st.number_input("Quantity Transferred to FDU", min_value=1, step=1)
+                fdu_temp = st.number_input("Current FDU Chiller Temp (°C)", value=4.0, step=0.1)
+                
+                if st.form_submit_button("🔄 Log FDU Transfer", type="primary"):
+                    if wh_item == "Select Item...":
+                        st.error("❌ Please select an item to transfer.")
+                    elif shelf_life == 0:
+                        st.error("❌ Item cannot be transferred to FDU.")
+                    else:
+                        with st.spinner("Logging FDU transfer..."):
+                            fdu_data = {
+                                "store_id": st.session_state["store_id"],
+                                "warehouse_name": wh_item,
+                                "store_name": store_name,
+                                "quantity": transfer_qty,
+                                "fdu_temp": fdu_temp,
+                                "thaw_start_time": now.strftime('%Y-%m-%d %H:%M:%S'),
+                                "discard_time": expiry_time.strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            try:
+                                if supabase:
+                                    supabase.table("store_fdu_transfers").insert(fdu_data).execute()
+                                    st.success(f"✅ Transfer logged!")
+                            except Exception as e:
+                                st.error(f"Database error: {e}")
+                                
+        elif transfer_type == "Inter-Store Dispatch (External)":
+            with st.form("transfer_form"):
+                destination = st.selectbox("Destination", ["DLF Mid Town Plaza", "Janakpuri, Delhi", "GK1, Delhi"])
+                transfer_items = st.text_area("Items Transferred (Include Quantities)")
+                dispatch_temp = st.number_input("Dispatch Core Temp (°C)", step=0.1, format="%.1f")
+                transfer_remarks = st.text_input("Remarks / Condition of Goods")
+                
+                if st.form_submit_button("🔄 Initiate Dispatch", type="primary"):
+                    if not transfer_items:
+                        st.error("❌ Please list items.")
+                    else:
+                        with st.spinner("Logging transfer..."):
+                            transfer_data = {
+                                "store_id": st.session_state["store_id"],
+                                "destination": destination,
+                                "items": transfer_items,
+                                "dispatch_temp": dispatch_temp,
+                                "remarks": transfer_remarks
+                            }
+                            try:
+                                if supabase:
+                                    supabase.table("store_transfers").insert(transfer_data).execute()
+                                    st.success("✅ Dispatch logged successfully!")
+                            except Exception as e:
+                                st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 5: WASTAGE & DISCARD
+    # ==========================================
+    with tab5:
+        st.subheader("🗑️ Wastage & Quality Discard Log")
+        
+        with st.form("wastage_form"):
+            waste_item = st.text_input("Item Name")
+            col_w1, col_w2 = st.columns(2)
+            with col_w1:
+                waste_qty = st.number_input("Quantity Discarded", min_value=0.0, step=0.5)
+            with col_w2:
+                waste_reason = st.selectbox("Reason for Discard", [
+                    "Expired / Out of Date", "Temperature Abuse", "Physical Damage", "Quality Standard Failure"
+                ])
+            
+            waste_photo = st.file_uploader("📂 Upload Wastage Evidence (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="waste_photo")
+            
+            if st.form_submit_button("🗑️ Log Wastage", type="primary"):
+                if not waste_item or waste_qty <= 0:
+                    st.error("❌ Valid Item Name and Quantity are required.")
+                else:
+                    with st.spinner("Logging wastage record..."):
+                        waste_url = upload_photo(waste_photo, st.session_state["store_id"], "wastage") if waste_photo else None
+                        
+                        waste_data = {
+                            "store_id": st.session_state["store_id"],
+                            "item_name": waste_item,
+                            "quantity": waste_qty,
+                            "reason": waste_reason,
+                            "evidence_url": waste_url
+                        }
+                        try:
+                            if supabase:
+                                supabase.table("store_wastage").insert(waste_data).execute()
+                                st.success("✅ Wastage record saved!")
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
+    # ==========================================
+    # TAB 6: RESOURCES (Active Network Vault)
+    # ==========================================
+    with tab6:
+        st.subheader("📚 Operational Resources & Vault")
+        st.caption("Access official SOPs, safety guides, and operational charts.")
+        
+        try:
+            if supabase is not None:
+                res_query = supabase.table("central_resources").select("*").execute()
+                if res_query.data:
+                    for row in res_query.data:
+                        col_r1, col_r2 = st.columns([3, 1])
+                        col_r1.markdown(f"**📌 {row['category']}**: {row['file_name']}")
+                        col_r2.markdown(f"[🔗 View / Download]({row['file_url']})", unsafe_allow_html=True)
+                else:
+                    st.info("📂 No master documents uploaded by central admin yet.")
+        except Exception:
+            st.info("Resource repository loading...")
+
+    # ==========================================
+    # OPTIONAL FEEDBACK SECTION AT BOTTOM
+    # ==========================================
+    st.markdown("---")
+    with st.expander("💬 Share Feedback / Report an Issue (Optional)", expanded=False):
+        with st.form("feedback_form"):
+            st.caption("Have suggestions or facing an app issue? Let management know.")
+            user_feedback = st.text_area("Your Feedback / Comments", placeholder="Type your message here...")
+            manager_tag = st.text_input("Your Name (Optional)")
+            
+            if st.form_submit_button("📤 Submit Feedback"):
+                if not user_feedback.strip():
+                    st.error("❌ Please write some feedback before submitting.")
+                else:
+                    try:
+                        if supabase is not None:
+                            supabase.table("store_feedback").insert({
+                                "store_id": st.session_state["store_id"],
+                                "store_name": st.session_state["store_name"],
+                                "manager_name": manager_tag if manager_tag else "Anonymous",
+                                "feedback_text": user_feedback
+                            }).execute()
+                            st.success("✅ Thank you! Your feedback has been sent to central management.")
+                    except Exception as e:
+                        st.error(f"Failed to submit feedback: {e}")
+
+# --- APP ROUTING ---
+if st.session_state["logged_in"]:
+    store_dashboard()
+else:
+    login_screen()
