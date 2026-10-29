@@ -1582,215 +1582,219 @@ elif nav_selection == "📦 Shelf-Life Manager":
 
 elif nav_selection == "🚀 NSO & Pest Control Hub":
     import plotly.graph_objects as go
-    import re
+    import datetime
     
-    st.subheader("🚀 New Store Opening (NSO) QA Pipeline & Pest Control Ledger")
-    st.caption("Track handover dates, visual opening timelines, QA pre-opening dependencies, and pest control gap audits.")
+    st.subheader("🚀 New Store Opening (NSO) QA Pipeline & Pest Control Hub")
+    st.caption("Strategic handover tracking, visual milestone timelines, pre-opening QA clearance, and structural gap audits.")
     
     tab_nso_timeline, tab_pest_control = st.tabs(["📅 Master NSO Timeline & QA Pipeline", "🐜 Pest Control & Gap Audit Ledger"])
     
+    # ---------------------------------------------------------
+    # MASTER 35-STORE DATASET
+    # ---------------------------------------------------------
+    default_nso_data = [
+        {"id": 1, "site_name": "Gold Dust City Centre", "city": "Patiala", "handover_date": "2026-02-27", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 2, "site_name": "DLF Midtown Plaza", "city": "Delhi", "handover_date": "2026-03-11", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 3, "site_name": "Neelkanth Star", "city": "Murthal", "handover_date": "2026-04-03", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 4, "site_name": "Creek", "city": "Punjab", "handover_date": "2026-08-20", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 5, "site_name": "Sukh Plaza", "city": "Mohali", "handover_date": "2026-09-23", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 6, "site_name": "JLPL Sec-82", "city": "Mohali", "handover_date": "2026-09-18", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
+        {"id": 7, "site_name": "Central Ikon", "city": "Noida", "handover_date": "2026-10-30", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
+        {"id": 8, "site_name": "CPO", "city": "Ludhiana", "handover_date": "2026-10-21", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
+        {"id": 9, "site_name": "Karnal", "city": "Karnal", "handover_date": "2026-11-04", "status": "On Track", "fssai_applied": True, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 10, "site_name": "Kailash Colony", "city": "Delhi", "handover_date": "2026-11-02", "status": "On Track", "fssai_applied": True, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 11, "site_name": "Brand Village", "city": "Hoshiarpur-PB", "handover_date": "2026-11-15", "status": "On Track", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 12, "site_name": "Chembur", "city": "Mumbai", "handover_date": "2026-10-28", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
+        {"id": 13, "site_name": "Boulevard Walk", "city": "Noida", "handover_date": "2026-11-25", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 14, "site_name": "Glamton Plaza", "city": "Ludhiana", "handover_date": "2026-11-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 15, "site_name": "Ganga Trueno", "city": "Pune", "handover_date": "2026-11-25", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 16, "site_name": "Punjabi Bagh", "city": "Delhi", "handover_date": "2026-11-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 17, "site_name": "Hauz Khas", "city": "Delhi", "handover_date": "2026-12-10", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 18, "site_name": "Spaze Boulevard", "city": "Gurugram", "handover_date": "2026-12-15", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 19, "site_name": "Pink Walk", "city": "Jaipur", "handover_date": "2026-12-10", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 20, "site_name": "Runwal, Mulund", "city": "Mumbai", "handover_date": "2026-12-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 21, "site_name": "Eldeco Fbd", "city": "Faridabad", "handover_date": "2026-12-05", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 22, "site_name": "Freedom HS-Pune", "city": "Pune", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 23, "site_name": "Joya Toll", "city": "UP", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 24, "site_name": "Chandigarh Sec7", "city": "Chandigarh", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 25, "site_name": "IHC", "city": "Ghaziabad", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 26, "site_name": "Jnk, Kurukshetra", "city": "Kurukshetra", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 27, "site_name": "Aerowalk", "city": "Mohali", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 28, "site_name": "WTP Jaipur", "city": "Jaipur", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 29, "site_name": "Sirsi Road Vaishali", "city": "Jaipur", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 30, "site_name": "Omera Urban Square", "city": "Sangrur-PB", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 31, "site_name": "Gilco Greens", "city": "Phagwara-PB", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 32, "site_name": "Magnum", "city": "Gurugram", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 33, "site_name": "Kalyani Nagar-Pune", "city": "Pune", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 34, "site_name": "L-13 CP", "city": "Delhi", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
+        {"id": 35, "site_name": "Route 65 GGR", "city": "Gurugram", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False}
+    ]
+
     # ==========================================
     # TAB 1: MASTER NSO TIMELINE & QA PIPELINE
     # ==========================================
     with tab_nso_timeline:
-        # --- 1. EXCEL/CSV AUTO-IMPORTER FOR BD TRACKERS ---
-        with st.expander("📥 Import BD NSO Tracker File (Excel / CSV)", expanded=False):
-            st.info("Upload the latest BD handover Excel file to automatically parse and refresh all 35+ store handover dates.")
-            bd_file = st.file_uploader("Upload BD Handover File", type=["xlsx", "xls", "csv"], key="bd_nso_upload")
-            if bd_file and st.button("🚀 Sync BD Excel to QA Pipeline", type="primary"):
-                try:
-                    df_bd_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
-                    df_bd_raw.columns = [str(c).strip().lower() for c in df_bd_raw.columns]
-                    
-                    # Map standard columns from BD sheet
-                    col_site = next((c for c in df_bd_raw.columns if 'site' in c or 'store' in c), None)
-                    col_city = next((c for c in df_bd_raw.columns if 'city' in c), None)
-                    col_handover = next((c for c in df_bd_raw.columns if 'ops' in c or 'handover' in c or 'ac' in c), None)
-                    col_status = next((c for c in df_bd_raw.columns if 'status' in c), None)
-                    
-                    if col_site:
-                        clean_recs = []
-                        for idx, r in df_bd_raw.iterrows():
-                            s_name = str(r.get(col_site, '')).strip()
-                            if not s_name or s_name.lower() in ['nan', 'none', '']: continue
-                            
-                            s_city = str(r.get(col_city, '')).strip() if col_city else ""
-                            raw_date = str(r.get(col_handover, '')).strip() if col_handover else "TBD"
-                            raw_stat = str(r.get(col_status, '')).strip() if col_status else "TBD"
-                            
-                            # Normalize Status
-                            stat_mapped = "TBD"
-                            if "operational" in raw_stat.lower(): stat_mapped = "Completed"
-                            elif "uc" in raw_stat.lower() or "under" in raw_stat.lower(): stat_mapped = "On Track"
-                            elif "loi" in raw_stat.lower() or "agreement" in raw_stat.lower(): stat_mapped = "Pending Dependencies"
-                            
-                            # Clean Date
-                            clean_dt_str = "TBD"
-                            try:
-                                parsed_dt = pd.to_datetime(raw_date, errors='coerce')
-                                if pd.notna(parsed_dt):
-                                    clean_dt_str = parsed_dt.strftime('%Y-%m-%d')
-                            except Exception:
-                                clean_dt_str = "TBD"
-
-                            clean_recs.append({
-                                "id": idx + 1,
-                                "site_name": s_name,
-                                "city": s_city if s_city.lower() != 'nan' else "",
-                                "handover_date": clean_dt_str,
-                                "status": stat_mapped,
-                                "fssai_applied": stat_mapped == "Completed",
-                                "pest_contract": stat_mapped == "Completed",
-                                "water_test": stat_mapped == "Completed",
-                                "pre_op_audit": stat_mapped == "Completed"
-                            })
-                            
-                        if supabase is not None and clean_recs:
-                            supabase.table("nso_pipeline").delete().neq("id", 0).execute()
-                            supabase.table("nso_pipeline").insert(clean_recs).execute()
-                            st.success(f"✅ Successfully synced {len(clean_recs)} store records from BD tracker!")
-                            st.rerun()
-                except Exception as e:
-                    st.error(f"Error parsing BD file: {e}")
-
-        # --- 2. FETCH OR LOAD FULL 35-STORE DATASET ---
+        # 1. Quiet Database Fetcher (No Raw JSON Errors)
         nso_df = pd.DataFrame()
-        try:
-            if supabase is not None:
+        if supabase is not None:
+            try:
                 res = supabase.table("nso_pipeline").select("*").execute()
                 if res.data:
                     nso_df = pd.DataFrame(res.data)
-        except Exception as e:
-            st.warning(f"Could not load NSO table from Supabase: {e}")
-            
-        # Complete fallback extracted from BD Handover Sheets (35 Locations)
+            except Exception:
+                pass # Silently fallback to default data if table does not exist yet
+
         if nso_df.empty:
-            nso_df = pd.DataFrame([
-                {"id": 1, "site_name": "Gold Dust City Centre", "city": "Patiala", "handover_date": "2026-02-27", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 2, "site_name": "DLF Midtown Plaza", "city": "Delhi", "handover_date": "2026-03-11", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 3, "site_name": "Neelkanth Star", "city": "Murthal", "handover_date": "2026-04-03", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 4, "site_name": "Creek", "city": "Punjab", "handover_date": "2026-08-20", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 5, "site_name": "Sukh Plaza", "city": "Mohali", "handover_date": "2026-09-23", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 6, "site_name": "JLPL Sec-82", "city": "Mohali", "handover_date": "2026-09-18", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
-                {"id": 7, "site_name": "Central Ikon", "city": "Noida", "handover_date": "2026-10-30", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
-                {"id": 8, "site_name": "CPO", "city": "Ludhiana", "handover_date": "2026-10-21", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
-                {"id": 9, "site_name": "Karnal", "city": "Karnal", "handover_date": "2026-11-04", "status": "On Track", "fssai_applied": True, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 10, "site_name": "Kailash Colony", "city": "Delhi", "handover_date": "2026-11-02", "status": "On Track", "fssai_applied": True, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 11, "site_name": "Brand Village", "city": "Hoshiarpur-PB", "handover_date": "2026-11-15", "status": "On Track", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 12, "site_name": "Chembur", "city": "Mumbai", "handover_date": "2026-10-28", "status": "On Track", "fssai_applied": True, "pest_contract": True, "water_test": False, "pre_op_audit": False},
-                {"id": 13, "site_name": "Boulevard Walk", "city": "Noida", "handover_date": "2026-11-25", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 14, "site_name": "Glamton Plaza", "city": "Ludhiana", "handover_date": "2026-11-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 15, "site_name": "Ganga Trueno", "city": "Pune", "handover_date": "2026-11-25", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 16, "site_name": "Punjabi Bagh", "city": "Delhi", "handover_date": "2026-11-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 17, "site_name": "Hauz Khas", "city": "Delhi", "handover_date": "2026-12-10", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 18, "site_name": "Spaze Boulevard", "city": "Gurugram", "handover_date": "2026-12-15", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 19, "site_name": "Pink Walk", "city": "Jaipur", "handover_date": "2026-12-10", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 20, "site_name": "Runwal, Mulund", "city": "Mumbai", "handover_date": "2026-12-20", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 21, "site_name": "Eldeco Fbd", "city": "Faridabad", "handover_date": "2026-12-05", "status": "Pending Dependencies", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 22, "site_name": "Freedom HS-Pune", "city": "Pune", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 23, "site_name": "Joya Toll", "city": "UP", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 24, "site_name": "Chandigarh Sec7", "city": "Chandigarh", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 25, "site_name": "IHC", "city": "Ghaziabad", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 26, "site_name": "Jnk, Kurukshetra", "city": "Kurukshetra", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 27, "site_name": "Aerowalk", "city": "Mohali", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 28, "site_name": "WTP Jaipur", "city": "Jaipur", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 29, "site_name": "Sirsi Road Vaishali", "city": "Jaipur", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 30, "site_name": "Omera Urban Square", "city": "Sangrur-PB", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 31, "site_name": "Gilco Greens", "city": "Phagwara-PB", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 32, "site_name": "Magnum", "city": "Gurugram", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 33, "site_name": "Kalyani Nagar-Pune", "city": "Pune", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 34, "site_name": "L-13 CP", "city": "Delhi", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False},
-                {"id": 35, "site_name": "Route 65 GGR", "city": "Gurugram", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False}
-            ])
+            nso_df = pd.DataFrame(default_nso_data)
 
-        # Safe date conversion
+        # 2. Executive Metric Badges
         nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
-        
-        # --- 3. RENDER PLOTLY TIMELINE CHART ---
-        st.markdown("### 📊 Master Pipeline & Handover Timeline")
-        
-        nso_df_plot = nso_df.sort_values(by='handover_date_dt', ascending=True).copy()
-        
-        color_map = {
-            "Completed": "#2E7D32",             # Green
-            "On Track": "#3366CC",              # Blue
-            "Pending Dependencies": "#D9822B",  # Amber/Orange
-            "TBD": "#757575"                    # Grey
-        }
-        
-        fig = go.Figure()
+        total_sites = len(nso_df)
+        completed_cnt = len(nso_df[nso_df['status'] == 'Completed'])
+        ontrack_cnt = len(nso_df[nso_df['status'] == 'On Track'])
+        pending_cnt = len(nso_df[nso_df['status'] == 'Pending Dependencies'])
+        tbd_cnt = len(nso_df[nso_df['status'] == 'TBD'])
 
-        for status_type, group in nso_df_plot.groupby("status"):
-            x_vals = []
-            y_vals = []
-            labels = []
-            
-            for idx, row in group.iterrows():
-                if pd.notna(row['handover_date_dt']):
-                    x_vals.append(row['handover_date_dt'])
-                    formatted_date = row['handover_date_dt'].strftime('%d %b')
-                else:
-                    x_vals.append(pd.to_datetime("2027-01-15"))
-                    formatted_date = "TBD"
-                
-                y_pos = len(y_vals) + 1
-                y_vals.append(y_pos)
-                labels.append(f" <b>{row['site_name']}</b> ({formatted_date})")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("📍 Total Pipeline", f"{total_sites} Sites")
+        m2.metric("🟢 Operational", f"{completed_cnt} Stores")
+        m3.metric("🔵 Under Fit-out", f"{ontrack_cnt} Sites")
+        m4.metric("🟠 Dependencies", f"{pending_cnt} Sites")
+        m5.metric("⚪ Early LOI / TBD", f"{tbd_cnt} Sites")
 
-            fig.add_trace(go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="markers+text",
-                name=status_type,
-                marker=dict(
-                    size=20,
-                    color=color_map.get(status_type, "#757575"),
-                    line=dict(width=1.5, color="#1A110A")
-                ),
-                text=labels,
-                textposition="middle right",
-                textfont=dict(size=11, color="#1A110A"),
-                hoverinfo="text"
-            ))
-
-        fig.update_layout(
-            height=460,
-            margin=dict(l=20, r=160, t=30, b=40),
-            plot_bgcolor="#F8F9FA",
-            paper_bgcolor="#FFFFFF",
-            xaxis=dict(
-                title="Target Ops Handover Timeline",
-                type="date",
-                showgrid=True,
-                gridcolor="#E0E0E0",
-                tickformat="%b %Y"
-            ),
-            yaxis=dict(
-                showgrid=False,
-                zeroline=False,
-                showticklabels=False,
-                range=[0, 10]
-            ),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5
-            )
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-
-        # --- 4. EDITABLE DATA GRID FOR ALL 35 LOCATIONS ---
         st.markdown("---")
-        st.markdown("### ✏️ Edit NSO Dates & QA Pre-Opening Dependencies")
-        st.caption("Directly update handover dates, site names, and QA readiness checkboxes. Changes trigger instant visual timeline updates.")
+
+        # 3. BD Excel/CSV Importer Expander
+        with st.expander("📥 Import BD NSO Tracker File (Excel / CSV)", expanded=False):
+            st.caption("Upload the BD team's handover Excel sheet to parse dates automatically.")
+            bd_file = st.file_uploader("Choose BD Sheet", type=["xlsx", "xls", "csv"], key="bd_nso_upload_v2")
+            if bd_file and st.button("🚀 Sync BD File to Pipeline", type="primary"):
+                try:
+                    df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
+                    df_raw.columns = [str(c).strip().lower() for c in df_raw.columns]
+                    col_site = next((c for c in df_raw.columns if 'site' in c or 'store' in c), None)
+                    col_city = next((c for c in df_raw.columns if 'city' in c), None)
+                    col_date = next((c for c in df_raw.columns if 'ops' in c or 'handover' in c or 'ac' in c), None)
+                    col_stat = next((c for c in df_raw.columns if 'status' in c), None)
+
+                    if col_site:
+                        recs = []
+                        for idx, r in df_raw.iterrows():
+                            sn = str(r.get(col_site, '')).strip()
+                            if not sn or sn.lower() in ['nan', 'none', '']: continue
+                            sc = str(r.get(col_city, '')).strip() if col_city else ""
+                            rd = str(r.get(col_date, '')).strip() if col_date else "TBD"
+                            rs = str(r.get(col_stat, '')).strip() if col_stat else "TBD"
+
+                            st_val = "TBD"
+                            if "operational" in rs.lower(): st_val = "Completed"
+                            elif "uc" in rs.lower() or "under" in rs.lower(): st_val = "On Track"
+                            elif "loi" in rs.lower() or "agreement" in rs.lower(): st_val = "Pending Dependencies"
+
+                            dt_val = "TBD"
+                            p_dt = pd.to_datetime(rd, errors='coerce')
+                            if pd.notna(p_dt): dt_val = p_dt.strftime('%Y-%m-%d')
+
+                            recs.append({
+                                "id": idx + 1, "site_name": sn, "city": sc if sc.lower() != 'nan' else "",
+                                "handover_date": dt_val, "status": st_val,
+                                "fssai_applied": st_val == "Completed", "pest_contract": st_val == "Completed",
+                                "water_test": st_val == "Completed", "pre_op_audit": st_val == "Completed"
+                            })
+                        if supabase is not None and recs:
+                            try:
+                                supabase.table("nso_pipeline").delete().neq("id", 0).execute()
+                                supabase.table("nso_pipeline").insert(recs).execute()
+                                st.success(f"✅ Synced {len(recs)} store records from BD file!")
+                                st.rerun()
+                            except Exception as ex:
+                                st.error(f"Cloud sync error: {ex}")
+                except Exception as e:
+                    st.error(f"Error reading file: {e}")
+
+        # 4. HIGH-POLISH TIMELINE PLOTLY (Zero Label Overlap)
+        st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
+
+        dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
+        tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
+
+        if not dated_df.empty:
+            color_map = {
+                "Completed": "#2E7D32",             # Emerald Green
+                "On Track": "#1E88E5",              # Vivid Blue
+                "Pending Dependencies": "#E65100",  # Dark Orange/Amber
+                "TBD": "#757575"                    # Slate Grey
+            }
+
+            fig = go.Figure()
+
+            # Plot each store on its dedicated unique Y row
+            for idx, row in dated_df.iterrows():
+                y_label = f"<b>{row['site_name']}</b> ({row['city']})"
+                date_str = row['handover_date_dt'].strftime('%d %b %Y')
+                st_color = color_map.get(row['status'], "#757575")
+
+                fig.add_trace(go.Scatter(
+                    x=[row['handover_date_dt']],
+                    y=[y_label],
+                    mode="markers+text",
+                    name=row['status'],
+                    marker=dict(
+                        size=15,
+                        color=st_color,
+                        line=dict(width=1.5, color="#1A110A")
+                    ),
+                    text=[f"  <b>{date_str}</b> — {row['status']}"],
+                    textposition="middle right",
+                    textfont=dict(size=11, color="#1A110A"),
+                    showlegend=False
+                ))
+
+            # Dynamic chart height calculation to guarantee ample line padding
+            dynamic_height = max(450, len(dated_df) * 32 + 80)
+
+            fig.update_layout(
+                height=dynamic_height,
+                margin=dict(l=20, r=200, t=20, b=40),
+                plot_bgcolor="#F8F9FA",
+                paper_bgcolor="#FFFFFF",
+                xaxis=dict(
+                    title="Target Operational Handover Date",
+                    type="date",
+                    showgrid=True,
+                    gridcolor="#E2E8F0",
+                    tickformat="%b %Y"
+                ),
+                yaxis=dict(
+                    autorange="reversed", # Chronological order from top to bottom
+                    showgrid=True,
+                    gridcolor="#F1F5F9",
+                    tickfont=dict(size=12, color="#1A110A")
+                )
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No dated handover stores found.")
+
+        # 5. Early Stage TBD Pipeline Summary Card View
+        if not tbd_df.empty:
+            with st.expander(f"⏳ LOI & Early Stage Pipeline (Handover Date TBD — {len(tbd_df)} Locations)", expanded=False):
+                tbd_cols = st.columns(3)
+                for idx, row in tbd_df.iterrows():
+                    with tbd_cols[idx % 3]:
+                        st.markdown(f"📍 **{row['site_name']}** ({row['city']})\n*Status*: `{row['status']}`")
+
+        # 6. Interactive Data Grid
+        st.markdown("---")
+        st.markdown("### ✏️ Edit NSO Handover Dates & QA Clearance Checklist")
+        st.caption("Update target dates or toggle pre-opening compliance checkboxes. Timeline updates automatically on save.")
 
         edited_nso_df = st.data_editor(
             nso_df,
             num_rows="dynamic",
             use_container_width=True,
+            key="nso_pipeline_editor_v2",
             column_config={
                 "site_name": st.column_config.TextColumn("Site Name", required=True),
                 "city": st.column_config.TextColumn("City"),
@@ -1805,13 +1809,13 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             column_order=["site_name", "city", "handover_date", "status", "fssai_applied", "pest_contract", "water_test", "pre_op_audit"]
         )
 
-        if st.button("💾 Save Timeline & QA Status Changes", type="primary"):
+        if st.button("💾 Save NSO Timeline & QA Clearance Changes", type="primary"):
             try:
-                clean_nso_payload = edited_nso_df.drop(columns=['handover_date_dt'], errors='ignore').fillna("").to_dict(orient="records")
+                clean_payload = edited_nso_df.drop(columns=['handover_date_dt'], errors='ignore').fillna("").to_dict(orient="records")
                 if supabase is not None:
                     supabase.table("nso_pipeline").delete().neq("id", 0).execute()
-                    supabase.table("nso_pipeline").insert(clean_nso_payload).execute()
-                    st.success("✅ NSO pipeline & timeline updated successfully!")
+                    supabase.table("nso_pipeline").insert(clean_payload).execute()
+                    st.success("✅ NSO pipeline & timeline successfully updated!")
                     st.rerun()
             except Exception as e:
                 st.error(f"Failed to sync timeline: {e}")
@@ -1820,39 +1824,48 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
     # TAB 2: PEST CONTROL & GAP AUDIT LEDGER
     # ==========================================
     with tab_pest_control:
-        st.markdown("### 🐜 Network Pest Control Financials & Service Execution")
-        st.caption("Track vendor SLAs, monthly costs, service execution, and structural gap audits requiring civil maintenance.")
+        st.markdown("### 🐜 Network Pest Control Financials & Structural Gap Ledger")
+        st.caption("Track agency contracts, monthly cost, service fulfillment, and civil maintenance gap audit findings.")
 
+        # 1. Executive Pest Control Metrics
         col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-        col_p1.metric("🏢 Serviced Facilities", "24 Stores")
+        col_p1.metric("🏢 Serviced Outlets", "24 Outlets")
         col_p2.metric("💳 Monthly Pest Budget", "₹1,48,000")
-        col_p3.metric("⚠️ Pending Gap Audits", "4 Open Findings", delta="Civil Fix Required", delta_color="inverse")
-        col_p4.metric("✅ Service Compliance", "92%", delta="2 Missed")
+        col_p3.metric("⚠️ Pending Civil Gap Fixes", "4 Open Findings", delta="Maintenance Required", delta_color="inverse")
+        col_p4.metric("✅ Service Fulfillment", "92%", delta="2 Missed")
 
         st.markdown("---")
 
+        # 2. Quiet Data Fetcher
         pest_df = pd.DataFrame()
-        try:
-            if supabase is not None:
+        if supabase is not None:
+            try:
                 p_res = supabase.table("store_pest_control").select("*").execute()
                 if p_res.data:
                     pest_df = pd.DataFrame(p_res.data)
-        except Exception:
-            pass
+            except Exception:
+                pass
+
+        default_pest_data = [
+            {"store_name": "Janakpuri", "vendor": "Rentokil PCI", "annual_cost": 72000, "frequency": "Fortnightly", "last_service": "2026-10-15", "execution_status": "Done", "pest_gap_audit_findings": "Door sweep missing at rear entrance."},
+            {"store_name": "GK1", "vendor": "Rentokil PCI", "annual_cost": 68000, "frequency": "Fortnightly", "last_service": "2026-10-18", "execution_status": "Done", "pest_gap_audit_findings": "None. Facilities sealed."},
+            {"store_name": "Oberoi SkyCity", "vendor": "HiCare", "annual_cost": 84000, "frequency": "Weekly", "last_service": "2026-10-22", "execution_status": "Done", "pest_gap_audit_findings": "Gap around AC pipe in false ceiling near BOH."},
+            {"store_name": "Season Mall Pune", "vendor": "HiCare", "annual_cost": 78000, "frequency": "Fortnightly", "last_service": "2026-10-05", "execution_status": "Missed", "pest_gap_audit_findings": "Vendor missed fortnightly visit. Rescheduled."},
+            {"store_name": "DLF Moti Nagar", "vendor": "Rentokil PCI", "annual_cost": 72000, "frequency": "Fortnightly", "last_service": "2026-10-20", "execution_status": "Done", "pest_gap_audit_findings": "Drain mesh loose in dishwashing zone."}
+        ]
 
         if pest_df.empty:
-            pest_df = pd.DataFrame([
-                {"store_name": "Janakpuri", "vendor": "Rentokil PCI", "annual_cost": 72000, "frequency": "Fortnightly", "last_service": "2026-10-15", "execution_status": "Done", "pest_gap_audit_findings": "Door sweep missing at rear entrance."},
-                {"store_name": "GK1", "vendor": "Rentokil PCI", "annual_cost": 68000, "frequency": "Fortnightly", "last_service": "2026-10-18", "execution_status": "Done", "pest_gap_audit_findings": "None. Facilities sealed."},
-                {"store_name": "Oberoi SkyCity", "vendor": "HiCare", "annual_cost": 84000, "frequency": "Weekly", "last_service": "2026-10-22", "execution_status": "Done", "pest_gap_audit_findings": "Gap around AC pipe in false ceiling near BOH."},
-                {"store_name": "Season Mall Pune", "vendor": "HiCare", "annual_cost": 78000, "frequency": "Fortnightly", "last_service": "2026-10-05", "execution_status": "Missed", "pest_gap_audit_findings": "Vendor missed fortnightly visit. Rescheduled."},
-                {"store_name": "DLF Moti Nagar", "vendor": "Rentokil PCI", "annual_cost": 72000, "frequency": "Fortnightly", "last_service": "2026-10-20", "execution_status": "Done", "pest_gap_audit_findings": "Drain mesh loose in dishwashing zone."}
-            ])
+            pest_df = pd.DataFrame(default_pest_data)
 
+        # Pre-convert string dates to actual datetime.date objects to avoid StreamlitAPIException
+        pest_df['last_service'] = pd.to_datetime(pest_df['last_service'], errors='coerce').dt.date
+
+        # 3. Robust Data Editor
         edited_pest_df = st.data_editor(
             pest_df,
             num_rows="dynamic",
             use_container_width=True,
+            key="pest_control_editor_v2",
             column_config={
                 "store_name": st.column_config.TextColumn("Store Location", required=True),
                 "vendor": st.column_config.TextColumn("Pest Agency Vendor"),
@@ -1874,8 +1887,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     st.success("✅ Pest Control Ledger and Gap Audit findings updated!")
                     st.rerun()
             except Exception as e:
-                st.error(f"Failed to save pest control ledger: {e}")
-elif nav_selection == "📦 Receiving & Inbound Spec Check":
+                st.error(f"Failed to save pest control ledger: {e}")elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
     from supabase import create_client, Client
