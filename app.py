@@ -1888,53 +1888,15 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
     
     # ==========================================
-    # TAB 2: MULTI-MONTH PEST CONTROL & NSO GAP AUDIT LEDGER
+    # TAB 2: PEST CONTROL PROVISION & NSO GAP CLEARANCE
     # ==========================================
     with tab_pest_control:
-        st.markdown("### 🐜 Pest Control Provisioning & NSO Pre-Op Civil Clearance")
-        st.caption("Manage monthly vendor provisions, track active services, and enforce pre-opening civil gap closure with Maintenance.")
+        st.markdown("### 🐜 Active Pest Control Provision & NSO Civil Clearance Hub")
+        st.caption("Manage monthly vendor provisions, track service rates, and sign off on pre-opening civil gap fixes with Maintenance.")
 
         # ---------------------------------------------------------
-        # 1. MONTH SELECTION & PROVISION INITIALIZER
+        # 1. QUIET DATABASE FETCHER
         # ---------------------------------------------------------
-        col_m1, col_m2 = st.columns([2, 2])
-        
-        with col_m1:
-            selected_month = st.selectbox(
-                "📅 **Select Operating Month:**",
-                ["September 2026", "October 2026", "November 2026", "All Months"],
-                index=0
-            )
-
-        # Map display name to clean data key
-        month_key_map = {
-            "September 2026": "Sep-2026",
-            "October 2026": "Oct-2026",
-            "November 2026": "Nov-2026",
-            "All Months": "ALL"
-        }
-        active_month_key = month_key_map[selected_month]
-
-        # ---------------------------------------------------------
-        # DEFAULT DATASETS (September Default Base)
-        # ---------------------------------------------------------
-        default_pest_data = [
-            {"id": 1, "month_year": "Sep-2026", "store_name": "GK1", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1000, "total_provision": 4000, "pest_gap_audit_findings": "Serviced. Sealed BOH area.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 2, "month_year": "Sep-2026", "store_name": "Sky City", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1000, "total_provision": 4000, "pest_gap_audit_findings": "Gap around AC pipe in false ceiling near BOH.", "civil_gap_status": "Pending Maintenance Fix"},
-            {"id": 3, "month_year": "Sep-2026", "store_name": "Malcha", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1200, "total_provision": 4800, "pest_gap_audit_findings": "Serviced. Zero pest activity.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 4, "month_year": "Sep-2026", "store_name": "M3M", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Fly catcher UV tube replaced.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 5, "month_year": "Sep-2026", "store_name": "PLATINA", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Door sweep tight.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 6, "month_year": "Sep-2026", "store_name": "Murthal", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Fortnightly schedule completed.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 7, "month_year": "Sep-2026", "store_name": "NOIDA", "vendor": "Eco Solution", "services_completed": 3, "rate_per_service": 600, "total_provision": 1800, "pest_gap_audit_findings": "3 services executed.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 8, "month_year": "Sep-2026", "store_name": "DLF Motinagar", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Drain mesh loose in dishwashing zone.", "civil_gap_status": "Pending Maintenance Fix"},
-            {"id": 9, "month_year": "Sep-2026", "store_name": "Janakpuri (JKP)", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Door sweep missing at rear entrance.", "civil_gap_status": "Pending Maintenance Fix"},
-            {"id": 10, "month_year": "Sep-2026", "store_name": "BRS", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Serviced properly.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 11, "month_year": "Sep-2026", "store_name": "Goldust (Patiala)", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Fortnightly completed.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 12, "month_year": "Sep-2026", "store_name": "Doraha Ludhiana", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Weekly service log on file.", "civil_gap_status": "Closed & Sealed"},
-            {"id": 13, "month_year": "Sep-2026", "store_name": "Season Mall Pune", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Vendor completed 2 visits.", "civil_gap_status": "Closed & Sealed"}
-        ]
-
-        # 2. Quiet Data Fetcher
         pest_df = pd.DataFrame()
         if supabase is not None:
             try:
@@ -1944,75 +1906,58 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             except Exception:
                 pass
 
+        default_pest_data = [
+            {"id": 1, "store_name": "GK1", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1000, "total_provision": 4000, "pest_gap_audit_findings": "Serviced. Sealed BOH area.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 2, "store_name": "Sky City", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1000, "total_provision": 4000, "pest_gap_audit_findings": "Gap around AC pipe in false ceiling near BOH.", "civil_gap_status": "Pending Maintenance Fix"},
+            {"id": 3, "store_name": "Malcha", "vendor": "IGPC", "services_completed": 4, "rate_per_service": 1200, "total_provision": 4800, "pest_gap_audit_findings": "Serviced. Zero pest activity.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 4, "store_name": "M3M", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Fly catcher UV tube replaced.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 5, "store_name": "PLATINA", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Door sweep tight.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 6, "store_name": "Murthal", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Fortnightly schedule completed.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 7, "store_name": "NOIDA", "vendor": "Eco Solution", "services_completed": 3, "rate_per_service": 600, "total_provision": 1800, "pest_gap_audit_findings": "3 services executed.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 8, "store_name": "DLF Motinagar", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Drain mesh loose in dishwashing zone.", "civil_gap_status": "Pending Maintenance Fix"},
+            {"id": 9, "store_name": "Janakpuri (JKP)", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Door sweep missing at rear entrance.", "civil_gap_status": "Pending Maintenance Fix"},
+            {"id": 10, "store_name": "BRS", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Serviced properly.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 11, "store_name": "Goldust (Patiala)", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Fortnightly completed.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 12, "store_name": "Doraha Ludhiana", "vendor": "Eco Solution", "services_completed": 4, "rate_per_service": 600, "total_provision": 2400, "pest_gap_audit_findings": "Weekly service log on file.", "civil_gap_status": "Closed & Sealed"},
+            {"id": 13, "store_name": "Season Mall Pune", "vendor": "Eco Solution", "services_completed": 2, "rate_per_service": 600, "total_provision": 1200, "pest_gap_audit_findings": "Vendor completed 2 visits.", "civil_gap_status": "Closed & Sealed"}
+        ]
+
         if pest_df.empty:
             pest_df = pd.DataFrame(default_pest_data)
 
-        if 'month_year' not in pest_df.columns:
-            pest_df['month_year'] = 'Sep-2026'
-
-        # Filter dataset by selected month
-        if active_month_key != "ALL":
-            filtered_pest_df = pest_df[pest_df['month_year'] == active_month_key].copy()
-        else:
-            filtered_pest_df = pest_df.copy()
-
-        # Option to initialize next month's provisioning if empty
-        with col_m2:
-            if filtered_pest_df.empty and active_month_key != "ALL":
-                st.warning(f"No records found for {selected_month}.")
-                if st.button(f"➕ Initialize {selected_month} Data from Previous Month", type="primary"):
-                    base_df = pest_df[pest_df['month_year'] == 'Sep-2026'].copy() if not pest_df.empty else pd.DataFrame(default_pest_data)
-                    base_df['month_year'] = active_month_key
-                    base_df['services_completed'] = 0
-                    base_df['total_provision'] = 0
-                    base_df['pest_gap_audit_findings'] = f"Initialized for {selected_month}."
-                    base_df['civil_gap_status'] = "Pending Audit"
-
-                    new_recs = base_df.fillna("").to_dict(orient="records")
-                    if supabase is not None:
-                        try:
-                            supabase.table("store_pest_control").insert(new_recs).execute()
-                            st.success(f"✅ Initialized provisioning table for {selected_month}!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to initialize month: {e}")
-
         # ---------------------------------------------------------
-        # 3. DYNAMIC MONTHLY METRIC CARDS
+        # 2. EXECUTIVE METRIC BADGES
         # ---------------------------------------------------------
-        total_services = filtered_pest_df['services_completed'].sum() if not filtered_pest_df.empty and 'services_completed' in filtered_pest_df.columns else 0
-        total_provision_amt = filtered_pest_df['total_provision'].sum() if not filtered_pest_df.empty and 'total_provision' in filtered_pest_df.columns else 0
+        total_services = pest_df['services_completed'].sum() if 'services_completed' in pest_df.columns else 45
+        total_provision_amt = pest_df['total_provision'].sum() if 'total_provision' in pest_df.columns else 32600
 
-        igpc_df = filtered_pest_df[filtered_pest_df['vendor'] == 'IGPC'] if not filtered_pest_df.empty and 'vendor' in filtered_pest_df.columns else pd.DataFrame()
-        eco_df = filtered_pest_df[filtered_pest_df['vendor'] == 'Eco Solution'] if not filtered_pest_df.empty and 'vendor' in filtered_pest_df.columns else pd.DataFrame()
+        igpc_df = pest_df[pest_df['vendor'] == 'IGPC'] if 'vendor' in pest_df.columns else pd.DataFrame()
+        eco_df = pest_df[pest_df['vendor'] == 'Eco Solution'] if 'vendor' in pest_df.columns else pd.DataFrame()
 
-        igpc_provision = igpc_df['total_provision'].sum() if not igpc_df.empty and 'total_provision' in igpc_df.columns else 0
-        eco_provision = eco_df['total_provision'].sum() if not eco_df.empty and 'total_provision' in eco_df.columns else 0
-        pending_civil_gaps = len(filtered_pest_df[filtered_pest_df['civil_gap_status'] == 'Pending Maintenance Fix']) if 'civil_gap_status' in filtered_pest_df.columns else 0
+        igpc_provision = igpc_df['total_provision'].sum() if not igpc_df.empty and 'total_provision' in igpc_df.columns else 12800
+        eco_provision = eco_df['total_provision'].sum() if not eco_df.empty and 'total_provision' in eco_df.columns else 19800
+        pending_gaps = len(pest_df[pest_df['civil_gap_status'] == 'Pending Maintenance Fix']) if 'civil_gap_status' in pest_df.columns else 3
 
-        st.markdown("---")
         col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-        col_p1.metric(f"📦 {selected_month} Provision", f"₹{total_provision_amt:,.0f}", f"{total_services} Services Executed")
-        col_p2.metric("🏢 IGPC Provision", f"₹{igpc_provision:,.0f}", f"{len(igpc_df)} Stores Covered")
-        col_p3.metric("🌱 Eco Solution Provision", f"₹{eco_provision:,.0f}", f"{len(eco_df)} Stores Covered")
-        col_p4.metric("🚨 Open Civil Gap Items", f"{pending_civil_gaps} Stores", delta="Awaiting Maintenance" if pending_civil_gaps > 0 else "All Clear", delta_color="inverse")
+        col_p1.metric("📦 Active Total Provision", f"₹{total_provision_amt:,.0f}", f"{total_services} Services Completed")
+        col_p2.metric("🏢 IGPC Provision", f"₹{igpc_provision:,.0f}", f"{len(igpc_df)} Outlets")
+        col_p3.metric("🌱 Eco Solution Provision", f"₹{eco_provision:,.0f}", f"{len(eco_df)} Outlets")
+        col_p4.metric("🚨 Open Civil Gap Fixes", f"{pending_gaps} Outlets", delta="Awaiting Maintenance" if pending_gaps > 0 else "All Clear", delta_color="inverse")
 
         st.markdown("---")
 
         # ---------------------------------------------------------
-        # 4. SPECIAL NSO PRE-OPENING CIVIL PEST CLEARANCE TRACKER
+        # 3. DIRECTLY EDITABLE NSO PRE-OPENING PEST & CIVIL CLEARANCE PIPELINE
         # ---------------------------------------------------------
         with st.expander("🏗️ Bird's Eye View: Upcoming NSO Pre-Opening Pest & Civil Clearance Pipeline", expanded=True):
-            st.info("Cross-referencing upcoming NSO store openings with Pest Control & Civil Gap Clearances.")
+            st.caption("✏️ **Directly edit** QA findings or select Maintenance Clearance status in the table below, then click **Save Clearance Statuses**.")
 
-            # Filter upcoming stores from NSO Pipeline within 60 days
             upcoming_nsos = nso_df[nso_df['status'].isin(['On Track', 'Pending Dependencies'])].copy() if 'nso_df' in locals() and not nso_df.empty else pd.DataFrame()
 
             if not upcoming_nsos.empty:
                 nso_clearance_list = []
                 for _, nso_row in upcoming_nsos.iterrows():
                     s_name = nso_row['site_name']
-                    # Match with pest findings
                     pest_match = pest_df[pest_df['store_name'].str.contains(s_name, case=False, na=False)] if not pest_df.empty else pd.DataFrame()
 
                     pest_contract_active = nso_row.get('pest_contract', False)
@@ -2020,27 +1965,75 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     c_status = pest_match['civil_gap_status'].values[0] if not pest_match.empty and 'civil_gap_status' in pest_match.columns else "Pending Audit"
 
                     nso_clearance_list.append({
+                        "store_name": s_name,
                         "NSO Store Location": f"📍 {s_name} ({nso_row.get('city', '')})",
                         "Target Handover Date": nso_row.get('handover_date', 'TBD'),
                         "Pest Contract Active?": "✅ Active" if pest_contract_active else "❌ Pending Contract",
-                        "QA Structural Gap Findings": findings,
-                        "Maintenance Clearance Status": c_status
+                        "pest_gap_audit_findings": findings,
+                        "civil_gap_status": c_status
                     })
 
                 df_nso_clearance = pd.DataFrame(nso_clearance_list)
-                st.dataframe(df_nso_clearance, use_container_width=True, hide_index=True)
+
+                # DIRECTLY EDITABLE DATA EDITOR
+                edited_nso_clearance = st.data_editor(
+                    df_nso_clearance,
+                    use_container_width=True,
+                    key="nso_clearance_editor_direct",
+                    column_config={
+                        "store_name": None, # Hidden internal matching key
+                        "NSO Store Location": st.column_config.TextColumn("NSO Store Location", disabled=True),
+                        "Target Handover Date": st.column_config.TextColumn("Target Handover Date", disabled=True),
+                        "Pest Contract Active?": st.column_config.TextColumn("Pest Contract Active?", disabled=True),
+                        "pest_gap_audit_findings": st.column_config.TextColumn("QA Structural Gap Findings", help="Type your pre-opening audit notes here"),
+                        "civil_gap_status": st.column_config.SelectboxColumn("Maintenance Clearance Status", options=["Pending Audit", "Pending Maintenance Fix", "Closed & Sealed"])
+                    },
+                    hide_index=True
+                )
+
+                if st.button("💾 Save Pre-Op Pest Clearances & Maintenance Notes", type="primary"):
+                    try:
+                        # Update findings back to master pest dataframe
+                        for _, edited_row in edited_nso_clearance.iterrows():
+                            s_target = edited_row['store_name']
+                            mask = pest_df['store_name'] == s_target
+                            if mask.any():
+                                pest_df.loc[mask, 'pest_gap_audit_findings'] = edited_row['pest_gap_audit_findings']
+                                pest_df.loc[mask, 'civil_gap_status'] = edited_row['civil_gap_status']
+                            else:
+                                # Append new NSO store record to master pest table if not existing
+                                new_nso_entry = {
+                                    "id": len(pest_df) + 1,
+                                    "store_name": s_target,
+                                    "vendor": "Pending Agency",
+                                    "services_completed": 0,
+                                    "rate_per_service": 600,
+                                    "total_provision": 0,
+                                    "pest_gap_audit_findings": edited_row['pest_gap_audit_findings'],
+                                    "civil_gap_status": edited_row['civil_gap_status']
+                                }
+                                pest_df = pd.concat([pest_df, pd.DataFrame([new_nso_entry])], ignore_index=True)
+
+                        if supabase is not None:
+                            payload = pest_df.fillna("").to_dict(orient="records")
+                            supabase.table("store_pest_control").delete().neq("id", 0).execute()
+                            supabase.table("store_pest_control").insert(payload).execute()
+                            st.success("✅ NSO Pre-Op clearances updated and synced to cloud!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Save failed: {e}")
             else:
                 st.caption("No pending NSO store openings found in the immediate pipeline.")
 
         st.markdown("---")
 
         # ---------------------------------------------------------
-        # 5. IMPORT EXCEL / CSV IMPORTER
+        # 4. EXCEL MONTH-END OVERWRITE IMPORTER
         # ---------------------------------------------------------
-        with st.expander(f"📥 Import {selected_month} Provision Excel / CSV Sheet", expanded=False):
-            st.caption(f"Upload your vendor provision Excel sheet for {selected_month}.")
-            pest_file = st.file_uploader("Choose Excel File", type=["xlsx", "xls", "csv"], key="multi_month_pest_upload")
-            if pest_file and st.button(f"🚀 Sync File to {selected_month} Ledger", type="primary"):
+        with st.expander("📥 Import Month-End Provisioning Sheet (Excel / CSV)", expanded=False):
+            st.caption("At month-end, upload your vendor billing sheet to auto-refresh all store rates, services, and totals.")
+            pest_file = st.file_uploader("Upload Month-End Excel Sheet", type=["xlsx", "xls", "csv"], key="monthend_pest_upload_v7")
+            if pest_file and st.button("🚀 Overwrite & Sync Latest Month Ledger", type="primary"):
                 try:
                     p_raw = pd.read_csv(pest_file) if pest_file.name.endswith('.csv') else pd.read_excel(pest_file)
                     p_raw.columns = [str(c).strip().lower().replace('.', '').replace('(₹)', '').strip() for c in p_raw.columns]
@@ -2062,71 +2055,61 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                             pst_tot = float(pr.get(col_p_tot, pst_serv * pst_rate)) if col_p_tot and pd.notna(pr.get(col_p_tot)) else (pst_serv * pst_rate)
 
                             p_recs.append({
-                                "month_year": active_month_key if active_month_key != "ALL" else "Sep-2026",
+                                "id": idx + 1,
                                 "store_name": pst_name,
                                 "vendor": pst_vend,
                                 "services_completed": pst_serv,
                                 "rate_per_service": pst_rate,
                                 "total_provision": pst_tot,
-                                "pest_gap_audit_findings": "Uploaded via Excel.",
+                                "pest_gap_audit_findings": "Month-end provision updated.",
                                 "civil_gap_status": "Closed & Sealed"
                             })
                         if supabase is not None and p_recs:
                             try:
-                                # Delete only records for this specific month before inserting
-                                if active_month_key != "ALL":
-                                    supabase.table("store_pest_control").delete().eq("month_year", active_month_key).execute()
+                                supabase.table("store_pest_control").delete().neq("id", 0).execute()
                                 supabase.table("store_pest_control").insert(p_recs).execute()
-                                st.success(f"✅ Successfully synced {len(p_recs)} records for {selected_month}!")
+                                st.success(f"✅ Successfully updated active ledger with {len(p_recs)} store records!")
                                 st.rerun()
                             except Exception as ex:
                                 st.error(f"Cloud sync error: {ex}")
                 except Exception as e:
-                    st.error(f"Error reading pest file: {e}")
+                    st.error(f"Error reading file: {e}")
 
         # ---------------------------------------------------------
-        # 6. INTERACTIVE PROVISION & GAP LEDGER TABLE
+        # 5. MASTER ACTIVE PROVISIONING LEDGER TABLE
         # ---------------------------------------------------------
-        st.markdown(f"### 📋 {selected_month} Provision Breakdown & Gap Audit Table")
+        st.markdown("### 📋 Active Master Provisioning & Gap Audit Table")
 
-        if not filtered_pest_df.empty:
-            filtered_pest_df['total_provision'] = filtered_pest_df['services_completed'] * filtered_pest_df['rate_per_service']
+        pest_df['total_provision'] = pest_df['services_completed'] * pest_df['rate_per_service']
 
-            edited_pest_df = st.data_editor(
-                filtered_pest_df,
-                num_rows="dynamic",
-                use_container_width=True,
-                key="multi_month_pest_editor_v5",
-                column_config={
-                    "month_year": st.column_config.TextColumn("Month-Year", disabled=True),
-                    "store_name": st.column_config.TextColumn("Store Location", required=True),
-                    "vendor": st.column_config.SelectboxColumn("Vendor Agency", options=["IGPC", "Eco Solution", "Rentokil PCI", "HiCare"]),
-                    "services_completed": st.column_config.NumberColumn("Services Completed", min_value=0, step=1),
-                    "rate_per_service": st.column_config.NumberColumn("Rate per Service (₹)", format="₹%d"),
-                    "total_provision": st.column_config.NumberColumn("Total Provision (₹)", format="₹%d", disabled=True),
-                    "pest_gap_audit_findings": st.column_config.TextColumn("QA Structural Gap Audit Notes"),
-                    "civil_gap_status": st.column_config.SelectboxColumn("Maintenance Clearance", options=["Closed & Sealed", "Pending Maintenance Fix", "Pending Audit"])
-                },
-                hide_index=True,
-                column_order=["month_year", "store_name", "vendor", "services_completed", "rate_per_service", "total_provision", "pest_gap_audit_findings", "civil_gap_status"]
-            )
+        edited_pest_df = st.data_editor(
+            pest_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="master_pest_editor_v7",
+            column_config={
+                "store_name": st.column_config.TextColumn("Store Location", required=True),
+                "vendor": st.column_config.SelectboxColumn("Vendor Agency", options=["IGPC", "Eco Solution", "Rentokil PCI", "HiCare"]),
+                "services_completed": st.column_config.NumberColumn("Services Completed", min_value=0, step=1),
+                "rate_per_service": st.column_config.NumberColumn("Rate per Service (₹)", format="₹%d"),
+                "total_provision": st.column_config.NumberColumn("Total Provision (₹)", format="₹%d", disabled=True),
+                "pest_gap_audit_findings": st.column_config.TextColumn("QA Gap Audit Notes"),
+                "civil_gap_status": st.column_config.SelectboxColumn("Maintenance Clearance", options=["Closed & Sealed", "Pending Maintenance Fix", "Pending Audit"])
+            },
+            hide_index=True,
+            column_order=["store_name", "vendor", "services_completed", "rate_per_service", "total_provision", "pest_gap_audit_findings", "civil_gap_status"]
+        )
 
-            if st.button(f"💾 Save {selected_month} Provision & Gap Ledger", type="primary"):
-                try:
-                    pest_payload = edited_pest_df.fillna("").to_dict(orient="records")
-                    if supabase is not None:
-                        if active_month_key != "ALL":
-                            supabase.table("store_pest_control").delete().eq("month_year", active_month_key).execute()
-                        else:
-                            supabase.table("store_pest_control").delete().neq("id", 0).execute()
-
-                        supabase.table("store_pest_control").insert(pest_payload).execute()
-                        st.success(f"✅ Provision ledger for {selected_month} saved to cloud!")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to save pest control ledger: {e}")
-        else:
-            st.info(f"No provisioning records found for {selected_month}. Use the initializer above or upload an Excel file.")        
+        if st.button("💾 Save Active Master Provision Ledger", type="primary"):
+            try:
+                pest_payload = edited_pest_df.fillna("").to_dict(orient="records")
+                if supabase is not None:
+                    supabase.table("store_pest_control").delete().neq("id", 0).execute()
+                    supabase.table("store_pest_control").insert(pest_payload).execute()
+                    st.success("✅ Master Pest Provision Ledger successfully saved to cloud database!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Failed to save pest control ledger: {e}")        
 elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
