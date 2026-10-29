@@ -1886,7 +1886,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     st.success("✅ Pest Control Ledger and Gap Audit findings updated!")
                     st.rerun()
             except Exception as e:
-                st.error(f"Failed to save pest control ledger: {e}")elif nav_selection == "📦 Receiving & Inbound Spec Check":
+                st.error(f"Failed to save pest control ledger: {e}")
+elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
     from supabase import create_client, Client
