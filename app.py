@@ -1712,14 +1712,31 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
-        # 4. HIGH-POLISH TIMELINE PLOTLY WITH BOTTOM SLIDER & FIXED MARGINS
+        # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
-        st.caption("💡 Use the **range slider bar at the bottom** to scroll horizontally across dates as time progresses.")
 
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
 
         if not dated_df.empty:
+            # Native Streamlit Date Range Slider (Replaces cluttered Plotly rangeslider)
+            min_d = dated_df['handover_date_dt'].min().date()
+            max_d = dated_df['handover_date_dt'].max().date()
+
+            selected_range = st.slider(
+                "📅 **Filter Handover View Window:**",
+                min_value=min_d,
+                max_value=max_d,
+                value=(min_d, max_d),
+                format="MMM YYYY"
+            )
+
+            # Filter dataset dynamically based on slider
+            filtered_dated_df = dated_df[
+                (dated_df['handover_date_dt'].dt.date >= selected_range[0]) & 
+                (dated_df['handover_date_dt'].dt.date <= selected_range[1])
+            ].reset_index(drop=True)
+
             color_map = {
                 "Completed": "#2E7D32",             # Emerald Green
                 "On Track": "#1E88E5",              # Vivid Blue
@@ -1730,7 +1747,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             fig = go.Figure()
 
             # Plot each store on its dedicated unique Y row
-            for idx, row in dated_df.iterrows():
+            for idx, row in filtered_dated_df.iterrows():
                 y_label = f"<b>{row['site_name']}</b> ({row['city']})"
                 date_str = row['handover_date_dt'].strftime('%d %b %Y')
                 st_color = color_map.get(row['status'], "#757575")
@@ -1748,26 +1765,27 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     text=[f"  <b>{date_str}</b> — {row['status']}"],
                     textposition="middle right",
                     textfont=dict(size=11, color="#1A110A"),
+                    cliponaxis=False, # Prevents text clipping at container edges!
                     showlegend=False
                 ))
 
-            dynamic_height = max(450, len(dated_df) * 32 + 100)
+            # Dynamic chart height calculation
+            dynamic_height = max(400, len(filtered_dated_df) * 32 + 80)
 
             fig.update_layout(
                 height=dynamic_height,
-                margin=dict(l=20, r=260, t=20, b=60), # Expanded right margin (260px) prevents label cutoff!
+                margin=dict(l=20, r=280, t=20, b=40), # 280px right padding prevents right text cutoff
                 plot_bgcolor="#F8F9FA",
                 paper_bgcolor="#FFFFFF",
                 xaxis=dict(
-                    title="Target Operational Handover Date (Drag slider below to scroll/zoom)",
+                    title="Target Operational Handover Date",
                     type="date",
                     showgrid=True,
                     gridcolor="#E2E8F0",
-                    tickformat="%b %Y",
-                    rangeslider=dict(visible=True) # Bottom Slider Bar for sliding as dates pass!
+                    tickformat="%b %Y"
                 ),
                 yaxis=dict(
-                    autorange="reversed",
+                    autorange="reversed", # Chronological order top to bottom
                     showgrid=True,
                     gridcolor="#F1F5F9",
                     tickfont=dict(size=12, color="#1A110A")
@@ -1777,7 +1795,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No dated handover stores found.")
-
         # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
