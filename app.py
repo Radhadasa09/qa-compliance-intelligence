@@ -1586,7 +1586,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
     
     st.subheader("🚀 New Store Opening (NSO) QA Pipeline & Pest Control Hub")
     st.caption("Strategic handover tracking, visual milestone timelines, pre-opening QA clearance, and structural gap audits.")
-    tab_nso_timeline, tab_pest_control = st.tabs(["📅 Master NSO Timeline & QA Pipeline", "🐜 Pest Control & Gap Audit Ledger"])
+    
+    tab_nso_timeline, tab_pest_control = st.tabs(["📅 Master NSO Timeline & QA Pipeline", "integrated Pest Control & Gap Audit Ledger"])
     
     # ---------------------------------------------------------
     # MASTER 35-STORE DATASET
@@ -1641,7 +1642,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 if res.data:
                     nso_df = pd.DataFrame(res.data)
             except Exception:
-                pass # Silently fallback to default data if table does not exist yet
+                pass
 
         if nso_df.empty:
             nso_df = pd.DataFrame(default_nso_data)
@@ -1666,7 +1667,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         # 3. BD Excel/CSV Importer Expander
         with st.expander("📥 Import BD NSO Tracker File (Excel / CSV)", expanded=False):
             st.caption("Upload the BD team's handover Excel sheet to parse dates automatically.")
-            bd_file = st.file_uploader("Choose BD Sheet", type=["xlsx", "xls", "csv"], key="bd_nso_upload_v2")
+            bd_file = st.file_uploader("Choose BD Sheet", type=["xlsx", "xls", "csv"], key="bd_nso_upload_v3")
             if bd_file and st.button("🚀 Sync BD File to Pipeline", type="primary"):
                 try:
                     df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
@@ -1711,8 +1712,9 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
-        # 4. HIGH-POLISH TIMELINE PLOTLY (Zero Label Overlap)
+        # 4. HIGH-POLISH TIMELINE PLOTLY WITH BOTTOM SLIDER & FIXED MARGINS
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
+        st.caption("💡 Use the **range slider bar at the bottom** to scroll horizontally across dates as time progresses.")
 
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
@@ -1749,23 +1751,23 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     showlegend=False
                 ))
 
-            # Dynamic chart height calculation to guarantee ample line padding
-            dynamic_height = max(450, len(dated_df) * 32 + 80)
+            dynamic_height = max(450, len(dated_df) * 32 + 100)
 
             fig.update_layout(
                 height=dynamic_height,
-                margin=dict(l=20, r=200, t=20, b=40),
+                margin=dict(l=20, r=260, t=20, b=60), # Expanded right margin (260px) prevents label cutoff!
                 plot_bgcolor="#F8F9FA",
                 paper_bgcolor="#FFFFFF",
                 xaxis=dict(
-                    title="Target Operational Handover Date",
+                    title="Target Operational Handover Date (Drag slider below to scroll/zoom)",
                     type="date",
                     showgrid=True,
                     gridcolor="#E2E8F0",
-                    tickformat="%b %Y"
+                    tickformat="%b %Y",
+                    rangeslider=dict(visible=True) # Bottom Slider Bar for sliding as dates pass!
                 ),
                 yaxis=dict(
-                    autorange="reversed", # Chronological order from top to bottom
+                    autorange="reversed",
                     showgrid=True,
                     gridcolor="#F1F5F9",
                     tickfont=dict(size=12, color="#1A110A")
@@ -1776,7 +1778,55 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         else:
             st.info("No dated handover stores found.")
 
-        # 5. Early Stage TBD Pipeline Summary Card View
+        # 5. PRINT & EXPORT FORECAST SUITE
+        st.markdown("---")
+        st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
+        col_p1, col_p2 = st.columns(2)
+        
+        with col_p1:
+            csv_export_data = nso_df[['site_name', 'city', 'handover_date', 'status', 'fssai_applied', 'pest_contract', 'water_test', 'pre_op_audit']].to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Full NSO Forecast (CSV)",
+                data=csv_export_data,
+                file_name=f"CBTL_NSO_Master_Forecast_{datetime.date.today().strftime('%Y_%m_%d')}.csv",
+                mime="text/csv",
+                type="primary"
+            )
+            
+        with col_p2:
+            # Printable HTML View Generation
+            html_table = nso_df[['site_name', 'city', 'handover_date', 'status']].to_html(index=False, classes='table')
+            printable_html = f"""
+            <html>
+                <head>
+                    <title>CBTL NSO Executive Handover Forecast</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; padding: 20px; color: #1A110A; }}
+                        h2 {{ color: #C5A059; border-bottom: 2px solid #C5A059; padding-bottom: 5px; }}
+                        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }}
+                        th {{ background-color: #1A110A; color: #C5A059; }}
+                        @media print {{
+                            .no-print {{ display: none; }}
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <h2>☕ The Coffee Bean & Tea Leaf — Master NSO Handover Forecast</h2>
+                    <p><b>Report Date:</b> {datetime.date.today().strftime('%d-%b-%Y')} | <b>Total Pipeline:</b> {total_sites} Sites</p>
+                    <button class="no-print" onclick="window.print()" style="padding:10px 20px; background:#C5A059; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Click to Print / Save as PDF</button>
+                    {html_table}
+                </body>
+            </html>
+            """
+            st.download_button(
+                label="🖨️ Download Printable HTML Forecast Report",
+                data=printable_html.encode('utf-8'),
+                file_name=f"Printable_NSO_Forecast_{datetime.date.today().strftime('%Y_%m_%d')}.html",
+                mime="text/html"
+            )
+
+        # 6. Early Stage TBD Pipeline Summary Card View
         if not tbd_df.empty:
             with st.expander(f"⏳ LOI & Early Stage Pipeline (Handover Date TBD — {len(tbd_df)} Locations)", expanded=False):
                 tbd_cols = st.columns(3)
@@ -1784,7 +1834,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     with tbd_cols[idx % 3]:
                         st.markdown(f"📍 **{row['site_name']}** ({row['city']})\n*Status*: `{row['status']}`")
 
-        # 6. Interactive Data Grid
+        # 7. Interactive Data Grid
         st.markdown("---")
         st.markdown("### ✏️ Edit NSO Handover Dates & QA Clearance Checklist")
         st.caption("Update target dates or toggle pre-opening compliance checkboxes. Timeline updates automatically on save.")
@@ -1793,7 +1843,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             nso_df,
             num_rows="dynamic",
             use_container_width=True,
-            key="nso_pipeline_editor_v2",
+            key="nso_pipeline_editor_v3",
             column_config={
                 "site_name": st.column_config.TextColumn("Site Name", required=True),
                 "city": st.column_config.TextColumn("City"),
@@ -1835,7 +1885,51 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
         st.markdown("---")
 
-        # 2. Quiet Data Fetcher
+        # 2. Pest Provisioning / Contract Sheet Importer Expander
+        with st.expander("📥 Import Pest Control Provisioning Sheet (Excel / CSV)", expanded=False):
+            st.caption("Upload commercial pest contract sheets to bulk-update agencies, costs, and frequencies.")
+            pest_file = st.file_uploader("Upload Pest Provisioning File", type=["xlsx", "xls", "csv"], key="pest_import_v3")
+            if pest_file and st.button("🚀 Sync Pest Data to Ledger", type="primary"):
+                try:
+                    p_raw = pd.read_csv(pest_file) if pest_file.name.endswith('.csv') else pd.read_excel(pest_file)
+                    p_raw.columns = [str(c).strip().lower() for c in p_raw.columns]
+
+                    col_p_store = next((c for c in p_raw.columns if 'store' in c or 'site' in c or 'location' in c), None)
+                    col_p_vend = next((c for c in p_raw.columns if 'vendor' in c or 'agency' in c or 'contractor' in c), None)
+                    col_p_cost = next((c for c in p_raw.columns if 'cost' in c or 'price' in c or 'budget' in c or 'annual' in c), None)
+                    col_p_freq = next((c for c in p_raw.columns if 'freq' in c or 'schedule' in c), None)
+
+                    if col_p_store:
+                        p_recs = []
+                        for idx, pr in p_raw.iterrows():
+                            pst_name = str(pr.get(col_p_store, '')).strip()
+                            if not pst_name or pst_name.lower() in ['nan', 'none', '']: continue
+                            pst_vend = str(pr.get(col_p_vend, 'Rentokil PCI')).strip() if col_p_vend else "Rentokil PCI"
+                            pst_cost = float(pr.get(col_p_cost, 72000)) if col_p_cost and pd.notna(pr.get(col_p_cost)) else 72000
+                            pst_freq = str(pr.get(col_p_freq, 'Fortnightly')).strip() if col_p_freq else "Fortnightly"
+
+                            p_recs.append({
+                                "id": idx + 1,
+                                "store_name": pst_name,
+                                "vendor": pst_vend,
+                                "annual_cost": pst_cost,
+                                "frequency": pst_freq,
+                                "last_service": str(datetime.date.today()),
+                                "execution_status": "Done",
+                                "pest_gap_audit_findings": "Provisioned contract active."
+                            })
+                        if supabase is not None and p_recs:
+                            try:
+                                supabase.table("store_pest_control").delete().neq("id", 0).execute()
+                                supabase.table("store_pest_control").insert(p_recs).execute()
+                                st.success(f"✅ Synced {len(p_recs)} pest contract records!")
+                                st.rerun()
+                            except Exception as ex:
+                                st.error(f"Pest sync error: {ex}")
+                except Exception as e:
+                    st.error(f"Error reading pest file: {e}")
+
+        # 3. Quiet Data Fetcher
         pest_df = pd.DataFrame()
         if supabase is not None:
             try:
@@ -1856,15 +1950,15 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         if pest_df.empty:
             pest_df = pd.DataFrame(default_pest_data)
 
-        # Pre-convert string dates to actual datetime.date objects to avoid StreamlitAPIException
+        # Pre-convert string dates to actual datetime.date objects
         pest_df['last_service'] = pd.to_datetime(pest_df['last_service'], errors='coerce').dt.date
 
-        # 3. Robust Data Editor
+        # 4. Robust Data Editor
         edited_pest_df = st.data_editor(
             pest_df,
             num_rows="dynamic",
             use_container_width=True,
-            key="pest_control_editor_v2",
+            key="pest_control_editor_v3",
             column_config={
                 "store_name": st.column_config.TextColumn("Store Location", required=True),
                 "vendor": st.column_config.TextColumn("Pest Agency Vendor"),
@@ -1887,6 +1981,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     st.rerun()
             except Exception as e:
                 st.error(f"Failed to save pest control ledger: {e}")
+        
 elif nav_selection == "📦 Receiving & Inbound Spec Check":
     import pandas as pd
     import streamlit as st
