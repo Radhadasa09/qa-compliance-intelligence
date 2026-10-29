@@ -829,28 +829,106 @@ elif nav_selection == "🚚 Vendor & Supply Chain":
 
 elif nav_selection == "📜 License Summary":
     st.subheader("📜 License Compliance Summary & Digital Vault")
+    st.caption("Track statutory compliance, upcoming expirations, and regulatory health across the network.")
+    
     df_lic = pd.DataFrame()
     try:
         if supabase is not None:
             resp = supabase.table("license_tracker").select("*").execute()
             if resp.data:
-                df_lic = pd.DataFrame(resp.data)[['s_no', 'location', 'city', 'fssai', 'trade', 'fire', 'pollution_cto', 'signage', 'remark']]
-                df_lic.columns = ['S.no', 'Location', 'City', 'FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage', 'Remark']
+                df_lic = pd.DataFrame(resp.data)
     except Exception as e:
         st.error(f"Could not fetch license data: {e}")
 
     if df_lic.empty:
         st.info("📂 No license data found in cloud database.")
     else:
-        st.metric("🏢 Total Tracked Facilities", f"{len(df_lic)} Stores")
+        # --- 1. DATA PROCESSING FOR INSIGHTS ---
+        today = pd.Timestamp(datetime.date.today())
+        lic_columns = ['fssai', 'trade', 'fire', 'pollution_cto', 'signage']
+        
+        total_stores = len(df_lic)
+        expired_count = 0
+        expiring_soon_count = 0 # Within 45 days
+        
+        display_df = df_lic.copy()
+        
+        for col in lic_columns:
+            if col in df_lic.columns:
+                # Calculate counts for metrics
+                temp_dates = pd.to_datetime(df_lic[col], errors='coerce')
+                days_to_expiry = (temp_dates - today).dt.days
+                expired_count += (days_to_expiry < 0).sum()
+                expiring_soon_count += ((days_to_expiry >= 0) & (days_to_expiry <= 45)).sum()
+                
+                # Style the display dataframe with emojis
+                def style_date(val):
+                    if pd.isna(val) or str(val).strip().lower() in ['nan', 'none', '']: 
+                        return "➖ N/A"
+                    d = pd.Timestamp(val)
+                    if pd.isna(d): return "➖ N/A"
+                    
+                    diff = (d - today).days
+                    date_str = d.strftime('%d-%b-%Y')
+                    
+                    if diff < 0: return f"🔴 {date_str} (Expired)"
+                    if diff <= 45: return f"🟡 {date_str} (Expiring)"
+                    return f"🟢 {date_str}"
+                    
+                display_df[col] = df_lic[col].apply(style_date)
+
+        # --- 2. TOP LEVEL INSIGHTS (METRICS) ---
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🏢 Tracked Facilities", f"{total_stores} Stores")
+        col2.metric("🔴 Expired Licenses", expired_count, delta="Critical Action Needed" if expired_count > 0 else "All Clear", delta_color="inverse")
+        col3.metric("🟡 Expiring (< 45 Days)", expiring_soon_count, delta="Renewal Required" if expiring_soon_count > 0 else "Healthy", delta_color="inverse" if expiring_soon_count > 0 else "normal")
+        
+        # Calculate a rough health percentage based on active tracked licenses
+        total_tracked_licenses = df_lic[lic_columns].notna().sum().sum()
+        if total_tracked_licenses > 0:
+            healthy_pct = max(0, 100 - ((expired_count + expiring_soon_count) / total_tracked_licenses) * 100)
+        else:
+            healthy_pct = 100.0
+            
+        col4.metric("🛡️ Compliance Health", f"{healthy_pct:.1f}%")
+
         st.markdown("---")
-        for _, row in df_lic.iterrows():
-            with st.expander(f"📍 {row['Location']} ({row['City']})"):
-                cols = st.columns(5)
-                for idx, c in enumerate(['FSSAI', 'Trade', 'Fire', 'Pollution CTO', 'Signage']):
-                    cols[idx].metric(c, str(row[c])[:10] if pd.notna(row[c]) else "N/A")
-                if pd.notna(row['Remark']) and str(row['Remark']).strip() not in ['nan', 'none', '']:
-                    st.warning(f"⚠️ **Remarks:** {row['Remark']}")
+        
+        # --- 3. URGENT ALERTS SECTION ---
+        if expired_count > 0 or expiring_soon_count > 0:
+            with st.expander("🚨 Urgent Action Required (Expiring / Expired)", expanded=True):
+                for idx, row in df_lic.iterrows():
+                    store_alerts = []
+                    for col in lic_columns:
+                        if col in row and pd.notna(row[col]) and str(row[col]).strip().lower() not in ['nan', 'none', '']:
+                            d = pd.to_datetime(row[col], errors='coerce')
+                            if pd.notnull(d):
+                                diff = (d - today).days
+                                if diff < 0:
+                                    store_alerts.append(f"**{col.upper()}** expired on {d.strftime('%d-%b-%Y')} ({abs(diff)} days ago)")
+                                elif diff <= 45:
+                                    store_alerts.append(f"**{col.upper()}** expires on {d.strftime('%d-%b-%Y')} (in {diff} days)")
+                    
+                    if store_alerts:
+                        st.warning(f"**{row.get('location', 'Unknown Store')} ({row.get('city', '')})**\n- " + "\n- ".join(store_alerts))
+        
+        # --- 4. INTERACTIVE DATA GRID ---
+        st.markdown("### 📋 Store-by-Store License Matrix")
+        display_df = display_df.rename(columns={
+            'location': 'Store Location', 'city': 'City', 'fssai': 'FSSAI', 
+            'trade': 'Trade License', 'fire': 'Fire NOC', 
+            'pollution_cto': 'Pollution CTO', 'signage': 'Signage', 'remark': 'Remarks'
+        })
+        
+        cols_to_show = ['Store Location', 'City', 'FSSAI', 'Trade License', 'Fire NOC', 'Pollution CTO', 'Signage', 'Remarks']
+        valid_cols = [c for c in cols_to_show if c in display_df.columns]
+        
+        st.dataframe(
+            display_df[valid_cols],
+            use_container_width=True,
+            hide_index=True,
+            height=400
+        )
 
     st.markdown("---")
     st.markdown("### 📂 Permanent Cloud License Excel Sync")
@@ -871,7 +949,6 @@ elif nav_selection == "📜 License Summary":
                 st.rerun()
         except Exception as e:
             st.error(f"Sync failed: {e}")
-
 elif nav_selection == "📈 NSF Audit Intelligence":
     import re
     import datetime
