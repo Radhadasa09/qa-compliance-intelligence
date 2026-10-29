@@ -1586,7 +1586,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
     
     st.subheader("🚀 New Store Opening (NSO) QA Pipeline & Pest Control Hub")
     st.caption("Strategic handover tracking, visual milestone timelines, pre-opening QA clearance, and structural gap audits.")
-    
     tab_nso_timeline, tab_pest_control = st.tabs(["📅 Master NSO Timeline & QA Pipeline", "🐜 Pest Control & Gap Audit Ledger"])
     
     # ---------------------------------------------------------
