@@ -263,6 +263,7 @@ with st.sidebar:
             "⚙️ System Administration",
             "🤖 AI Support Assistant",
             "📦 Shelf-Life Manager",
+            "🚀 NSO & Pest Control Hub"
             "📦 Receiving & Inbound Spec Check"
         ],
         label_visibility="collapsed"
