@@ -438,56 +438,123 @@ if nav_selection == "📊 Executive Dashboard":
 
     if not df_db.empty and 'score' in df_db.columns and 'store_name' in df_db.columns:
         st.markdown("### 🏬 Network Operations (Historical Journey Stack)")
+        st.caption("📌 **Stacking Rule:** Oldest audits form the base at $y=0$, and the **latest audit score is stacked at the very top**.")
         
         tab_ekaagra, tab_sub = st.tabs(["🏢 Ekaagra Direct", "🏪 Sub Franchise"])
         
+        # --- TAB 1: EKAAGRA DIRECT (Chronological Stack) ---
         with tab_ekaagra:
             if not ekaagra_df.empty:
-                # Sort by date so older audits form the base of the stack
-                if 'audit_date' in ekaagra_df.columns:
-                    ekaagra_df['audit_date_str'] = ekaagra_df['audit_date'].astype(str).str.split(' ').str[0]
-                    ekaagra_df = ekaagra_df.sort_values(by='audit_date', ascending=True)
-                    hover_cols = ['audit_date_str']
+                import plotly.graph_objects as go
+                
+                # Sort chronologically (Oldest first, Newest last)
+                df_ek = ekaagra_df.copy()
+                if 'audit_date' in df_ek.columns:
+                    df_ek['audit_date_dt'] = pd.to_datetime(df_ek['audit_date'], errors='coerce')
                 else:
-                    hover_cols = None
-
-                fig_nsf_e = px.bar(
-                    ekaagra_df, x='store_name', y='score', text='score',
+                    df_ek['audit_date_dt'] = pd.to_datetime('today')
+                    
+                df_ek = df_ek.sort_values(by=['store_name', 'audit_date_dt'], ascending=[True, True])
+                df_ek['audit_rank'] = df_ek.groupby('store_name')['audit_date_dt'].rank(method='first', ascending=True).astype(int)
+                
+                fig_nsf_e = go.Figure()
+                max_audits = df_ek['audit_rank'].max() if not df_ek.empty else 0
+                
+                for rank in range(1, max_audits + 1):
+                    sub_df = df_ek[df_ek['audit_rank'] == rank]
+                    if not sub_df.empty:
+                        res_col = 'result' if 'result' in sub_df.columns else None
+                        colors = ['#10B981' if res_col and str(r).upper() == 'PASS' else '#EF4444' for r in sub_df.get(res_col, ['FAIL']*len(sub_df))]
+                        
+                        hover_texts = [
+                            f"<b>Store:</b> {row['store_name']}<br>"
+                            f"<b>Audit Date:</b> {row['audit_date_dt'].strftime('%d-%b-%Y') if pd.notna(row['audit_date_dt']) else 'N/A'}<br>"
+                            f"<b>Score:</b> {row['score']:.1f}%<br>"
+                            f"<b>Stack Position:</b> {'Top (Latest Audit)' if rank == df_ek[df_ek['store_name'] == row['store_name']]['audit_rank'].max() else f'Audit #{rank}'}"
+                            for _, row in sub_df.iterrows()
+                        ]
+                        
+                        fig_nsf_e.add_trace(go.Bar(
+                            x=sub_df['store_name'],
+                            y=sub_df['score'],
+                            name=f"Audit {rank}",
+                            marker=dict(color=colors, line=dict(color='#FFFFFF', width=1)),
+                            text=[f"{s:.1f}%" for s in sub_df['score']],
+                            textposition="inside",
+                            insidetextanchor="middle",
+                            textfont=dict(color="#FFFFFF", size=11, family="Arial Black"),
+                            hovertext=hover_texts,
+                            hoverinfo="text",
+                            showlegend=False
+                        ))
+                        
+                fig_nsf_e.update_layout(
+                    barmode='stack',
                     title="Ekaagra Direct Outlets Cumulative/Historical NSF Scores",
-                    color='result' if 'result' in ekaagra_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='stack', # Restores your preferred stacked look
-                    category_orders={"result": ["FAIL", "PASS"]}, 
-                    hover_data=hover_cols 
+                    height=520,
+                    margin=dict(t=40, b=120, l=0, r=0),
+                    xaxis=dict(tickangle=-35, title="Store Location"),
+                    yaxis=dict(title="Cumulative Score Points")
                 )
-                fig_nsf_e.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
-                fig_nsf_e.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-                st.plotly_chart(fig_nsf_e, width='stretch')
+                st.plotly_chart(fig_nsf_e, use_container_width=True)
             else:
                 st.info("No Ekaagra Direct NSF data available in the selected period.")
 
+        # --- TAB 2: SUB FRANCHISE (Chronological Stack) ---
         with tab_sub:
             if not subfranchise_df.empty:
-                # Sort by date so older audits form the base of the stack
-                if 'audit_date' in subfranchise_df.columns:
-                    subfranchise_df['audit_date_str'] = subfranchise_df['audit_date'].astype(str).str.split(' ').str[0]
-                    subfranchise_df = subfranchise_df.sort_values(by='audit_date', ascending=True)
-                    hover_cols = ['audit_date_str']
+                import plotly.graph_objects as go
+                
+                # Sort chronologically (Oldest first, Newest last)
+                df_sub = subfranchise_df.copy()
+                if 'audit_date' in df_sub.columns:
+                    df_sub['audit_date_dt'] = pd.to_datetime(df_sub['audit_date'], errors='coerce')
                 else:
-                    hover_cols = None
-
-                fig_nsf_s = px.bar(
-                    subfranchise_df, x='store_name', y='score', text='score',
+                    df_sub['audit_date_dt'] = pd.to_datetime('today')
+                    
+                df_sub = df_sub.sort_values(by=['store_name', 'audit_date_dt'], ascending=[True, True])
+                df_sub['audit_rank'] = df_sub.groupby('store_name')['audit_date_dt'].rank(method='first', ascending=True).astype(int)
+                
+                fig_nsf_s = go.Figure()
+                max_audits_sub = df_sub['audit_rank'].max() if not df_sub.empty else 0
+                
+                for rank in range(1, max_audits_sub + 1):
+                    sub_df = df_sub[df_sub['audit_rank'] == rank]
+                    if not sub_df.empty:
+                        res_col = 'result' if 'result' in sub_df.columns else None
+                        colors = ['#10B981' if res_col and str(r).upper() == 'PASS' else '#EF4444' for r in sub_df.get(res_col, ['FAIL']*len(sub_df))]
+                        
+                        hover_texts = [
+                            f"<b>Store:</b> {row['store_name']}<br>"
+                            f"<b>Audit Date:</b> {row['audit_date_dt'].strftime('%d-%b-%Y') if pd.notna(row['audit_date_dt']) else 'N/A'}<br>"
+                            f"<b>Score:</b> {row['score']:.1f}%<br>"
+                            f"<b>Stack Position:</b> {'Top (Latest Audit)' if rank == df_sub[df_sub['store_name'] == row['store_name']]['audit_rank'].max() else f'Audit #{rank}'}"
+                            for _, row in sub_df.iterrows()
+                        ]
+                        
+                        fig_nsf_s.add_trace(go.Bar(
+                            x=sub_df['store_name'],
+                            y=sub_df['score'],
+                            name=f"Audit {rank}",
+                            marker=dict(color=colors, line=dict(color='#FFFFFF', width=1)),
+                            text=[f"{s:.1f}%" for s in sub_df['score']],
+                            textposition="inside",
+                            insidetextanchor="middle",
+                            textfont=dict(color="#FFFFFF", size=11, family="Arial Black"),
+                            hovertext=hover_texts,
+                            hoverinfo="text",
+                            showlegend=False
+                        ))
+                        
+                fig_nsf_s.update_layout(
+                    barmode='stack',
                     title="Sub Franchise Outlets Cumulative/Historical NSF Scores",
-                    color='result' if 'result' in subfranchise_df.columns else 'score', 
-                    color_discrete_map={'PASS': '#10B981', 'FAIL': '#EF4444'},
-                    barmode='stack', # Restores your preferred stacked look
-                    category_orders={"result": ["FAIL", "PASS"]}, 
-                    hover_data=hover_cols 
+                    height=520,
+                    margin=dict(t=40, b=120, l=0, r=0),
+                    xaxis=dict(tickangle=-35, title="Store Location"),
+                    yaxis=dict(title="Cumulative Score Points")
                 )
-                fig_nsf_s.update_traces(textposition='inside') # 'inside' looks cleaner on stacked blocks
-                fig_nsf_s.update_layout(xaxis_tickangle=-35, showlegend=True, margin=dict(t=40, b=40, l=0, r=0))
-                st.plotly_chart(fig_nsf_s, width='stretch')
+                st.plotly_chart(fig_nsf_s, use_container_width=True)
             else:
                 st.info("No Sub Franchise NSF data available in the selected period.")
     else:
@@ -517,7 +584,6 @@ if nav_selection == "📊 Executive Dashboard":
                 st.info("📂 No compliance data found.")
     except Exception as e:
         st.error(f"❌ Could not load compliance data from the cloud: {e}")
-
 elif nav_selection == "🏬 Retail Operations":
     st.header("🏪 Retail Operations & Logistics")
     st.markdown("---")
