@@ -1738,13 +1738,16 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 try:
                     df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
                     df_raw.columns = [str(c).strip().lower() for c in df_raw.columns]
+                    
+                    # Target 'ops' first to grab "Ops Handover**", then fallback to generic handover
                     col_date = next((c for c in df_raw.columns if 'ops' in c), None)
                     if not col_date:
                         col_date = next((c for c in df_raw.columns if 'handover' in c or 'ac' in c), None)
-                    # ------------------------------
                     
+                    # Define missing columns
+                    col_site = next((c for c in df_raw.columns if 'site' in c or 'store' in c), None)
+                    col_city = next((c for c in df_raw.columns if 'city' in c), None)
                     col_stat = next((c for c in df_raw.columns if 'status' in c), None)
-                  
 
                     if col_site:
                         recs = []
@@ -1770,6 +1773,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                 "fssai_applied": st_val == "Completed", "pest_contract": st_val == "Completed",
                                 "water_test": st_val == "Completed", "pre_op_audit": st_val == "Completed"
                             })
+                            
                         if supabase is not None and recs:
                             try:
                                 supabase.table("nso_pipeline").delete().neq("id", 0).execute()
@@ -1780,7 +1784,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                 st.error(f"Cloud sync error: {ex}")
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
-
         # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
