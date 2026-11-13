@@ -1935,8 +1935,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             try:
                 clean_payload = edited_nso_df.drop(columns=['handover_date_dt'], errors='ignore').fillna("").to_dict(orient="records")
                 if supabase is not None:
-                    supabase.table("nso_pipeline").delete().neq("id", 0).execute()
-                    supabase.table("nso_pipeline").insert(clean_payload).execute()
+                    supabase.table("nso_master_pipeline").delete().neq("id", 0).execute()
+                    supabase.table("nso_master_pipeline").insert(clean_payload).execute()
                     st.success("✅ NSO pipeline & timeline successfully updated!")
                     st.rerun()
             except Exception as e:
