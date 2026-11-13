@@ -302,7 +302,7 @@ def store_dashboard():
     ])
     
     # ==========================================
-    # TAB 1: DAILY AUDIT (Gallery/File Uploader Enabled)
+    # TAB 1: DAILY AUDIT (Dual-Input Camera Enabled)
     # ==========================================
     with tab1:
         st.subheader("☀️ Daily Opening Checklist")
@@ -331,7 +331,8 @@ def store_dashboard():
             c_fssai = st.checkbox("FSSAI License & Display Board prominently visible", value=draft["c_fssai"])
             c_med = st.checkbox("Current medical certificates available on-site", value=draft["c_med"])
             c_water = st.checkbox("IS-10500:2012 Water Analysis report on file", value=draft["c_water"])
-            proof_a = st.file_uploader("📂 Upload Admin Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_a")
+            method_a = st.radio("Admin Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_a")
+            proof_a = st.camera_input("Snap Admin Proof", key="cam_a") if method_a == "Take Photo" else st.file_uploader("📂 Upload Admin Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_a")
             
             st.markdown("### B. Team Hygiene")
             c_soap = st.checkbox("Handwash sinks fully stocked with paper towels & soap", value=draft["c_soap"])
@@ -339,7 +340,8 @@ def store_dashboard():
             c_uni = st.checkbox("Staff in clean, approved uniforms with aprons tied", value=draft["c_uni"])
             c_jewel = st.checkbox("Zero Jewellery policy strictly enforced", value=draft["c_jewel"])
             c_glove = st.checkbox("Gloves and bright bandages stocked and used", value=draft["c_glove"])
-            proof_b = st.file_uploader("📂 Upload Hygiene Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_b")
+            method_b = st.radio("Hygiene Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_b")
+            proof_b = st.camera_input("Snap Hygiene Proof", key="cam_b") if method_b == "Take Photo" else st.file_uploader("📂 Upload Hygiene Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_b")
             
             st.markdown("### C. Sanitation")
             c_sink = st.checkbox("3-Compartment sink set up correctly", value=draft["c_sink"])
@@ -348,7 +350,8 @@ def store_dashboard():
             c_mop = st.checkbox("Mops stored clean and elevated", value=draft["c_mop"])
             c_trash = st.checkbox("Trash bins covered and foot-operated", value=draft["c_trash"])
             c_chem = st.checkbox("Chemical spray bottles clearly labeled", value=draft["c_chem"])
-            proof_c = st.file_uploader("📂 Upload Sanitation Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_c")
+            method_c = st.radio("Sanitation Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_c")
+            proof_c = st.camera_input("Snap Sanitation Proof", key="cam_c") if method_c == "Take Photo" else st.file_uploader("📂 Upload Sanitation Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_c")
             
             st.markdown("### D. Product & Equipment")
             c_cold = st.checkbox("Cold holding maintained < 5°C / 41°F", value=draft["c_cold"])
@@ -357,14 +360,16 @@ def store_dashboard():
             c_ice = st.checkbox("Ice machine 100% mold-free", value=draft["c_ice"])
             c_tool = st.checkbox("Thermometers calibrated & scoops available", value=draft["c_tool"])
             c_esp = st.checkbox("Espresso calibrated 18-26s (14g dose)", value=draft["c_esp"])
-            proof_d = st.file_uploader("📂 Upload Product Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_d")
+            method_d = st.radio("Product Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_d")
+            proof_d = st.camera_input("Snap Product Proof", key="cam_d") if method_d == "Take Photo" else st.file_uploader("📂 Upload Product Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_d")
             
             st.markdown("### E. Facility Integrity")
             c_pest = st.checkbox("Zero pests; fly catchers ON", value=draft["c_pest"])
             c_gask = st.checkbox("Refrigeration gaskets clean/untorn", value=draft["c_gask"])
             c_drain = st.checkbox("Drains unclogged and odor-free", value=draft["c_drain"])
             c_struct = st.checkbox("No structural seepage or peeling paint", value=draft["c_struct"])
-            proof_e = st.file_uploader("📂 Upload Facility Proof (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="proof_e")
+            method_e = st.radio("Facility Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_e")
+            proof_e = st.camera_input("Snap Facility Proof", key="cam_e") if method_e == "Take Photo" else st.file_uploader("📂 Upload Facility Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_e")
             
             st.markdown("---")
             
@@ -470,17 +475,28 @@ def store_dashboard():
                         st.error(f"Could not generate collage: {e}")
 
     # ==========================================
-    # TAB 2: STORE READINESS PROOFS (Gallery Enabled)
+    # TAB 2: STORE READINESS PROOFS (Dual-Input)
     # ==========================================
     with tab2:
         st.subheader("📸 Opening Hygiene & Readiness Proofs")
         st.caption("Upload required photo verification from camera or gallery.")
         
         with st.form("readiness_form"):
-            p1 = st.file_uploader("Sanitizer Prepared & Metered", type=["jpg", "jpeg", "png"], key="proof_sanitizer")
-            p2 = st.file_uploader("Dusters Dipped in Sanitizer Solution", type=["jpg", "jpeg", "png"], key="proof_dusters")
-            p3 = st.file_uploader("Wash Sink Loaded with Soap Solution", type=["jpg", "jpeg", "png"], key="proof_sink")
-            p4 = st.file_uploader("General Station Readiness / Counter Setup", type=["jpg", "jpeg", "png"], key="proof_general")
+            st.markdown("**1. Sanitizer Prepared & Metered**")
+            m_p1 = st.radio("Input Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_p1")
+            p1 = st.camera_input("Snap Sanitizer", key="cam_p1") if m_p1 == "Take Photo" else st.file_uploader("Upload Sanitizer Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_sanitizer")
+            
+            st.markdown("**2. Dusters Dipped in Sanitizer Solution**")
+            m_p2 = st.radio("Input Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_p2")
+            p2 = st.camera_input("Snap Dusters", key="cam_p2") if m_p2 == "Take Photo" else st.file_uploader("Upload Dusters Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_dusters")
+            
+            st.markdown("**3. Wash Sink Loaded with Soap Solution**")
+            m_p3 = st.radio("Input Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_p3")
+            p3 = st.camera_input("Snap Sink", key="cam_p3") if m_p3 == "Take Photo" else st.file_uploader("Upload Sink Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_sink")
+            
+            st.markdown("**4. General Station Readiness / Counter Setup**")
+            m_p4 = st.radio("Input Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_p4")
+            p4 = st.camera_input("Snap General Station", key="cam_p4") if m_p4 == "Take Photo" else st.file_uploader("Upload General Proof", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="proof_general")
             
             readiness_photos = [p for p in [p1, p2, p3, p4] if p is not None]
             
@@ -509,7 +525,7 @@ def store_dashboard():
                             st.error(f"Database error: {e}")
 
     # ==========================================
-    # TAB 3: RECEIVING & INVOICE LOG
+    # TAB 3: RECEIVING & INVOICE LOG (Dual-Input & Error Fix)
     # ==========================================
     with tab3:
         st.subheader("🧾 Smart Invoice Management")
@@ -524,7 +540,8 @@ def store_dashboard():
         
         with tab_capture:
             st.info("Capture vendor invoice now. AI extraction happens later.")
-            invoice_photo = st.file_uploader("📂 Capture or Upload Invoice", type=['png', 'jpg', 'jpeg'], key="fast_capture_cam")
+            m_inv = st.radio("Invoice Input Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_inv")
+            invoice_photo = st.camera_input("Snap Invoice", key="cam_inv") if m_inv == "Take Photo" else st.file_uploader("📂 Capture or Upload Invoice", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="fast_capture_cam")
             
             if invoice_photo and st.button("🚀 Upload Invoice to Queue", type="primary"):
                 with st.spinner("Uploading securely..."):
@@ -542,10 +559,16 @@ def store_dashboard():
 
         with tab_review:
             if supabase is not None:
-                pending_res = supabase.table("pending_invoices").select("*").eq("store_code", st.session_state["store_id"]).eq("status", "Pending AI Extraction").execute()
+                # FIXED: Added try-except block to prevent crashes if 'pending_invoices' table is missing
+                try:
+                    pending_res = supabase.table("pending_invoices").select("*").eq("store_code", st.session_state["store_id"]).eq("status", "Pending AI Extraction").execute()
+                    pending_data = pending_res.data
+                except Exception as e:
+                    pending_data = []
+                    pass
                 
-                if pending_res.data:
-                    df_pending = pd.DataFrame(pending_res.data)
+                if pending_data:
+                    df_pending = pd.DataFrame(pending_data)
                     
                     sl_res = supabase.table("shelf_life_master").select("product_name, category, primary_shelf_life").execute()
                     df_shelf_life = pd.DataFrame(sl_res.data) if sl_res.data else pd.DataFrame(columns=["product_name", "category", "primary_shelf_life"])
@@ -700,7 +723,7 @@ def store_dashboard():
                                 st.error(f"Database error: {e}")
 
     # ==========================================
-    # TAB 5: WASTAGE & DISCARD
+    # TAB 5: WASTAGE & DISCARD (Dual-Input)
     # ==========================================
     with tab5:
         st.subheader("🗑️ Wastage & Quality Discard Log")
@@ -715,7 +738,8 @@ def store_dashboard():
                     "Expired / Out of Date", "Temperature Abuse", "Physical Damage", "Quality Standard Failure"
                 ])
             
-            waste_photo = st.file_uploader("📂 Upload Wastage Evidence (Camera or Gallery)", type=["jpg", "jpeg", "png"], key="waste_photo")
+            m_waste = st.radio("Wastage Proof Method:", ["Take Photo", "Upload File"], horizontal=True, key="m_waste")
+            waste_photo = st.camera_input("Snap Wastage Evidence", key="cam_waste") if m_waste == "Take Photo" else st.file_uploader("📂 Upload Wastage Evidence", type=["jpg", "jpeg", "png", "heic", "heif", "webp"], key="waste_photo")
             
             if st.form_submit_button("🗑️ Log Wastage", type="primary"):
                 if not waste_item or waste_qty <= 0:
