@@ -1704,7 +1704,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         nso_df = pd.DataFrame()
         if supabase is not None:
             try:
-                res = supabase.table("nso_pipeline").select("*").execute()
+                res = supabase.table("nso_master_pipeline").select("*").execute()
                 if res.data:
                     nso_df = pd.DataFrame(res.data)
             except Exception:
