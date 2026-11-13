@@ -1738,10 +1738,13 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 try:
                     df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
                     df_raw.columns = [str(c).strip().lower() for c in df_raw.columns]
-                    col_site = next((c for c in df_raw.columns if 'site' in c or 'store' in c), None)
-                    col_city = next((c for c in df_raw.columns if 'city' in c), None)
-                    col_date = next((c for c in df_raw.columns if 'ops' in c or 'handover' in c or 'ac' in c), None)
+                    col_date = next((c for c in df_raw.columns if 'ops' in c), None)
+                    if not col_date:
+                        col_date = next((c for c in df_raw.columns if 'handover' in c or 'ac' in c), None)
+                    # ------------------------------
+                    
                     col_stat = next((c for c in df_raw.columns if 'status' in c), None)
+                  
 
                     if col_site:
                         recs = []
