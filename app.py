@@ -1776,8 +1776,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                             
                         if supabase is not None and recs:
                             try:
-                                supabase.table("nso_pipeline").delete().neq("id", 0).execute()
-                                supabase.table("nso_pipeline").insert(recs).execute()
+                                supabase.table("nso_master_pipeline").delete().neq("id", 0).execute()
+                                supabase.table("nso_master_pipeline").insert(recs).execute()
                                 st.success(f"✅ Synced {len(recs)} store records from BD file!")
                                 st.rerun()
                             except Exception as ex:
