@@ -1787,24 +1787,34 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
+        import pandas as pd
         from datetime import timedelta
+        import plotly.graph_objects as go
+
+        # Ensure we have a proper datetime column
+        nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
 
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
 
         if not dated_df.empty:
-            min_d = dated_df['handover_date_dt'].min().date()
-            max_d = dated_df['handover_date_dt'].max().date()
+            # Safely extract Python date objects
+            min_d = dated_df['handover_date_dt'].min().to_pydatetime().date()
+            max_d = dated_df['handover_date_dt'].max().to_pydatetime().date()
 
-            # --- FIX: Prevent Streamlit slider crash if min and max bounds are identical ---
             if min_d >= max_d:
                 max_d = min_d + timedelta(days=30)
-            # -------------------------------------------------------------------------------
+
+            # --- THE FIX: Timezone Padding ---
+            # Pad the absolute boundaries by 5 days so the IST/UTC timezone shift 
+            # doesn't push the slider values out of bounds.
+            safe_min_bound = min_d - timedelta(days=5)
+            safe_max_bound = max_d + timedelta(days=5)
 
             selected_range = st.slider(
                 "📅 **Filter Handover View Window:**",
-                min_value=min_d,
-                max_value=max_d,
+                min_value=safe_min_bound,
+                max_value=safe_max_bound,
                 value=(min_d, max_d),
                 format="MMM YYYY"
             )
@@ -1821,7 +1831,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 "TBD": "#757575"                    
             }
 
-            import plotly.graph_objects as go
             fig = go.Figure()
 
             for idx, row in filtered_dated_df.iterrows():
