@@ -1787,12 +1787,19 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
+        from datetime import timedelta
+
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
 
         if not dated_df.empty:
             min_d = dated_df['handover_date_dt'].min().date()
             max_d = dated_df['handover_date_dt'].max().date()
+
+            # --- FIX: Prevent Streamlit slider crash if min and max bounds are identical ---
+            if min_d >= max_d:
+                max_d = min_d + timedelta(days=30)
+            # -------------------------------------------------------------------------------
 
             selected_range = st.slider(
                 "📅 **Filter Handover View Window:**",
@@ -1849,7 +1856,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No dated handover stores found.")
-
         # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
