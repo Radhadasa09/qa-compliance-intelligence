@@ -1772,7 +1772,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                         p_dt = pd.to_datetime(r.get("ops_handover_date"), errors='coerce')
                                         if pd.notna(p_dt): dt_val = p_dt.strftime('%Y-%m-%d')
                                         
-                                    recs.append({
+                    recs.append({
                         "id": idx + 1,
                         "site_name": str(r.get("site_name", "Unknown")),
                         "city": str(r.get("city", "")),
@@ -1783,12 +1783,15 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                         "water_test": st_val == "Completed",
                         "pre_op_audit": st_val == "Completed"
                     })
+                    
+    
+            except Exception as e:
+                st.error(f"Error processing data: {e}")
 
         # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
-        col_p1, col_p2 = st.columns(2)        
-        with col_p1:
+        col_p1, col_p2 = st.columns(2)        with col_p1:
             csv_export_data = nso_df[['site_name', 'city', 'handover_date', 'status', 'fssai_applied', 'pest_contract', 'water_test', 'pre_op_audit']].to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Full NSO Forecast (CSV)",
