@@ -1730,138 +1730,55 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
         st.markdown("---")
 
-        # 3. BD Excel/CSV Importer Expander
-        with st.expander("📥 Import BD NSO Tracker File (Excel / CSV)", expanded=False):
-            st.caption("Upload the BD team's handover Excel sheet to parse dates automatically.")
-            bd_file = st.file_uploader("Choose BD Sheet", type=["xlsx", "xls", "csv"], key="bd_nso_upload_v3")
-            if bd_file and st.button("🚀 Sync BD File to Pipeline", type="primary"):
+        # 3. BD Excel/CSV & IMAGE Importer Expander (AI-Powered)
+        with st.expander("📥 Import BD NSO Tracker (Excel / CSV / Image Screenshot)", expanded=False):
+            st.caption("Upload the BD team's handover sheet or a screenshot. Images will be processed by AI.")
+            bd_file = st.file_uploader("Choose BD File", type=["xlsx", "xls", "csv", "jpg", "jpeg", "png", "webp"], key="bd_nso_upload_ai")
+            
+            if bd_file and st.button("🚀 Sync Tracker to Pipeline", type="primary"):
                 try:
-                    df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
-                    df_raw.columns = [str(c).strip().lower() for c in df_raw.columns]
-                    col_site = next((c for c in df_raw.columns if 'site' in c or 'store' in c), None)
-                    col_city = next((c for c in df_raw.columns if 'city' in c), None)
-                    col_date = next((c for c in df_raw.columns if 'ops' in c or 'handover' in c or 'ac' in c), None)
-                    col_stat = next((c for c in df_raw.columns if 'status' in c), None)
-
-                    if col_site:
-                        recs = []
-                        for idx, r in df_raw.iterrows():
-                            sn = str(r.get(col_site, '')).strip()
-                            if not sn or sn.lower() in ['nan', 'none', '']: continue
-                            sc = str(r.get(col_city, '')).strip() if col_city else ""
-                            rd = str(r.get(col_date, '')).strip() if col_date else "TBD"
-                            rs = str(r.get(col_stat, '')).strip() if col_stat else "TBD"
-
-                            st_val = "TBD"
-                            if "operational" in rs.lower(): st_val = "Completed"
-                            elif "uc" in rs.lower() or "under" in rs.lower(): st_val = "On Track"
-                            elif "loi" in rs.lower() or "agreement" in rs.lower(): st_val = "Pending Dependencies"
-
-                            dt_val = "TBD"
-                            p_dt = pd.to_datetime(rd, errors='coerce')
-                            if pd.notna(p_dt): dt_val = p_dt.strftime('%Y-%m-%d')
-
-                            recs.append({
-                                "id": idx + 1, "site_name": sn, "city": sc if sc.lower() != 'nan' else "",
-                                "handover_date": dt_val, "status": st_val,
-                                "fssai_applied": st_val == "Completed", "pest_contract": st_val == "Completed",
-                                "water_test": st_val == "Completed", "pre_op_audit": st_val == "Completed"
-                            })
-                        if supabase is not None and recs:
-                            try:
-                                supabase.table("nso_pipeline").delete().neq("id", 0).execute()
-                                supabase.table("nso_pipeline").insert(recs).execute()
-                                st.success(f"✅ Synced {len(recs)} store records from BD file!")
-                                st.rerun()
-                            except Exception as ex:
-                                st.error(f"Cloud sync error: {ex}")
-                except Exception as e:
-                    st.error(f"Error reading file: {e}")
-
-        # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
-        st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
-
-        dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
-        tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
-
-        if not dated_df.empty:
-            # Native Streamlit Date Range Slider (Replaces cluttered Plotly rangeslider)
-            min_d = dated_df['handover_date_dt'].min().date()
-            max_d = dated_df['handover_date_dt'].max().date()
-
-            selected_range = st.slider(
-                "📅 **Filter Handover View Window:**",
-                min_value=min_d,
-                max_value=max_d,
-                value=(min_d, max_d),
-                format="MMM YYYY"
-            )
-
-            # Filter dataset dynamically based on slider
-            filtered_dated_df = dated_df[
-                (dated_df['handover_date_dt'].dt.date >= selected_range[0]) & 
-                (dated_df['handover_date_dt'].dt.date <= selected_range[1])
-            ].reset_index(drop=True)
-
-            color_map = {
-                "Completed": "#2E7D32",             # Emerald Green
-                "On Track": "#1E88E5",              # Vivid Blue
-                "Pending Dependencies": "#E65100",  # Dark Orange/Amber
-                "TBD": "#757575"                    # Slate Grey
-            }
-
-            fig = go.Figure()
-
-            # Plot each store on its dedicated unique Y row
-            for idx, row in filtered_dated_df.iterrows():
-                y_label = f"<b>{row['site_name']}</b> ({row['city']})"
-                date_str = row['handover_date_dt'].strftime('%d %b %Y')
-                st_color = color_map.get(row['status'], "#757575")
-
-                fig.add_trace(go.Scatter(
-                    x=[row['handover_date_dt']],
-                    y=[y_label],
-                    mode="markers+text",
-                    name=row['status'],
-                    marker=dict(
-                        size=15,
-                        color=st_color,
-                        line=dict(width=1.5, color="#1A110A")
-                    ),
-                    text=[f"  <b>{date_str}</b> — {row['status']}"],
-                    textposition="middle right",
-                    textfont=dict(size=11, color="#1A110A"),
-                    cliponaxis=False, # Prevents text clipping at container edges!
-                    showlegend=False
-                ))
-
-            # Dynamic chart height calculation
-            dynamic_height = max(400, len(filtered_dated_df) * 32 + 80)
-
-            fig.update_layout(
-                height=dynamic_height,
-                margin=dict(l=20, r=280, t=20, b=40), # 280px right padding prevents right text cutoff
-                plot_bgcolor="#F8F9FA",
-                paper_bgcolor="#FFFFFF",
-                xaxis=dict(
-                    title="Target Operational Handover Date",
-                    type="date",
-                    showgrid=True,
-                    gridcolor="#E2E8F0",
-                    tickformat="%b %Y"
-                ),
-                yaxis=dict(
-                    autorange="reversed", # Chronological order top to bottom
-                    showgrid=True,
-                    gridcolor="#F1F5F9",
-                    tickfont=dict(size=12, color="#1A110A")
-                )
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No dated handover stores found.")
-        # 5. PRINT & EXPORT FORECAST SUITE
+                    is_image = bd_file.name.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                    recs = []
+                    
+                    if is_image:
+                        with st.spinner("🤖 Gemini AI is reading the tracker screenshot..."):
+                            import google.generativeai as genai
+                            from PIL import Image
+                            import io
+                            import json
+                            
+                            if "GEMINI_API_KEY" in st.secrets:
+                                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                                vision_model = genai.GenerativeModel("gemini-1.5-flash")
+                                
+                                img_buffer = Image.open(io.BytesIO(bd_file.read()))
+                                prompt = """
+                                You are a data extraction assistant. Look at this store handover tracker image.
+                                Extract the table rows into a strict, valid JSON array of objects.
+                                Keys required exactly as written: "site_name", "city", "ops_handover_date", "status".
+                                If a date is missing, write "TBD". If city is missing, leave empty string.
+                                If status says "Operational", map to "Completed". If "UC", map to "On Track". 
+                                If "LOI Signed" or "Agreement", map to "Pending Dependencies".
+                                Return ONLY the JSON array without markdown formatting.
+                                """
+                                response = vision_model.generate_content([prompt, img_buffer])
+                                raw_json = response.text.strip().replace('```json', '').replace('```', '')
+                                ai_data = json.loads(raw_json)
+                                
+                                for idx, r in enumerate(ai_data):
+                                    st_val = r.get("status", "TBD")
+                                    dt_val = "TBD"
+                                    if str(r.get("ops_handover_date", "TBD")).strip() != "TBD":
+                                        p_dt = pd.to_datetime(r.get("ops_handover_date"), errors='coerce')
+                                        if pd.notna(p_dt): dt_val = p_dt.strftime('%Y-%m-%d')
+                                        
+                                    recs.append({
+                                        "id": idx + 1,
+                                        "site_name": str(r.get("site_name", "Unknown")),
+                                        "city": str(r.get("city", "")),
+                                        "handover_date": dt_val,
+                                        "status": st_val,
+                                        "fssai        # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
         col_p1, col_p2 = st.columns(2)
