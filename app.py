@@ -1784,7 +1784,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                 st.error(f"Cloud sync error: {ex}")
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
-       # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
+       
+        # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE PICKER
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
         import pandas as pd
@@ -1797,30 +1798,31 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
 
         if not dated_df.empty:
-            # 2. Extract standard Python dates directly from the Pandas column
             actual_min = dated_df['handover_date_dt'].dt.date.min()
             actual_max = dated_df['handover_date_dt'].dt.date.max()
 
-            # 3. Add a 15-day buffer to both ends to completely absorb timezone shifts
-            safe_min = actual_min - timedelta(days=15)
-            safe_max = actual_max + timedelta(days=15)
+            # Ensure there is always a gap
+            if actual_min == actual_max:
+                actual_max = actual_min + timedelta(days=1)
 
-            # 4. If they are still somehow identical, force a 1-month gap
-            if safe_min >= safe_max:
-                safe_max = safe_min + timedelta(days=30)
-
-            # 5. CRITICAL FIX: The `value` must explicitly equal `safe_min` and `safe_max`
-            selected_range = st.slider(
+            # 2. BYPASS SLIDER BUG: Use st.date_input for bulletproof date selection
+            selected_range = st.date_input(
                 "📅 **Filter Handover View Window:**",
-                min_value=safe_min,
-                max_value=safe_max,
-                value=(safe_min, safe_max),
-                format="MMM YYYY"
+                value=(actual_min, actual_max),
+                min_value=actual_min - timedelta(days=365),  # 1 year breathing room
+                max_value=actual_max + timedelta(days=365)
             )
 
+            # 3. Handle the tuple safely (date_input returns 1 value while user is clicking the second date)
+            if len(selected_range) == 2:
+                start_date, end_date = selected_range
+            else:
+                start_date = selected_range[0]
+                end_date = selected_range[0]
+
             filtered_dated_df = dated_df[
-                (dated_df['handover_date_dt'].dt.date >= selected_range[0]) & 
-                (dated_df['handover_date_dt'].dt.date <= selected_range[1])
+                (dated_df['handover_date_dt'].dt.date >= start_date) & 
+                (dated_df['handover_date_dt'].dt.date <= end_date)
             ].reset_index(drop=True)
 
             color_map = {
@@ -1863,7 +1865,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No dated handover stores found.")        # 5. PRINT & EXPORT FORECAST SUITE
+            st.info("No dated handover stores found.") 
+            # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
         col_p1, col_p2 = st.columns(2)
