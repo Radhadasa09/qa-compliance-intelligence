@@ -1784,38 +1784,37 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                 st.error(f"Cloud sync error: {ex}")
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
-        # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
+       # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE SLIDER & ZERO CLIPPING
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
         import pandas as pd
         from datetime import timedelta
         import plotly.graph_objects as go
 
-        # Ensure we have a proper datetime column
+        # 1. Safely convert to proper datetime objects
         nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
 
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
-        tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
 
         if not dated_df.empty:
-            # Safely extract Python date objects
-            min_d = dated_df['handover_date_dt'].min().to_pydatetime().date()
-            max_d = dated_df['handover_date_dt'].max().to_pydatetime().date()
+            # 2. Extract standard Python dates directly from the Pandas column
+            actual_min = dated_df['handover_date_dt'].dt.date.min()
+            actual_max = dated_df['handover_date_dt'].dt.date.max()
 
-            if min_d >= max_d:
-                max_d = min_d + timedelta(days=30)
+            # 3. Add a 15-day buffer to both ends to completely absorb timezone shifts
+            safe_min = actual_min - timedelta(days=15)
+            safe_max = actual_max + timedelta(days=15)
 
-            # --- THE FIX: Timezone Padding ---
-            # Pad the absolute boundaries by 5 days so the IST/UTC timezone shift 
-            # doesn't push the slider values out of bounds.
-            safe_min_bound = min_d - timedelta(days=5)
-            safe_max_bound = max_d + timedelta(days=5)
+            # 4. If they are still somehow identical, force a 1-month gap
+            if safe_min >= safe_max:
+                safe_max = safe_min + timedelta(days=30)
 
+            # 5. CRITICAL FIX: The `value` must explicitly equal `safe_min` and `safe_max`
             selected_range = st.slider(
                 "📅 **Filter Handover View Window:**",
-                min_value=safe_min_bound,
-                max_value=safe_max_bound,
-                value=(min_d, max_d),
+                min_value=safe_min,
+                max_value=safe_max,
+                value=(safe_min, safe_max),
                 format="MMM YYYY"
             )
 
@@ -1864,8 +1863,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No dated handover stores found.")
-        # 5. PRINT & EXPORT FORECAST SUITE
+            st.info("No dated handover stores found.")        # 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
         col_p1, col_p2 = st.columns(2)
