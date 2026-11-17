@@ -1795,6 +1795,13 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         # 1. Safely convert to proper datetime objects
         nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
 
+        # --- THE FIX: Correct Excel/Pandas "Year 0001" default parsing bug ---
+        nso_df['handover_date_dt'] = nso_df['handover_date_dt'].apply(
+            lambda x: x.replace(year=2026) if pd.notnull(x) and x.year < 2000 else x
+        )
+        # ---------------------------------------------------------------------
+        
+        dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
 
         if not dated_df.empty:
