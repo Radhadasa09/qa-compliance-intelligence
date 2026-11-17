@@ -1801,19 +1801,17 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             actual_min = dated_df['handover_date_dt'].dt.date.min()
             actual_max = dated_df['handover_date_dt'].dt.date.max()
 
-            # Ensure there is always a gap
             if actual_min == actual_max:
                 actual_max = actual_min + timedelta(days=1)
 
-            # 2. BYPASS SLIDER BUG: Use st.date_input for bulletproof date selection
+            # 2. THE FIX: Remove min_value and max_value math completely. 
+            # Streamlit will automatically apply safe 10-year default boundaries.
             selected_range = st.date_input(
                 "📅 **Filter Handover View Window:**",
-                value=(actual_min, actual_max),
-                min_value=actual_min - timedelta(days=365),  # 1 year breathing room
-                max_value=actual_max + timedelta(days=365)
+                value=(actual_min, actual_max)
             )
 
-            # 3. Handle the tuple safely (date_input returns 1 value while user is clicking the second date)
+            # 3. Handle the tuple safely
             if len(selected_range) == 2:
                 start_date, end_date = selected_range
             else:
@@ -1866,7 +1864,8 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No dated handover stores found.") 
-            # 5. PRINT & EXPORT FORECAST SUITE
+            
+# 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
         col_p1, col_p2 = st.columns(2)
