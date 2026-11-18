@@ -259,7 +259,6 @@ with st.sidebar:
             "📈 NSF Audit Intelligence",
             "📑 Reports & Archive",
             "📚 Resources Vault",
-            "💳 Finance Invoices",
             "⚙️ System Administration",
             "🤖 AI Support Assistant",
             "📦 Shelf-Life Manager",
@@ -414,7 +413,7 @@ def generate_detailed_checklist_pdf(name, fso, lic, addr, audit_dt, responses, p
     try:
         return bytes(pdf.output())
     except TypeError:
-        return bytes(pdf.output(dest='S')).encode('latin-1')
+        return bytes(pdf.output(dest='S').encode('latin-1'))
 
 # ==========================================
 # MAIN ROUTER SWITCH
@@ -630,15 +629,11 @@ elif nav_selection == "🏬 Retail Operations":
                     df_audits['date_only'] = df_audits['created_at'].dt.date
                     df_latest_audits = df_audits.drop_duplicates(subset=['store_id', 'date_only'], keep='first').copy()
                     
-                    store_name_map = {
-                        "189001": "Janakpuri, Delhi", "189002": "GK1, Delhi", "189003": "Oberoi SkyCity, Mumbai",
-                        "189004": "M3M Atrium, Gurgaon", "189005": "Secor 50 Noida, Noida", "189006": "Malcha, Delhi",
-                        "189007": "Platina, Gurgaon", "189008": "Season Mall Pune, Pune", "189009": "BRS Nagar Ludhiana, Ludhiana",
-                        "189010": "DLF Moti Nagar, Delhi", "189011": "Goldust Patiala, Patiala", "189012": "Warehouse, Delhi",
-                        "189013": "Creek Side, Ludhiana", "189014": "Chembur, Mumbai"
-                    }
                     df_latest_audits['store_id_str'] = df_latest_audits['store_id'].astype(str)
+                    
+                    # --- FIX: Use dynamic store_name_map generated at the top of the file from Supabase ---
                     df_latest_audits['Store Name'] = df_latest_audits['store_id_str'].map(store_name_map).fillna(df_latest_audits['store_id_str'])
+                    
                     audit_counts = df_latest_audits['Store Name'].value_counts().reset_index()
                     audit_counts.columns = ['Store Name', 'Total Valid Submissions']
                     fig_audit = px.bar(audit_counts, x='Store Name', y='Total Valid Submissions', title="Valid Daily Audits by Store", text_auto=True, color='Total Valid Submissions', color_continuous_scale='Blues')
@@ -696,14 +691,13 @@ elif nav_selection == "🏬 Retail Operations":
 
     st.markdown("---")
     st.subheader("📋 Store Staff Compliance Entry")
-    FULL_STORE_LIST = [
-        "DLF Mid Town Plaza, Moti Nagar", "Janakpuri, Delhi", "GK1, Delhi",
-        "Oberoi SkyCity, Mumbai", "M3M Atrium, Gurgaon", "Sector 50 Noida, Noida",
-        "Malcha, Delhi", "Platina, Gurgaon", "Season Mall Pune, Pune", "BRS Nagar Ludhiana, Ludhiana"
-    ]
+
+    # --- FIX: Replaced hardcoded list with dynamic list from Supabase ---
+    dynamic_compliance_stores = df_stores_dynamic['store_name'].tolist() if not df_stores_dynamic.empty else []
+
     with st.expander("📝 Enter New Compliance Record", expanded=False):
         with st.form("compliance_entry_form"):
-            selected_store_name = st.selectbox("Select Store Location", FULL_STORE_LIST)
+            selected_store_name = st.selectbox("Select Store Location", dynamic_compliance_stores)
             current_month_val = st.selectbox("Select Audit Month", ["August 2026", "September 2026", "October 2026", "November 2026"])
             col1, col2 = st.columns(2)
             with col1:
@@ -1082,14 +1076,10 @@ elif nav_selection == "📈 NSF Audit Intelligence":
             col_n1, col_n2 = st.columns(2)
             with col_n1:
                 acode = st.text_input("NSF Audit Code")
-                store_opt = [
-                    "189001 - Janakpuri, Delhi", "189002 - GK1, Delhi", "189003 - Oberoi SkyCity, Mumbai", 
-                    "189004 - M3M Atrium, Gurgaon", "189005 - Secor 50 Noida, Noida", "189006 - Malcha, Delhi", 
-                    "189007 - Platina, Gurgaon", "189008 - Season Mall Pune, Pune", "189009 - BRS Nagar Ludhiana, Ludhiana", 
-                    "189010 - DLF Moti Nagar, Delhi", "189011 - Goldust Patiala, Patiala", "189012 - Neelkanth - Murthal", 
-                    "189013 - Creek Side, Ludhiana", "189014 - Chembur, Mumbai"
-                ]
+                
+                # --- FIX: Removed hardcoded store list. Now uses dynamic store_opt global list ---
                 sel_store = st.selectbox("Select Store", store_opt)
+                
                 sc_val = st.number_input("Score (%)", 0.0, 100.0, 85.0)
             with col_n2:
                 adt = st.date_input("Audit Date", value=datetime.date.today())
@@ -1192,7 +1182,7 @@ elif nav_selection == "📚 Resources Vault":
                     "updated_at": str(datetime.date.today()),
                     "target_store": target_store_val
                 }).execute()
-                st.success(f"✅ Published `{dv if 'dv' in locals() else dfile.name}` for **{target_store_val}**!")
+                st.success(f"✅ Published `{dfile.name}` for **{target_store_val}**!")
                 st.rerun()
 
     if supabase is not None:
@@ -1218,29 +1208,6 @@ elif nav_selection == "📚 Resources Vault":
             )
         else:
             st.info("No documents published in vault yet.")
-
-elif nav_selection == "💳 Finance Invoices":
-    st.subheader("💳 Central Invoices & Finance Clearance")
-    with st.expander("➕ Add New Central Invoice"):
-        with st.form("cent_inv"):
-            ic = st.selectbox("Category", ["Medical (Health Certs)", "Pest Control", "FOSTAC (Training)", "Liasoning / Licensing", "Utilities & Maintenance", "Other"])
-            vn = st.text_input("Vendor Name")
-            inumb = st.text_input("Invoice Number")
-            iamt = st.number_input("Amount (INR)", 0.0, step=100.0)
-            ifile = st.file_uploader("Upload Doc", type=["pdf", "jpg", "jpeg", "png"])
-            irem = st.text_area("Remarks")
-            if st.form_submit_button("Submit to Ledger", type="primary") and vn and inumb:
-                iurl = ""
-                if ifile and cloudinary_configured:
-                    iurl = cloudinary.uploader.upload(ifile, folder="cbtl/central_finance_invoices", resource_type="auto").get("secure_url", "")
-                if supabase is not None:
-                    supabase.table("central_finance_invoices").insert({"invoice_category": ic, "vendor_name": vn, "invoice_number": inumb, "invoice_amount": iamt, "invoice_url": iurl, "remarks": irem, "submitted_to_finance": False, "payment_done": False}).execute()
-                    st.success("Logged invoice!")
-                    st.rerun()
-    if supabase is not None:
-        inv_res = supabase.table("central_finance_invoices").select("*").order("created_at", desc=True).execute()
-        if inv_res.data:
-            st.dataframe(pd.DataFrame(inv_res.data), use_container_width=True)
 
 elif nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
@@ -1292,7 +1259,7 @@ elif nav_selection == "⚙️ System Administration":
         if fb_res.data:
             df_fb = pd.DataFrame(fb_res.data)
             for idx, r in df_fb.iterrows():
-                col_text, col_btn = st.columns([3, 1])  # adjust ratio/count as needed
+                col_text, col_btn = st.columns([3, 1])
                 date_str = str(r.get('created_at', 'N/A'))[:10]
                 store_val = r.get('store_id', r.get('store_name', 'N/A'))
                 msg_val = r.get('feedback_text', r.get('message', 'No text'))
@@ -1346,7 +1313,6 @@ elif nav_selection == "🤖 AI Support Assistant":
                 st.markdown(reply)
                 st.session_state["support_messages"].append({"role": "assistant", "content": reply})
             else:
-                # --- THE INTELLIGENT ROUTER (Fixes the Speed Issue) ---
                 query_lower = prompt.lower()
                 context_data = ""
                 source_used = ""
@@ -1398,7 +1364,6 @@ elif nav_selection == "🤖 AI Support Assistant":
 
                         st.caption(f"*(Query optimally routed to: {source_used})*")
 
-                        # --- SYSTEM PROMPT ---
                         system_prompt = f"""
                         You are the Senior QA & Compliance AI Officer for CBTL India / Ekaagra Retail Operations.
                         
@@ -1406,13 +1371,12 @@ elif nav_selection == "🤖 AI Support Assistant":
                         {context_data}
                         
                         === OPERATIONAL & COMPLIANCE RULES ===
-                        1. CLASSIFICATION: Site codes starting with '189' are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
-                        2. INTERNAL DATA GUARDRALL: Prioritize the provided table above. Never invent internal metrics.
-                        3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, or hygiene SOPs, utilize general QA/FSSAI industry knowledge.
-                        4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
+1. CLASSIFICATION: Site codes starting with '189' are 'Ekaagra Direct Outlets'. All other codes are 'Sub Franchise Outlets'.
+2. INTERNAL DATA GUARDRAIL: Prioritize the provided table above. Never invent internal metrics.
+3. HYBRID KNOWLEDGE RULE: For questions regarding general food safety standards, FSSAI regulations, FoSTaC guidelines, or hygiene SOPs, utilize general QA/FSSAI industry knowledge.
+4. STRUCTURE: Keep responses clear, professional, and well-structured with bullet points and bold headers.
                         """
 
-                        # --- FAILOVER MODEL SELECTION LOOP ---
                         model_candidates = [
                             "gemini-3.8-flash",
                             "gemini-3.5-flash",
@@ -1442,7 +1406,6 @@ elif nav_selection == "🤖 AI Support Assistant":
                             else:
                                 reply = f"Error processing query: {last_exception}"
 
-                        # --- AUTOMATIC LOGGING TO SUPABASE CHAT_LOGS ---
                         if supabase is not None and reply and not reply.startswith("Error"):
                             try:
                                 supabase.table("chat_logs").insert({
@@ -1466,17 +1429,14 @@ elif nav_selection == "📦 Shelf-Life Manager":
     st.header("📱 Cafe Field Audit: Shelf-Life Master")
     st.markdown("Walk the cafe, check physical items, update the database live, or auto-extract from vendor sheets.")
 
-    # --- 1. Connect to Supabase ---
     supabase_url = st.secrets["SUPABASE_URL"]
     supabase_key = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(supabase_url, supabase_key)
 
-    # --- 2. Fetch Live Data ---
     @st.cache_data(ttl=10)
     def load_shelf_life_data():
         response = supabase.table("shelf_life_master").select("category, item_code, product_name, primary_brand, alternative_brand, storage_conditions, primary_shelf_life, secondary_shelf_life, notes").execute()
         
-        # FIX: Enforce strict column ordering so the grid never misaligns
         ordered_cols = [
             "category", "item_code", "product_name", "primary_brand", 
             "alternative_brand", "storage_conditions", "primary_shelf_life", 
@@ -1494,7 +1454,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
 
     live_df = load_shelf_life_data()
 
-    # --- 3. SMART VENDOR DOCUMENT EXTRACTOR ---
     with st.expander("📄 Upload Vendor / Raw Master Document for Auto-Extraction"):
         st.info("Upload your raw vendor CSV or Excel sheet. The system will automatically map product names and push them to Supabase.")
         
@@ -1507,10 +1466,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 else:
                     raw_import_df = pd.read_excel(uploaded_doc)
                 
-                st.write("🔍 **Raw Document Preview (First 5 rows):**")
-                st.dataframe(raw_import_df.head(5))
-                
-                # Intelligent Column Auto-Alignment
                 cols = raw_import_df.columns.tolist()
                 cols_lower = [str(c).lower() for c in cols]
                 
@@ -1529,7 +1484,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 storage_idx = guess_col_index(['storage', 'temp', 'condition'])
                 storage_idx = (storage_idx + 1) if storage_idx != -1 else 0
 
-                # FIX: Added Shelf Life Guessing
                 shelf_idx = guess_col_index(['shelf', 'life', 'days', 'expiry'])
                 shelf_idx = (shelf_idx + 1) if shelf_idx != -1 else 0
 
@@ -1542,7 +1496,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                 with col3:
                     storage_col = st.selectbox("Select Storage", ["None"] + cols, index=storage_idx)
                 with col4:
-                    # FIX: Added Shelf Life Selection Dropdown
                     shelf_col = st.selectbox("Select Shelf Life", ["None"] + cols, index=shelf_idx)
                 
                 if st.button("Extract & Map Data to Master"):
@@ -1560,7 +1513,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     else:
                         mapped_df["storage_conditions"] = None
 
-                    # FIX: Map Shelf Life Properly
                     if shelf_col != "None":
                         mapped_df["primary_shelf_life"] = raw_import_df[shelf_col].astype(str).str.strip()
                     else:
@@ -1571,7 +1523,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                     mapped_df["secondary_shelf_life"] = None
                     mapped_df["notes"] = "Imported from vendor document - pending review"
                     
-                    # Drop blank product rows
                     mapped_df = mapped_df[
                         (mapped_df["product_name"].notna()) & 
                         (mapped_df["product_name"] != "") & 
@@ -1579,7 +1530,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
                         (mapped_df["product_name"] != "None")
                     ]
                     
-                    # Clean NaN for JSON
                     mapped_df = mapped_df.fillna("")
                     mapped_df = mapped_df.replace({"": None})
                     
@@ -1594,7 +1544,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
             except Exception as e:
                 st.error(f"⚠️ Error processing document: {e}")
 
-    # --- 4. DOWNLOAD CLEAN MASTER BUTTON ---
     st.divider()
     col_dl1, col_dl2 = st.columns([0.7, 0.3])
     with col_dl1:
@@ -1609,9 +1558,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
             type="primary"
         )
 
-    # --- 5. EDITABLE UI (Manual Entry) ---
-    st.caption("Tip: Scroll to the bottom row and click the '+' to add a brand new item you find in the cafe.")
-    
     edited_df = st.data_editor(
         live_df, 
         num_rows="dynamic", 
@@ -1619,7 +1565,6 @@ elif nav_selection == "📦 Shelf-Life Manager":
         hide_index=True
     )
 
-    # --- 6. SAVE LIVE EDITS BUTTON ---
     if st.button("💾 Save Live Edits to Supabase", type="primary"):
         with st.spinner("Syncing to cloud..."):
             clean_df = edited_df.fillna("")
@@ -1655,9 +1600,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
     
     tab_nso_timeline, tab_pest_control = st.tabs(["📅 Master NSO Timeline & QA Pipeline", "integrated Pest Control & Gap Audit Ledger"])
     
-    # ---------------------------------------------------------
-    # MASTER 35-STORE DATASET
-    # ---------------------------------------------------------
     default_nso_data = [
         {"id": 1, "site_name": "Gold Dust City Centre", "city": "Patiala", "handover_date": "2026-02-27", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
         {"id": 2, "site_name": "DLF Midtown Plaza", "city": "Delhi", "handover_date": "2026-03-11", "status": "Completed", "fssai_applied": True, "pest_contract": True, "water_test": True, "pre_op_audit": True},
@@ -1696,11 +1638,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         {"id": 35, "site_name": "Route 65 GGR", "city": "Gurugram", "handover_date": "TBD", "status": "TBD", "fssai_applied": False, "pest_contract": False, "water_test": False, "pre_op_audit": False}
     ]
 
-    # ==========================================
-    # TAB 1: MASTER NSO TIMELINE & QA PIPELINE
-    # ==========================================
     with tab_nso_timeline:
-        # 1. Quiet Database Fetcher (No Raw JSON Errors)
         nso_df = pd.DataFrame()
         if supabase is not None:
             try:
@@ -1713,7 +1651,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         if nso_df.empty:
             nso_df = pd.DataFrame(default_nso_data)
 
-        # 2. Executive Metric Badges
         nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
         total_sites = len(nso_df)
         completed_cnt = len(nso_df[nso_df['status'] == 'Completed'])
@@ -1730,7 +1667,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
         st.markdown("---")
 
-        # 3. BD Excel/CSV Importer Expander
         with st.expander("📥 Import BD NSO Tracker File (Excel / CSV)", expanded=False):
             st.caption("Upload the BD team's handover Excel sheet to parse dates automatically.")
             bd_file = st.file_uploader("Choose BD Sheet", type=["xlsx", "xls", "csv"], key="bd_nso_upload_v3")
@@ -1739,12 +1675,10 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     df_raw = pd.read_csv(bd_file) if bd_file.name.endswith('.csv') else pd.read_excel(bd_file)
                     df_raw.columns = [str(c).strip().lower() for c in df_raw.columns]
                     
-                    # Target 'ops' first to grab "Ops Handover**", then fallback to generic handover
                     col_date = next((c for c in df_raw.columns if 'ops' in c), None)
                     if not col_date:
                         col_date = next((c for c in df_raw.columns if 'handover' in c or 'ac' in c), None)
                     
-                    # Define missing columns
                     col_site = next((c for c in df_raw.columns if 'site' in c or 'store' in c), None)
                     col_city = next((c for c in df_raw.columns if 'city' in c), None)
                     col_stat = next((c for c in df_raw.columns if 'status' in c), None)
@@ -1785,23 +1719,18 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
        
-        # 4. HIGH-POLISH TIMELINE PLOTLY WITH STREAMLIT DATE PICKER
         st.markdown("### 📊 Master Pipeline & Chronological Handover Timeline")
 
         import pandas as pd
         from datetime import timedelta
         import plotly.graph_objects as go
 
-        # 1. Safely convert to proper datetime objects
         nso_df['handover_date_dt'] = pd.to_datetime(nso_df['handover_date'], errors='coerce')
 
-        # --- THE FIX: Correct Excel/Pandas "Year 0001" default parsing bug ---
         nso_df['handover_date_dt'] = nso_df['handover_date_dt'].apply(
             lambda x: x.replace(year=2026) if pd.notnull(x) and x.year < 2000 else x
         )
-        # ---------------------------------------------------------------------
         
-        dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
         dated_df = nso_df[nso_df['handover_date_dt'].notna()].sort_values(by='handover_date_dt', ascending=True).reset_index(drop=True)
 
         if not dated_df.empty:
@@ -1811,14 +1740,11 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             if actual_min == actual_max:
                 actual_max = actual_min + timedelta(days=1)
 
-            # 2. THE FIX: Remove min_value and max_value math completely. 
-            # Streamlit will automatically apply safe 10-year default boundaries.
             selected_range = st.date_input(
                 "📅 **Filter Handover View Window:**",
                 value=(actual_min, actual_max)
             )
 
-            # 3. Handle the tuple safely
             if len(selected_range) == 2:
                 start_date, end_date = selected_range
             else:
@@ -1872,7 +1798,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         else:
             st.info("No dated handover stores found.") 
             
-# 5. PRINT & EXPORT FORECAST SUITE
         st.markdown("---")
         st.markdown("### 🖨️ Export & Print Full NSO Forecast Report")
         col_p1, col_p2 = st.columns(2)
@@ -1921,7 +1846,7 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 mime="text/html"
             )
 
-        # 6. Early Stage TBD Pipeline Summary Card View
+        tbd_df = nso_df[nso_df['handover_date_dt'].isna()].reset_index(drop=True)
         if not tbd_df.empty:
             with st.expander(f"⏳ LOI & Early Stage Pipeline (Handover Date TBD — {len(tbd_df)} Locations)", expanded=False):
                 tbd_cols = st.columns(3)
@@ -1929,7 +1854,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                     with tbd_cols[idx % 3]:
                         st.markdown(f"📍 **{row['site_name']}** ({row['city']})\n*Status*: `{row['status']}`")
 
-        # 7. Interactive Data Grid
         st.markdown("---")
         st.markdown("### ✏️ Edit NSO Handover Dates & QA Clearance Checklist")
         st.caption("Update target dates or toggle pre-opening compliance checkboxes. Timeline updates automatically on save.")
@@ -1964,16 +1888,10 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
             except Exception as e:
                 st.error(f"Failed to sync timeline: {e}")
     
-    # ==========================================
-    # TAB 2: PEST CONTROL PROVISION & NSO GAP CLEARANCE
-    # ==========================================
     with tab_pest_control:
         st.markdown("### 🐜 Active Pest Control Provision & NSO Civil Clearance Hub")
         st.caption("Manage monthly vendor provisions, track service rates, and sign off on pre-opening civil gap fixes with Maintenance.")
 
-        # ---------------------------------------------------------
-        # 1. QUIET DATABASE FETCHER
-        # ---------------------------------------------------------
         pest_df = pd.DataFrame()
         if supabase is not None:
             try:
@@ -2002,9 +1920,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
         if pest_df.empty:
             pest_df = pd.DataFrame(default_pest_data)
 
-        # ---------------------------------------------------------
-        # 2. EXECUTIVE METRIC BADGES
-        # ---------------------------------------------------------
         total_services = pest_df['services_completed'].sum() if 'services_completed' in pest_df.columns else 45
         total_provision_amt = pest_df['total_provision'].sum() if 'total_provision' in pest_df.columns else 32600
 
@@ -2023,9 +1938,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
         st.markdown("---")
 
-        # ---------------------------------------------------------
-        # 3. DIRECTLY EDITABLE NSO PRE-OPENING PEST & CIVIL CLEARANCE PIPELINE
-        # ---------------------------------------------------------
         with st.expander("🏗️ Bird's Eye View: Upcoming NSO Pre-Opening Pest & Civil Clearance Pipeline", expanded=True):
             st.caption("✏️ **Directly edit** QA findings or select Maintenance Clearance status in the table below, then click **Save Clearance Statuses**.")
 
@@ -2052,13 +1964,12 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
                 df_nso_clearance = pd.DataFrame(nso_clearance_list)
 
-                # DIRECTLY EDITABLE DATA EDITOR
                 edited_nso_clearance = st.data_editor(
                     df_nso_clearance,
                     use_container_width=True,
                     key="nso_clearance_editor_direct",
                     column_config={
-                        "store_name": None, # Hidden internal matching key
+                        "store_name": None,
                         "NSO Store Location": st.column_config.TextColumn("NSO Store Location", disabled=True),
                         "Target Handover Date": st.column_config.TextColumn("Target Handover Date", disabled=True),
                         "Pest Contract Active?": st.column_config.TextColumn("Pest Contract Active?", disabled=True),
@@ -2070,7 +1981,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
                 if st.button("💾 Save Pre-Op Pest Clearances & Maintenance Notes", type="primary"):
                     try:
-                        # Update findings back to master pest dataframe
                         for _, edited_row in edited_nso_clearance.iterrows():
                             s_target = edited_row['store_name']
                             mask = pest_df['store_name'] == s_target
@@ -2078,7 +1988,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                                 pest_df.loc[mask, 'pest_gap_audit_findings'] = edited_row['pest_gap_audit_findings']
                                 pest_df.loc[mask, 'civil_gap_status'] = edited_row['civil_gap_status']
                             else:
-                                # Append new NSO store record to master pest table if not existing
                                 new_nso_entry = {
                                     "id": len(pest_df) + 1,
                                     "store_name": s_target,
@@ -2104,9 +2013,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
 
         st.markdown("---")
 
-        # ---------------------------------------------------------
-        # 4. EXCEL MONTH-END OVERWRITE IMPORTER
-        # ---------------------------------------------------------
         with st.expander("📥 Import Month-End Provisioning Sheet (Excel / CSV)", expanded=False):
             st.caption("At month-end, upload your vendor billing sheet to auto-refresh all store rates, services, and totals.")
             pest_file = st.file_uploader("Upload Month-End Excel Sheet", type=["xlsx", "xls", "csv"], key="monthend_pest_upload_v7")
@@ -2152,9 +2058,6 @@ elif nav_selection == "🚀 NSO & Pest Control Hub":
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
-        # ---------------------------------------------------------
-        # 5. MASTER ACTIVE PROVISIONING LEDGER TABLE
-        # ---------------------------------------------------------
         st.markdown("### 📋 Active Master Provisioning & Gap Audit Table")
 
         pest_df['total_provision'] = pest_df['services_completed'] * pest_df['rate_per_service']
@@ -2199,15 +2102,9 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
     supabase_key = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(supabase_url, supabase_key)
 
-    STORE_LOCATIONS = [
-        "Select Store Location...",
-        "189 - Select City Walk, Delhi",
-        "Platina, Gurugram",
-        "DLF CyberHub, Gurugram",
-        "Khan Market, Delhi"
-    ]
+    dynamic_receiving_stores = ["Select Store Location..."] + (df_stores_dynamic['store_name'].tolist() if not df_stores_dynamic.empty else [])
     
-    selected_store = st.selectbox("Select Store Location", STORE_LOCATIONS)
+    selected_store = st.selectbox("Select Store Location", dynamic_receiving_stores)
 
     if selected_store == "Select Store Location...":
         st.warning("⚠️ Please select your store location to begin receiving inspections.")
@@ -2245,7 +2142,6 @@ elif nav_selection == "📦 Receiving & Inbound Spec Check":
             
             if selected_display != "-- Select Item --":
                 
-                # FIX: Changed .iloc0 to .iloc[0]
                 row_data = merged_df[merged_df['Display Label'] == selected_display].iloc[0]
                 
                 item_code = row_data.get('item_code', 'N/A')
