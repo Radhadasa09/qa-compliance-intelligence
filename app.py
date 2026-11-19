@@ -1211,67 +1211,86 @@ elif nav_selection == "📚 Resources Vault":
 
 elif nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
-    with st.expander("➕ Add a New Store Location"):
-        with st.form("new_store"):
-            nn = st.text_input("Store Name")
-            isout = st.checkbox("Is Outstation?")
-            if st.form_submit_button("Add Store") and nn:
-                st.session_state['master_stores'].append({'name': nn, 'is_outstation': isout})
-                st.success("Added store!")
-                st.rerun()
 
-    st.markdown("### 📦 Supply Chain Terminology Unification Management")
-    try:
-        if supabase is not None:
-            response = supabase.table("master_item_reference").select("*").order("id").execute()
-            if response.data:
-                df_items = pd.DataFrame(response.data)
-                total_items = len(df_items)
-                unified_items = df_items['is_name_unified'].sum()
-                completion_rate = (unified_items / total_items) if total_items > 0 else 0
-                st.progress(completion_rate, text=f"Overall Unification Progress: {int(unified_items)} out of {total_items} items unified.")
-                edited_df = st.data_editor(
-                    df_items[['id', 'warehouse_item_name', 'store_retail_name', 'item_category', 'is_name_unified']],
-                    width='stretch', hide_index=True,
-                    disabled=['id', 'warehouse_item_name', 'store_retail_name', 'item_category'],
-                    column_config={
-                        "id": None, "warehouse_item_name": st.column_config.TextColumn("Current Invoice Name"),
-                        "store_retail_name": st.column_config.TextColumn("Target Retail Name"),
-                        "item_category": st.column_config.TextColumn("Category"),
-                        "is_name_unified": st.column_config.CheckboxColumn("Unified?", default=False)
-                    }, key="unification_tracker"
-                )
-                if st.button("💾 Save Compliance Updates", type="primary"):
-                    updates_made = 0
-                    for index, row in edited_df.iterrows():
-                        if df_items.loc[index, 'is_name_unified'] != row['is_name_unified']:
-                            supabase.table("master_item_reference").update({"is_name_unified": row['is_name_unified']}).eq("id", row['id']).execute()
-                            updates_made += 1
-                    if updates_made > 0:
-                        st.success(f"✅ Updated {updates_made} records.")
+    with st.expander("➕ Onboard New Store (Syncs Stores & Store Master)", expanded=False):
+        st.caption("Adds the store to `public.stores` for Store App PIN login and `public.store_master` for Central Hub dropdowns.")
+        with st.form("clean_onboard_store_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                new_code = st.text_input("Store / Site Code (Unique, e.g., 189015)")
+                new_name = st.text_input("Store Name (e.g., CyberHub, Gurugram)")
+                new_pin = st.text_input("4-Digit Store Login PIN", type="password", max_chars=4)
+            with c2:
+                new_loc = st.text_input("Location / City (Optional)")
+                new_active = st.checkbox("Active in Store Master", value=True)
+                new_outstation = st.checkbox("Outstation Store", value=False)
+
+            if st.form_submit_button("🚀 Save New Store", type="primary"):
+                clean_code = new_code.strip()
+                clean_name = new_name.strip()
+                clean_pin = new_pin.strip()
+                clean_loc = new_loc.strip() if new_loc else None
+
+                if not clean_code or not clean_name or not clean_pin:
+                    st.error("❌ Store Code, Store Name, and 4-Digit PIN are all required.")
+                elif len(clean_pin) != 4 or not clean_pin.isdigit():
+                    st.error("❌ Store Login PIN must be a 4-digit number.")
+                elif supabase is None:
+                    st.error("❌ Database connection is not available.")
+                else:
+                    try:
+                        # 1. Insert into public.stores (Store App login & PIN check)
+                        supabase.table("stores").insert({
+                            "store_id": clean_code,
+                            "store_name": clean_name,
+                            "location": clean_loc,
+                            "secure_pin": clean_pin
+                        }).execute()
+
+                        # 2. Insert into public.store_master (Central App dynamic dropdowns)
+                        supabase.table("store_master").insert({
+                            "site_code": clean_code,
+                            "store_name": clean_name,
+                            "is_active": bool(new_active)
+                        }).execute()
+
+                        # 3. Keep local session list aligned for the active session
+                        if "master_stores" in st.session_state:
+                            st.session_state["master_stores"].append({
+                                "name": clean_name,
+                                "is_outstation": bool(new_outstation)
+                            })
+
+                        st.cache_data.clear()
+                        st.success(f"✅ Onboarded `{clean_code} - {clean_name}` to `stores` and `store_master`!")
                         st.rerun()
-    except Exception as e:
-        st.error(f"Failed to load terminology data: {e}")
+                    except Exception as e:
+                        st.error(f"❌ Failed to onboard store: {e}")
 
+    st.markdown("---")
     st.markdown("### 💬 Store Feedback & Support Tickets")
     if supabase is not None:
-        fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
-        if fb_res.data:
-            df_fb = pd.DataFrame(fb_res.data)
-            for idx, r in df_fb.iterrows():
-                col_text, col_btn = st.columns([3, 1])
-                date_str = str(r.get('created_at', 'N/A'))[:10]
-                store_val = r.get('store_id', r.get('store_name', 'N/A'))
-                msg_val = r.get('feedback_text', r.get('message', 'No text'))
-                
-                col_text.markdown(f"**[{date_str}] Store {store_val}**: {msg_val}")
-                if col_btn.button("🗑️ Delete", key=f"del_fb_{r.get('id', idx)}"):
-                    supabase.table("store_feedback").delete().eq("id", r['id']).execute()
-                    st.success("✅ Ticket deleted!")
-                    st.rerun()
-        else:
-            st.info("No store feedback yet.")            
+        try:
+            fb_res = supabase.table("store_feedback").select("*").order("created_at", desc=True).execute()
+            if fb_res.data:
+                df_fb = pd.DataFrame(fb_res.data)
+                for idx, r in df_fb.iterrows():
+                    col_text, col_btn = st.columns([4, 1])
+                    date_str = str(r.get("created_at", "N/A"))[:10]
+                    store_val = r.get("store_name") or r.get("store_id") or "N/A"
+                    msg_val = r.get("feedback_text") or r.get("message") or "No text"
 
+                    col_text.markdown(f"**[{date_str}] {store_val}**: {msg_val}")
+                    if col_btn.button("🗑️ Delete", key=f"del_fb_{r.get('id', idx)}"):
+                        supabase.table("store_feedback").delete().eq("id", r["id"]).execute()
+                        st.success("✅ Ticket deleted!")
+                        st.rerun()
+            else:
+                st.info("No store feedback yet.")
+        except Exception as e:
+            st.error(f"Failed to load store feedback: {e}")
+    else:
+        st.info("Database connection unavailable.")
 elif nav_selection == "🤖 AI Support Assistant":
     import pandas as pd
     import streamlit as st
