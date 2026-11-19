@@ -1263,7 +1263,7 @@ def get_next_store_master_id(client):
     rows = client.table("store_master").select("id").execute().data or []
     ids = [int(r["id"]) for r in rows if r.get("id") is not None]
     return (max(ids) + 1) if ids else 1
-elif nav_selection == "⚙️ System Administration":
+if nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
 
     with st.expander("➕ Add New Store (Name Only + Similar Name Check)", expanded=False):
