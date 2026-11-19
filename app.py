@@ -1264,7 +1264,6 @@ def get_next_store_master_id(client):
     ids = [int(r["id"]) for r in rows if r.get("id") is not None]
     return (max(ids) + 1) if ids else 1
 
-
 elif nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
 
