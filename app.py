@@ -1209,63 +1209,126 @@ elif nav_selection == "📚 Resources Vault":
         else:
             st.info("No documents published in vault yet.")
 
+def _normalize_store_name(name):
+    return " ".join(
+        "".join(ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in str(name or "")).split()
+    )
+
+def find_similar_store_names(client, candidate_name):
+    norm_new = _normalize_store_name(candidate_name)
+    if not norm_new or client is None:
+        return []
+
+    matches = []
+    seen = set()
+    for table_name in ("stores", "store_master"):
+        try:
+            rows = client.table(table_name).select("store_name").execute().data or []
+            for r in rows:
+                existing = str(r.get("store_name") or "").strip()
+                if not existing:
+                    continue
+                norm_existing = _normalize_store_name(existing)
+                if (
+                    norm_new == norm_existing
+                    or (len(norm_new) >= 3 and norm_new in norm_existing)
+                    or (len(norm_existing) >= 3 and norm_existing in norm_new)
+                ):
+                    key = (table_name, existing.lower())
+                    if key not in seen:
+                        seen.add(key)
+                        matches.append(f"{existing} ({table_name})")
+        except Exception:
+            pass
+    return matches
+
+def generate_auto_store_code(client):
+    used_codes = set()
+    for table_name, col_name in (("stores", "store_id"), ("store_master", "site_code")):
+        try:
+            rows = client.table(table_name).select(col_name).execute().data or []
+            for r in rows:
+                val = str(r.get(col_name) or "").strip()
+                if val:
+                    used_codes.add(val)
+        except Exception:
+            pass
+
+    code_num = 18910001 + len(used_codes)
+    while str(code_num) in used_codes:
+        code_num += 1
+    return str(code_num)
+
+def get_next_store_master_id(client):
+    rows = client.table("store_master").select("id").execute().data or []
+    ids = [int(r["id"]) for r in rows if r.get("id") is not None]
+    return (max(ids) + 1) if ids else 1
+
+
 elif nav_selection == "⚙️ System Administration":
     st.subheader("⚙️ Store Portfolio & System Administration")
 
-    with st.expander("➕ Onboard New Store (Syncs Stores & Store Master)", expanded=False):
-        st.caption("Adds the store to `public.stores` for Store App PIN login and `public.store_master` for Central Hub dropdowns.")
-        with st.form("clean_onboard_store_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                new_code = st.text_input("Store / Site Code (Unique, e.g., 189015)")
-                new_name = st.text_input("Store Name (e.g., CyberHub, Gurugram)")
-                new_pin = st.text_input("4-Digit Store Login PIN", type="password", max_chars=4)
-            with c2:
-                new_loc = st.text_input("Location / City (Optional)")
-                new_active = st.checkbox("Active in Store Master", value=True)
-                new_outstation = st.checkbox("Outstation Store", value=False)
+    with st.expander("➕ Add New Store (Name Only + Similar Name Check)", expanded=False):
+        st.caption("Enter the store name only. A unique code is generated automatically and existing store records are preserved.")
+        with st.form("name_only_store_onboarding_form"):
+            new_store_name = st.text_input("Store Name")
+            login_pin = st.text_input("4-Digit Login PIN (for Store App)", value="1234", max_chars=4)
+            is_active_store = st.checkbox("Active Store", value=True)
+            is_outstation_store = st.checkbox("Outstation Store", value=False)
+            confirm_separate_store = st.checkbox(
+                "A similar store already exists — confirm adding this as a separate store"
+            )
 
-            if st.form_submit_button("🚀 Save New Store", type="primary"):
-                clean_code = new_code.strip()
-                clean_name = new_name.strip()
-                clean_pin = new_pin.strip()
-                clean_loc = new_loc.strip() if new_loc else None
+            if st.form_submit_button("🚀 Add Store", type="primary"):
+                clean_name = new_store_name.strip()
+                clean_pin = login_pin.strip() if login_pin.strip() else "1234"
 
-                if not clean_code or not clean_name or not clean_pin:
-                    st.error("❌ Store Code, Store Name, and 4-Digit PIN are all required.")
+                if not clean_name:
+                    st.error("❌ Please enter a Store Name.")
                 elif len(clean_pin) != 4 or not clean_pin.isdigit():
-                    st.error("❌ Store Login PIN must be a 4-digit number.")
+                    st.error("❌ Login PIN must be a 4-digit number.")
                 elif supabase is None:
                     st.error("❌ Database connection is not available.")
                 else:
-                    try:
-                        # 1. Insert into public.stores (Store App login & PIN check)
-                        supabase.table("stores").insert({
-                            "store_id": clean_code,
-                            "store_name": clean_name,
-                            "location": clean_loc,
-                            "secure_pin": clean_pin
-                        }).execute()
+                    similar_matches = find_similar_store_names(supabase, clean_name)
+                    if similar_matches and not confirm_separate_store:
+                        st.warning(
+                            "⚠️ Similar store name(s) already exist: **"
+                            + ", ".join(similar_matches)
+                            + "**. Check the confirmation box above and click **Add Store** again to add it as a separate store."
+                        )
+                    else:
+                        try:
+                            auto_code = generate_auto_store_code(supabase)
+                            next_master_id = get_next_store_master_id(supabase)
 
-                        # 2. Insert into public.store_master (Central App dynamic dropdowns)
-                        supabase.table("store_master").insert({
-                            "site_code": clean_code,
-                            "store_name": clean_name,
-                            "is_active": bool(new_active)
-                        }).execute()
+                            # Append new row to public.stores without touching existing rows
+                            supabase.table("stores").insert({
+                                "store_id": auto_code,
+                                "store_name": clean_name,
+                                "location": None,
+                                "secure_pin": clean_pin
+                            }).execute()
 
-                        # 3. Keep local session list aligned for the active session
-                        if "master_stores" in st.session_state:
-                            st.session_state["master_stores"].append({
-                                "name": clean_name,
-                                "is_outstation": bool(new_outstation)
-                            })
+                            # Append new row to public.store_master with explicit next id to avoid sequence collision
+                            supabase.table("store_master").insert({
+                                "id": next_master_id,
+                                "site_code": auto_code,
+                                "store_name": clean_name,
+                                "is_active": bool(is_active_store)
+                            }).execute()
 
-                        st.cache_data.clear()
-                        st.success(f"✅ Onboarded `{clean_code} - {clean_name}` to `stores` and `store_master`!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Failed to onboard store: {e}")
+                            if "master_stores" in st.session_state:
+                                st.session_state["master_stores"].append({
+                                    "name": clean_name,
+                                    "is_outstation": bool(is_outstation_store)
+                                })
+
+                            st.cache_data.clear()
+                            st.success(f"✅ Added **{clean_name}** (Auto Code: `{auto_code}`, PIN: `{clean_pin}`).")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to add store: {e}")
 
     st.markdown("---")
     st.markdown("### 💬 Store Feedback & Support Tickets")
@@ -1291,11 +1354,6 @@ elif nav_selection == "⚙️ System Administration":
             st.error(f"Failed to load store feedback: {e}")
     else:
         st.info("Database connection unavailable.")
-elif nav_selection == "🤖 AI Support Assistant":
-    import pandas as pd
-    import streamlit as st
-    import google.generativeai as genai
-
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
     st.caption("Powered by Gemini • Intelligent Context Routing + FSSAI Guidance")
 
