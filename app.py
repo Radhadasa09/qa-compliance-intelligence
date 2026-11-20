@@ -1352,6 +1352,7 @@ if nav_selection == "⚙️ System Administration":
             st.error(f"Failed to load store feedback: {e}")
     else:
         st.info("Database connection unavailable.")
+elif nav_selection == "🤖 AI Support Assistant":     
     st.subheader("🤖 Ekaagra QA & Compliance Intelligence Engine")
     st.caption("Powered by Gemini • Intelligent Context Routing + FSSAI Guidance")
 
