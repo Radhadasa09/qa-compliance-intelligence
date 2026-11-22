@@ -292,14 +292,15 @@ def store_dashboard():
     st.markdown("---")
     
     # Initialize 6 tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📋 Daily Audit", 
-        "📸 Readiness Proofs",
-        "📥 Receiving", 
-        "🔄 Transfer", 
-        "🗑️ Wastage",
-        "📚 Resources"
-    ])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📋 Daily Audit", 
+    "📸 Readiness Proofs",
+    "📥 Receiving", 
+    "🔄 Transfer", 
+    "🗑️ Wastage",
+    "📚 Resources",
+    "🌙 Closing Proofs"
+])
     
     # ==========================================
     # TAB 1: DAILY AUDIT (Dual-Input Camera Enabled)
@@ -783,6 +784,119 @@ def store_dashboard():
         except Exception:
             st.info("Resource repository loading...")
 
+# ==========================================
+    # TAB 7: SECTION-WISE STORE CLOSING & DEEP CLEAN
+    # ==========================================
+    with tab7:
+        st.subheader("🌙 Night Closing & Deep-Cleaning Proofs")
+        st.caption("Complete all 7 section checks and attach photo proof for each area before closing the store.")
+
+        closing_sections = [
+            ("bev_bar", "1. Espresso & Beverage Bar", "Espresso machine, wands, blenders, syrup/sauce stations & drip trays clean"),
+            ("bar_sink", "2. Bar Sink & Ice/Prep Area", "Bar sink sanitized, ice scoop stored properly, no milk/syrup residue or standing water"),
+            ("ovens_hot", "3. Ovens, Toasters & Hot Equipment", "Ovens/warmers interior, racks, crumb/grease trays & surrounding surfaces cleaned"),
+            ("prep_chiller", "4. Food Prep, Chillers & Storage", "Prep tables sanitized, chillers/freezers & gaskets clean, items covered & off the floor"),
+            ("dishwash", "5. 3-Sink / Dishwash Area", "Wash/rinse/sanitize sinks & dishwashing station clean, zero leftover soiled ware"),
+            ("grease_drains", "6. Grease Trap & Floor Drains", "Floor drains clear & clean, grease trap lid/area accessible & free of overflow/odor"),
+            ("floor_waste_lockup", "7. Floors, Waste, Hand Sink & Lock-Up", "Floors swept & mopped (incl. under/around gear), bins cleared, hand sink stocked, doors secured")
+        ]
+
+        with st.form("store_closing_proof_form"):
+            closing_manager = st.text_input("Closing Manager / Shift Lead Name")
+            closing_date = st.date_input("Closing Date", value=datetime.date.today())
+
+            section_inputs = {}
+            for key_prefix, sec_title, sec_desc in closing_sections:
+                st.markdown(f"### {sec_title}")
+                st.caption(sec_desc)
+                is_done = st.checkbox(f"{sec_title} deep-cleaned & verified", key=f"chk_close_{key_prefix}")
+                input_mode = st.radio(
+                    f"Proof Input ({sec_title}):",
+                    ["Upload File", "Take Photo"],
+                    horizontal=True,
+                    key=f"mode_close_{key_prefix}"
+                )
+                photo_file = (
+                    st.camera_input(f"Snap {sec_title}", key=f"cam_close_{key_prefix}")
+                    if input_mode == "Take Photo"
+                    else st.file_uploader(
+                        f"📂 Upload {sec_title} Photo",
+                        type=["jpg", "jpeg", "png", "heic", "heif", "webp"],
+                        key=f"up_close_{key_prefix}"
+                    )
+                )
+                section_inputs[key_prefix] = {
+                    "done": is_done,
+                    "photo": photo_file,
+                    "label": sec_title
+                }
+                st.markdown("---")
+
+            closing_remarks = st.text_area("Night Closing Notes / Maintenance or Defaulter Alerts (Optional)")
+
+            if st.form_submit_button("🌙 Submit Night Closing Proofs", type="primary"):
+                missing_photos = [
+                    data["label"] for data in section_inputs.values() if data["photo"] is None
+                ]
+                if not closing_manager.strip():
+                    st.error("❌ Closing Manager Name is required.")
+                elif missing_photos:
+                    st.error(
+                        "❌ Please attach a photo for every section before submitting. Missing: **"
+                        + ", ".join(missing_photos)
+                        + "**."
+                    )
+                elif supabase is None:
+                    st.error("❌ Database connection is not available.")
+                else:
+                    with st.spinner("Uploading section-wise closing photos & logging night deep clean..."):
+                        uploaded_urls = {}
+                        upload_failed = False
+
+                        for prefix, data in section_inputs.items():
+                            if cloudinary_configured:
+                                url = upload_photo(
+                                    data["photo"],
+                                    st.session_state["store_id"],
+                                    f"closing/{closing_date.strftime('%Y-%m-%d')}_{prefix}"
+                                )
+                                if not url:
+                                    upload_failed = True
+                                    break
+                                uploaded_urls[prefix] = url
+                            else:
+                                uploaded_urls[prefix] = None
+
+                        if not upload_failed:
+                            try:
+                                closing_payload = {
+                                    "store_id": st.session_state["store_id"],
+                                    "store_name": st.session_state["store_name"],
+                                    "closing_manager": closing_manager.strip(),
+                                    "closing_date": str(closing_date),
+                                    "bev_bar_clean": section_inputs["bev_bar"]["done"],
+                                    "bev_bar_photo_url": uploaded_urls.get("bev_bar"),
+                                    "bar_sink_clean": section_inputs["bar_sink"]["done"],
+                                    "bar_sink_photo_url": uploaded_urls.get("bar_sink"),
+                                    "ovens_hot_clean": section_inputs["ovens_hot"]["done"],
+                                    "ovens_hot_photo_url": uploaded_urls.get("ovens_hot"),
+                                    "prep_chiller_clean": section_inputs["prep_chiller"]["done"],
+                                    "prep_chiller_photo_url": uploaded_urls.get("prep_chiller"),
+                                    "dishwash_clean": section_inputs["dishwash"]["done"],
+                                    "dishwash_photo_url": uploaded_urls.get("dishwash"),
+                                    "grease_drains_clean": section_inputs["grease_drains"]["done"],
+                                    "grease_drains_photo_url": uploaded_urls.get("grease_drains"),
+                                    "floor_waste_lockup_clean": section_inputs["floor_waste_lockup"]["done"],
+                                    "floor_waste_lockup_photo_url": uploaded_urls.get("floor_waste_lockup"),
+                                    "closing_remarks": closing_remarks.strip() if closing_remarks else None
+                                }
+                                supabase.table("store_closing_logs").insert(closing_payload).execute()
+                                st.success("🎉 Night closing & deep-cleaning proofs submitted!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to save closing log: {e}")
+
+    
     # ==========================================
     # OPTIONAL FEEDBACK SECTION AT BOTTOM
     # ==========================================
