@@ -617,7 +617,7 @@ elif nav_selection == "🏬 Retail Operations":
         pass
 
     st.subheader("📡 Live Store Analytics Feed")
-    view_audit, view_recv, view_waste = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage"])
+    view_audit, view_recv, view_waste, view_closing = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage", "🌙 Closing Proofs"])
     
     with view_audit:
         try:
@@ -688,7 +688,100 @@ elif nav_selection == "🏬 Retail Operations":
                         st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error loading wastage logs: {e}")
+with view_closing:
+        st.markdown("### 🌙 Night Deep-Cleaning & Closing Photo Progress")
+        filter_close_date = st.date_input(
+            "Filter Closing Date",
+            value=datetime.date.today(),
+            key="central_closing_date_filter"
+        )
+        try:
+            if supabase is not None:
+                close_res = (
+                    supabase.table("store_closing_logs")
+                    .select("*")
+                    .eq("closing_date", str(filter_close_date))
+                    .order("created_at", desc=True)
+                    .execute()
+                )
+                df_close = pd.DataFrame(close_res.data) if close_res.data else pd.DataFrame()
 
+                total_active_stores = len(df_stores_dynamic) if not df_stores_dynamic.empty else len(df_stores)
+                submitted_store_count = df_close["store_id"].nunique() if not df_close.empty and "store_id" in df_close.columns else 0
+                pct_done = (submitted_store_count / total_active_stores) if total_active_stores > 0 else 0.0
+
+                st.progress(
+                    min(pct_done, 1.0),
+                    text=f"Closing Proof Completion ({filter_close_date.strftime('%d-%b-%Y')}): {submitted_store_count} of {total_active_stores} stores submitted ({pct_done * 100:.0f}%)"
+                )
+
+                if not df_close.empty:
+                    df_close_view = df_close.copy()
+                    df_close_view["created_at"] = pd.to_datetime(df_close_view["created_at"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M")
+
+                    # Supports the 7-zone NSF closing checklist
+                    zone_cols = [
+                        "bev_bar_clean", "bar_sink_clean", "ovens_hot_clean",
+                        "prep_chiller_clean", "dishwash_clean", "grease_drains_clean",
+                        "floor_waste_lockup_clean"
+                    ]
+                    existing_zone_cols = [c for c in zone_cols if c in df_close_view.columns]
+                    if existing_zone_cols:
+                        df_close_view["Sections Verified"] = (
+                            df_close_view[existing_zone_cols].fillna(False).astype(int).sum(axis=1)
+                        ).apply(lambda x: f"{x}/{len(existing_zone_cols)}")
+
+                    close_cols = [
+                        "created_at", "store_name", "closing_manager", "Sections Verified",
+                        "bev_bar_photo_url", "bar_sink_photo_url", "ovens_hot_photo_url",
+                        "prep_chiller_photo_url", "dishwash_photo_url", "grease_drains_photo_url",
+                        "floor_waste_lockup_photo_url", "closing_remarks"
+                    ]
+                    valid_close_cols = [c for c in close_cols if c in df_close_view.columns]
+
+                    st.dataframe(
+                        df_close_view[valid_close_cols],
+                        column_config={
+                            "bev_bar_photo_url": st.column_config.LinkColumn("Bev Bar", display_text="🔗 View"),
+                            "bar_sink_photo_url": st.column_config.LinkColumn("Bar Sink", display_text="🔗 View"),
+                            "ovens_hot_photo_url": st.column_config.LinkColumn("Ovens/Hot", display_text="🔗 View"),
+                            "prep_chiller_photo_url": st.column_config.LinkColumn("Prep/Chiller", display_text="🔗 View"),
+                            "dishwash_photo_url": st.column_config.LinkColumn("Dishwash", display_text="🔗 View"),
+                            "grease_drains_photo_url": st.column_config.LinkColumn("Grease/Drains", display_text="🔗 View"),
+                            "floor_waste_lockup_photo_url": st.column_config.LinkColumn("Floor/Lockup", display_text="🔗 View")
+                        },
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    selected_store_inspect = st.selectbox(
+                        "Inspect Section Photos for Store",
+                        options=df_close["store_name"].unique().tolist(),
+                        key="inspect_closing_store_select"
+                    )
+                    store_row = df_close[df_close["store_name"] == selected_store_inspect].iloc[0]
+                    photo_map = [
+                        ("1. Espresso & Bev Bar", store_row.get("bev_bar_photo_url")),
+                        ("2. Bar Sink & Ice Zone", store_row.get("bar_sink_photo_url")),
+                        ("3. Ovens & Hot Equipment", store_row.get("ovens_hot_photo_url")),
+                        ("4. Food Prep & Chillers", store_row.get("prep_chiller_photo_url")),
+                        ("5. 3-Sink / Dishwash", store_row.get("dishwash_photo_url")),
+                        ("6. Grease Trap & Drains", store_row.get("grease_drains_photo_url")),
+                        ("7. Floors, Waste & Lock-Up", store_row.get("floor_waste_lockup_photo_url"))
+                    ]
+                    p_cols = st.columns(3)
+                    for idx, (p_label, p_url) in enumerate(photo_map):
+                        with p_cols[idx % 3]:
+                            st.markdown(f"**{p_label}**")
+                            if p_url:
+                                st.image(p_url, use_container_width=True)
+                            else:
+                                st.caption("No photo uploaded")
+                else:
+                    st.info(f"No store closing proofs submitted for {filter_close_date.strftime('%d-%b-%Y')} yet.")
+        except Exception as e:
+            st.error(f"Error loading closing proofs: {e}")
+    
     st.markdown("---")
     st.subheader("📋 Store Staff Compliance Entry")
 
