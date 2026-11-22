@@ -781,7 +781,6 @@ with view_closing:
                     st.info(f"No store closing proofs submitted for {filter_close_date.strftime('%d-%b-%Y')} yet.")
         except Exception as e:
             st.error(f"Error loading closing proofs: {e}")
-    
     st.markdown("---")
     st.subheader("📋 Store Staff Compliance Entry")
 
