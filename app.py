@@ -688,7 +688,7 @@ elif nav_selection == "🏬 Retail Operations":
                         st.dataframe(df_waste[['created_at', 'store_id', 'item_name', 'quantity', 'reason']], use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error loading wastage logs: {e}")
-with view_closing:
+    with view_closing:
         st.markdown("### 🌙 Night Deep-Cleaning & Closing Photo Progress")
         filter_close_date = st.date_input(
             "Filter Closing Date",
