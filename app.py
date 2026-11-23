@@ -586,36 +586,97 @@ if nav_selection == "📊 Executive Dashboard":
 elif nav_selection == "🏬 Retail Operations":
     st.header("🏪 Retail Operations & Logistics")
     st.markdown("---")
-    try:
-        if supabase is not None:
-            leader_res = supabase.table("daily_audits").select("store_id, created_at").order("created_at", desc=True).execute()
-            if leader_res.data:
-                df_leader = pd.DataFrame(leader_res.data)
-                df_leader['created_at'] = pd.to_datetime(df_leader['created_at'])
-                df_leader['date_only'] = df_leader['created_at'].dt.date
-                df_unique_days = df_leader.drop_duplicates(subset=['store_id', 'date_only'], keep='first')
-                submission_counts = df_unique_days['store_id'].value_counts()
-                if not submission_counts.empty:
-                    max_score = submission_counts.max()
-                    top_store_ids = submission_counts[submission_counts == max_score].index.tolist()
-                    champion_names = []
-                    for s_id in top_store_ids:
-                        store_info = supabase.table("stores").select("store_name").eq("store_id", s_id).execute()
-                        champion_names.append(store_info.data[0]['store_name'] if store_info.data else f"Store {s_id}")
-                    champions_display = " & ".join(champion_names)
-                    st.markdown(
-                        f"""
-                        <div style="background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #B8860B; box-shadow: 0 4px 15px rgba(218, 165, 32, 0.4); margin-bottom: 25px;">
-                            <h2 style="color: #1A110A; margin: 0; font-weight: 800;">🏆 QA Shield of Excellence</h2>
-                            <h4 style="color: #1A110A; margin: 5px 0 0 0;">Current Monthly Champions: <b>{champions_display}</b></h4>
-                            <p style="color: #1A110A; margin: 5px 0 0 0; font-size: 14px;">Total Compliant Days: <b>{max_score}</b></p>
-                        </div>
-                        """, 
-                        unsafe_allow_html=True
-                    )
-    except Exception:
-        pass
+    # ==========================================
+    # QA SHIELD OF EXCELLENCE (MANDATORY + BONUS)
+    # ==========================================
+    today_dt = datetime.date.today()
+    month_label = today_dt.strftime("%B %Y")
+    start_window_str = today_dt.strftime("%d-%b-%Y")
 
+    def _get_store_valid_dates(df_src, date_candidates):
+        if df_src is None or df_src.empty:
+            return {}
+        df_tmp = df_src.copy()
+        d_col = next((c for c in date_candidates if c in df_tmp.columns), None)
+        if not d_col or "store_id" not in df_tmp.columns:
+            return {}
+        df_tmp["_dt"] = pd.to_datetime(df_tmp[d_col], errors="coerce").dt.date
+        df_tmp = df_tmp.dropna(subset=["_dt"])
+
+        # Start from today onward, strictly within the current calendar month & year
+        df_tmp = df_tmp[
+            df_tmp["_dt"].apply(
+                lambda d: d >= today_dt and d.year == today_dt.year and d.month == today_dt.month
+            )
+        ]
+
+        if "is_valid" in df_tmp.columns:
+            df_tmp = df_tmp[df_tmp["is_valid"] == True]
+        elif "status" in df_tmp.columns:
+            df_tmp = df_tmp[~df_tmp["status"].astype(str).str.lower().isin(["rejected", "invalid", "void"])]
+
+        date_map = {}
+        for sid, grp in df_tmp.groupby(df_tmp["store_id"].astype(str)):
+            date_map[sid] = set(grp["_dt"].tolist())
+        return date_map
+
+    audit_dates = _get_store_valid_dates(locals().get("df_audits_raw"), ["audit_date", "created_at"])
+    close_dates = _get_store_valid_dates(locals().get("df_close_raw"), ["closing_date", "created_at"])
+    recv_dates = _get_store_valid_dates(locals().get("df_recv_raw"), ["receiving_date", "created_at"])
+    waste_dates = _get_store_valid_dates(locals().get("df_waste_raw"), ["wastage_date", "created_at"])
+
+    store_name_map = {}
+    if "df_stores_dynamic" in locals() and not df_stores_dynamic.empty and "store_id" in df_stores_dynamic.columns:
+        name_col = "store_name" if "store_name" in df_stores_dynamic.columns else "store_id"
+        for _, r in df_stores_dynamic.iterrows():
+            store_name_map[str(r["store_id"])] = str(r[name_col])
+
+    candidate_stores = set(audit_dates) | set(close_dates) | set(recv_dates) | set(waste_dates)
+    shield_rows = []
+
+    for sid in candidate_stores:
+        a_set = audit_dates.get(sid, set())
+        c_set = close_dates.get(sid, set())
+        r_set = recv_dates.get(sid, set())
+        w_set = waste_dates.get(sid, set())
+
+        # Mandatory pair: Daily Audit + Closing on the same date
+        mandatory_days = a_set & c_set
+        core_points = float(len(mandatory_days))
+
+        # Partial bonus points (+0.25 each per date) for Receiving and Wastage
+        recv_bonus = 0.25 * len(r_set)
+        waste_bonus = 0.25 * len(w_set)
+        total_score = round(core_points + recv_bonus + waste_bonus, 2)
+
+        if total_score > 0:
+            shield_rows.append({
+                "store_id": sid,
+                "store_name": store_name_map.get(sid, sid),
+                "mandatory_days": len(mandatory_days),
+                "bonus_points": round(recv_bonus + waste_bonus, 2),
+                "shield_score": total_score,
+            })
+
+    if shield_rows:
+        df_shield_rank = pd.DataFrame(shield_rows).sort_values(
+            by=["shield_score", "mandatory_days", "store_name"],
+            ascending=[False, False, True]
+        )
+        top_score = float(df_shield_rank["shield_score"].max())
+        top_stores = df_shield_rank[df_shield_rank["shield_score"] == top_score]
+        champ_names = ", ".join(top_stores["store_name"].tolist())
+        top_mand_days = int(top_stores["mandatory_days"].iloc[0])
+
+        st.success(
+            f"🏆 **QA Shield of Excellence ({month_label} — From {start_window_str}):** {champ_names} — "
+            f"**Score: {top_score:g} pts** ({top_mand_days} Mandatory Audit+Closing Days + Receiving/Wastage Bonus)"
+        )
+    else:
+        st.info(
+            f"🏆 **QA Shield of Excellence ({month_label} — From {start_window_str}):** "
+            f"Fresh cycle active—no qualifying entries recorded yet from today onward."
+        )
     st.subheader("📡 Live Store Analytics Feed")
     view_audit, view_recv, view_waste, view_closing = st.tabs(["📋 Daily Audits", "📦 Receiving", "🗑️ Wastage", "🌙 Closing Proofs"])
     
