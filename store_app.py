@@ -922,7 +922,7 @@ def store_dashboard():
     # ==========================================
     # TAB 8: NUTRITIONAL & ALLERGEN COUNTER GUIDE
     # ==========================================
-    elif active_section == "🥗 Nutrition & Allergens:
+    elif active_section == "🥗 Nutrition & Allergens":
         st.subheader("🥗 Store Nutritional & Allergen Counter Guide")
         st.caption("Quick counter reference for guest macro questions, Veg/High-Protein picks, and allergen safety checks.")
 
