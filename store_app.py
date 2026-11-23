@@ -8,6 +8,7 @@ import json
 from PIL import Image, ImageDraw
 import io
 import requests
+import os
 
 try:
     import google.generativeai as genai
@@ -291,15 +292,11 @@ def store_dashboard():
             
     st.markdown("---")
     
-    # Initialize 6 tabs
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "📋 Daily Audit", 
-    "📸 Readiness Proofs",
-    "📥 Receiving", 
-    "🔄 Transfer", 
-    "🗑️ Wastage",
-    "📚 Resources",
-    "🌙 Closing Proofs"
+    # Initialize 8 tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "📋 Daily Audit", "📸 Readiness Proofs", "📥 Receiving",
+    "🔄 Transfer", "🗑️ Wastage", "📚 Resources", "🌙 Closing Proofs",
+    "🥗 Nutrition & Allergens"
 ])
     
     # ==========================================
@@ -896,7 +893,151 @@ def store_dashboard():
                             except Exception as e:
                                 st.error(f"❌ Failed to save closing log: {e}")
 
-    
+    # ==========================================
+    # TAB 8: NUTRITIONAL & ALLERGEN COUNTER GUIDE
+    # ==========================================
+    with tab8:
+        st.subheader("🥗 Store Nutritional & Allergen Counter Guide")
+        st.caption("Quick counter reference for guest macro questions, Veg/High-Protein picks, and allergen safety checks.")
+
+        @st.cache_data(ttl=600)
+        def load_nutritional_booklet():
+            if supabase is not None:
+                try:
+                    res = supabase.table("nutritional_allergen_booklet").select("*").order("item_name").execute()
+                    if res.data:
+                        return pd.DataFrame(res.data)
+                except Exception as e:
+                    st.warning(f"Could not load from Supabase: {e}")
+            for fallback_file in ["cbtl_nutritional_allergen_booklet_supabase.csv", "data/cbtl_nutritional_booklet.csv"]:
+                if os.path.exists(fallback_file):
+                    return pd.read_csv(fallback_file)
+            return pd.DataFrame()
+
+        df_nut = load_nutritional_booklet()
+
+        if df_nut.empty:
+            st.info("No nutritional booklet records found in `nutritional_allergen_booklet` yet.")
+        else:
+            for num_col in ["energy_kcal", "protein_g", "carbs_g", "total_fat_g"]:
+                if num_col in df_nut.columns:
+                    df_nut[num_col] = pd.to_numeric(df_nut[num_col], errors="coerce")
+
+            # Infer Veg / Non-Veg if diet_type column is not present yet
+            if "diet_type" not in df_nut.columns:
+                non_veg_keywords = ["chicken", "egg", "ham", "bacon", "prawn", "fish", "shrimp", "mutton", "lamb", "meat", "sausage"]
+                def _infer_diet(row):
+                    al_txt = str(row.get("allergens", "")).lower()
+                    name_txt = str(row.get("item_name", "")).lower()
+                    if "egg" in al_txt or any(k in name_txt for k in non_veg_keywords):
+                        return "Non-Veg"
+                    return "Veg"
+                df_nut["diet_type"] = df_nut.apply(_infer_diet, axis=1)
+
+            f1, f2, f3, f4 = st.columns([2, 1.1, 1.1, 1.3])
+            with f1:
+                q_text = st.text_input(
+                    "🔎 Search Item or Ingredient",
+                    placeholder="e.g., Omelette, Paneer, Pizza, Toast...",
+                    key="nut_search_box"
+                ).strip().lower()
+            with f2:
+                diet_filter = st.selectbox("Diet Type", ["All", "Veg", "Non-Veg"], key="nut_diet_select")
+            with f3:
+                cat_list = ["All Categories"]
+                if "category" in df_nut.columns:
+                    cat_list += sorted(df_nut["category"].dropna().astype(str).unique().tolist())
+                sel_cat = st.selectbox("Category", cat_list, key="nut_cat_select")
+            with f4:
+                protein_goal = st.selectbox(
+                    "Protein Tier",
+                    ["All Items", "⚡ High Protein (20g+)", "💪 Power Protein (35g+)"],
+                    key="nut_protein_filter"
+                )
+
+            all_col = "allergens" if "allergens" in df_nut.columns else None
+            exclude_allergens = []
+            if all_col:
+                exclude_allergens = st.multiselect(
+                    "🚫 Exclude Allergens for Guest (Hides items containing selected allergens)",
+                    options=["Egg", "Milk", "Gluten", "Soy", "Nuts", "Sesame", "Mustard"],
+                    key="nut_exclude_allergens"
+                )
+
+            view_nut = df_nut.copy()
+            if diet_filter != "All" and "diet_type" in view_nut.columns:
+                view_nut = view_nut[view_nut["diet_type"].astype(str) == diet_filter]
+
+            if sel_cat != "All Categories" and "category" in view_nut.columns:
+                view_nut = view_nut[view_nut["category"].astype(str) == sel_cat]
+
+            if q_text:
+                mask = pd.Series(False, index=view_nut.index)
+                for col in ["item_name", "category", "allergens"]:
+                    if col in view_nut.columns:
+                        mask = mask | view_nut[col].astype(str).str.lower().str.contains(q_text, na=False)
+                view_nut = view_nut[mask]
+
+            if "protein_g" in view_nut.columns:
+                if protein_goal == "⚡ High Protein (20g+)":
+                    view_nut = view_nut[view_nut["protein_g"] >= 20]
+                elif protein_goal == "💪 Power Protein (35g+)":
+                    view_nut = view_nut[view_nut["protein_g"] >= 35]
+
+            if all_col and exclude_allergens:
+                for al_tag in exclude_allergens:
+                    kw = "nut" if al_tag == "Nuts" else al_tag.lower()
+                    view_nut = view_nut[~view_nut[all_col].astype(str).str.lower().str.contains(kw, na=False)]
+
+            if view_nut.empty:
+                st.warning("No matching items fit these filters. Clear a filter or allergen exclusion to see more options.")
+            else:
+                st.caption(f"Showing **{len(view_nut)}** matching item(s) — Per-Serve Values")
+
+                item_choices = view_nut["item_name"].astype(str).tolist()
+                chosen_item = st.selectbox("📌 Select Item for Guest Counter Card", options=item_choices, key="nut_item_card")
+                item_row = view_nut[view_nut["item_name"].astype(str) == chosen_item].iloc[0]
+
+                kcal_val = item_row.get("energy_kcal", None)
+                prot_val = item_row.get("protein_g", None)
+                carb_val = item_row.get("carbs_g", None)
+                fat_val = item_row.get("total_fat_g", None)
+                serve_val = item_row.get("serving_size", "Standard Serve")
+                allergen_val = item_row.get("allergens", "Not specified")
+                cat_val = item_row.get("category", "General")
+                diet_val = item_row.get("diet_type", "Veg")
+
+                st.markdown(f"#### {chosen_item}  `{diet_val}`  •  `{cat_val}`")
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Portion", serve_val)
+                m2.metric("Energy", f"{kcal_val:g} kcal" if pd.notna(kcal_val) else "—")
+                m3.metric("Protein", f"{prot_val:g} g" if pd.notna(prot_val) else "—")
+                m4.metric("Carbs", f"{carb_val:g} g" if pd.notna(carb_val) else "—")
+                m5.metric("Fat", f"{fat_val:g} g" if pd.notna(fat_val) else "—")
+
+                st.warning(f"⚠️ **Declared Allergens:** {allergen_val} — Always confirm severe/anaphylactic allergies with the Shift Lead.")
+
+                display_cols = [
+                    c for c in [
+                        "item_name", "diet_type", "category", "serving_size",
+                        "energy_kcal", "protein_g", "carbs_g", "total_fat_g", "allergens"
+                    ] if c in view_nut.columns
+                ]
+                st.dataframe(
+                    view_nut[display_cols].rename(columns={
+                        "item_name": "Menu Item",
+                        "diet_type": "Type",
+                        "category": "Category",
+                        "serving_size": "Serving",
+                        "energy_kcal": "Energy (kcal)",
+                        "protein_g": "Protein (g)",
+                        "carbs_g": "Carbs (g)",
+                        "total_fat_g": "Fat (g)",
+                        "allergens": "Allergens"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
     # ==========================================
     # OPTIONAL FEEDBACK SECTION AT BOTTOM
     # ==========================================
