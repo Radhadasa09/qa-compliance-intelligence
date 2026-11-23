@@ -291,18 +291,44 @@ def store_dashboard():
             st.warning("⏳ Readiness Proofs (Pending)")
             
     st.markdown("---")
+    # ==========================================
+    # BIG MOBILE-FRIENDLY SECTION LAUNCHER
+    # ==========================================
+    if "active_store_section" not in st.session_state:
+        st.session_state["active_store_section"] = "📋 Daily Audit"
+
+    store_sections = [
+        ("📋 Daily Audit", "24-pt opening check"),
+        ("📸 Readiness Proofs", "4 morning setup photos"),
+        ("📥 Receiving", "Invoice & stock log"),
+        ("🔄 Transfer", "Thaw & dispatch log"),
+        ("🗑️ Wastage", "Discard & photo proof"),
+        ("📚 Resources", "SOPs & safety guides"),
+        ("🌙 Closing Proofs", "7-zone night deep clean"),
+        ("🥗 Nutrition & Allergens", "58 items & allergens"),
+    ]
+
+    st.markdown("### 📱 Select Section")
+    st.caption(f"Current Section: **{st.session_state['active_store_section']}** — Tap any button to switch")
+
+    for row_start in range(0, len(store_sections), 2):
+        btn_cols = st.columns(2)
+        for idx, (sec_title, sec_sub) in enumerate(store_sections[row_start:row_start + 2]):
+            with btn_cols[idx]:
+                is_selected = (st.session_state["active_store_section"] == sec_title)
+                btn_label = f"✅ {sec_title}\n{sec_sub}" if is_selected else f"{sec_title}\n{sec_sub}"
+                if st.button(btn_label, key=f"sec_btn_{sec_title}", use_container_width=True):
+                    st.session_state["active_store_section"] = sec_title
+                    st.rerun()
+
+    st.markdown("---")
+    active_section = st.session_state["active_store_section"]
     
-    # Initialize 8 tabs
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "📋 Daily Audit", "📸 Readiness Proofs", "📥 Receiving",
-    "🔄 Transfer", "🗑️ Wastage", "📚 Resources", "🌙 Closing Proofs",
-    "🥗 Nutrition & Allergens"
-])
     
     # ==========================================
     # TAB 1: DAILY AUDIT (Dual-Input Camera Enabled)
     # ==========================================
-    with tab1:
+    if active_section == "📋 Daily Audit":
         st.subheader("☀️ Daily Opening Checklist")
         st.caption("Upload clear photos from your phone camera or gallery as proof.")
         
@@ -476,7 +502,7 @@ def store_dashboard():
     # ==========================================
     # TAB 2: STORE READINESS PROOFS (Dual-Input)
     # ==========================================
-    with tab2:
+    elif active_section == "📸 Readiness Proofs":
         st.subheader("📸 Opening Hygiene & Readiness Proofs")
         st.caption("Upload required photo verification from camera or gallery.")
         
@@ -526,7 +552,7 @@ def store_dashboard():
     # ==========================================
     # TAB 3: RECEIVING & INVOICE LOG (Dual-Input & Error Fix)
     # ==========================================
-    with tab3:
+    elif active_section == "📥 Receiving":
         st.subheader("🧾 Smart Invoice Management")
         
         if "GEMINI_API_KEY" in st.secrets:
@@ -641,7 +667,7 @@ def store_dashboard():
     # ==========================================
     # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
-    with tab4:
+    elif active_section == "🔄 Transfer":
         st.subheader("🔄 Stock Transfer & Thaw Log")
         transfer_type = st.radio("Select Transfer Protocol", ["Freezer to FDU Chiller (Internal Thaw)", "Inter-Store Dispatch (External)"])
         
@@ -724,7 +750,7 @@ def store_dashboard():
     # ==========================================
     # TAB 5: WASTAGE & DISCARD (Dual-Input)
     # ==========================================
-    with tab5:
+    elif active_section == "🗑️ Wastage":
         st.subheader("🗑️ Wastage & Quality Discard Log")
         
         with st.form("wastage_form"):
@@ -764,7 +790,7 @@ def store_dashboard():
     # ==========================================
     # TAB 6: RESOURCES (Active Network Vault)
     # ==========================================
-    with tab6:
+    elif active_section == "📚 Resources":
         st.subheader("📚 Operational Resources & Vault")
         st.caption("Access official SOPs, safety guides, and operational charts.")
         
@@ -784,7 +810,7 @@ def store_dashboard():
 # ==========================================
     # TAB 7: SECTION-WISE STORE CLOSING & DEEP CLEAN
     # ==========================================
-    with tab7:
+    elif active_section == "🌙 Closing Proofs":
         st.subheader("🌙 Night Closing & Deep-Cleaning Proofs")
         st.caption("Complete all 7 section checks and attach photo proof for each area before closing the store.")
 
@@ -896,7 +922,7 @@ def store_dashboard():
     # ==========================================
     # TAB 8: NUTRITIONAL & ALLERGEN COUNTER GUIDE
     # ==========================================
-    with tab8:
+    elif active_section == "🥗 Nutrition & Allergens:
         st.subheader("🥗 Store Nutritional & Allergen Counter Guide")
         st.caption("Quick counter reference for guest macro questions, Veg/High-Protein picks, and allergen safety checks.")
 
@@ -1010,10 +1036,10 @@ def store_dashboard():
                 st.markdown(f"#### {chosen_item}  `{diet_val}`  •  `{cat_val}`")
                 m1, m2, m3, m4, m5 = st.columns(5)
                 m1.metric("Portion", serve_val)
-                m2.metric("Energy", f"{kcal_val:g} kcal" if pd.notna(kcal_val) else "—")
-                m3.metric("Protein", f"{prot_val:g} g" if pd.notna(prot_val) else "—")
-                m4.metric("Carbs", f"{carb_val:g} g" if pd.notna(carb_val) else "—")
-                m5.metric("Fat", f"{fat_val:g} g" if pd.notna(fat_val) else "—")
+                m2.metric("Energy (kcal)", f"{kcal_val:g}" if pd.notna(kcal_val) else "—")
+                m3.metric("Protein (g)", f"{prot_val:g}" if pd.notna(prot_val) else "—")
+                m4.metric("Carbs (g)", f"{carb_val:g}" if pd.notna(carb_val) else "—")
+                m5.metric("Fat (g)", f"{fat_val:g}" if pd.notna(fat_val) else "—")
 
                 st.warning(f"⚠️ **Declared Allergens:** {allergen_val} — Always confirm severe/anaphylactic allergies with the Shift Lead.")
 
