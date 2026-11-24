@@ -549,12 +549,12 @@ def store_dashboard():
                         except Exception as e:
                             st.error(f"Database error: {e}")
 
-    # ==========================================
+# ==========================================
 # TAB 3: RECEIVING QA CHECK & BATCH LOG
 # ==========================================
-elif active_section == "📥 Receiving":
-    st.subheader("📥 Receiving QA Check")
-    st.caption(
+    elif active_section == "📥 Receiving":
+        st.subheader("📥 Receiving QA Check")
+        st.caption(
         "Upload the invoice, record receiving date and temperature. "
         "Add rejection details only if any item or quantity is rejected."
     )
