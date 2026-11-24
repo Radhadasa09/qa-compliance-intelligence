@@ -300,7 +300,7 @@ def store_dashboard():
     store_sections = [
         ("📋 Daily Audit", "24-pt opening check"),
         ("📸 Readiness Proofs", "4 morning setup photos"),
-        ("📥 Receiving", "Receiving QA & rejection log"),
+        ("📥 Receiving", "QA & rejection log"),
         ("🔄 Transfer", "Thaw & dispatch log"),
         ("🗑️ Wastage", "Discard & photo proof"),
         ("📚 Resources", "SOPs & safety guides"),
