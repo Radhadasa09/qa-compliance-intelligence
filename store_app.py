@@ -551,7 +551,8 @@ def store_dashboard():
     # ==========================================
 # TAB 3: RECEIVING QA CHECK & BATCH LOG
 # ==========================================
-elif active_section == "📥 Receiving":
+
+    elif active_section == "📥 Receiving":
     st.subheader("📥 Receiving QA Check")
     st.caption(
         "Upload the invoice, record receiving date and temperature. "
@@ -842,7 +843,6 @@ elif active_section == "📥 Receiving":
                                 st.rerun()
         else:
             st.info("No pending invoices in the queue for this location.")
-    
     # ==========================================
     # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
