@@ -300,7 +300,7 @@ def store_dashboard():
     store_sections = [
         ("📋 Daily Audit", "24-pt opening check"),
         ("📸 Readiness Proofs", "4 morning setup photos"),
-        ("📥 Receiving", "Invoice & stock log"),
+        ("📥 Receiving", "Receiving QA & rejection log"),
         ("🔄 Transfer", "Thaw & dispatch log"),
         ("🗑️ Wastage", "Discard & photo proof"),
         ("📚 Resources", "SOPs & safety guides"),
@@ -553,7 +553,7 @@ def store_dashboard():
     # TAB 3: RECEIVING & INVOICE LOG (Dual-Input & Error Fix)
     # ==========================================
     elif active_section == "📥 Receiving":
-        st.subheader("🧾 Smart Invoice Management")
+        st.subheader("📥 Receiving QA Check ")
         
         if "GEMINI_API_KEY" in st.secrets:
             if genai is not None:
