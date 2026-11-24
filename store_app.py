@@ -548,13 +548,12 @@ def store_dashboard():
                             st.rerun()
                         except Exception as e:
                             st.error(f"Database error: {e}")
-
-# ==========================================
+    # ==========================================
 # TAB 3: RECEIVING QA CHECK & BATCH LOG
 # ==========================================
-    elif active_section == "📥 Receiving":
-        st.subheader("📥 Receiving QA Check")
-        st.caption(
+elif active_section == "📥 Receiving":
+    st.subheader("📥 Receiving QA Check")
+    st.caption(
         "Upload the invoice, record receiving date and temperature. "
         "Add rejection details only if any item or quantity is rejected."
     )
@@ -670,7 +669,10 @@ def store_dashboard():
             elif supabase is None:
                 st.error("❌ Database connection is not available.")
             elif has_rejections and (not rejected_item.strip() or not rejection_remarks.strip()):
-                st.error("❌ Please enter both **Rejected Item / SKU** and **Rejection Reason / Remarks** when items are rejected.")
+                st.error(
+                    "❌ Please enter both **Rejected Item / SKU** and **Rejection Reason / Remarks** "
+                    "when items are rejected."
+                )
             else:
                 with st.spinner("Uploading invoice & saving Receiving QA log..."):
                     try:
@@ -706,8 +708,7 @@ def store_dashboard():
 
                         supabase.table("store_receiving_logs").insert(receiving_payload).execute()
 
-                        # Also queue the invoice for optional later AI extraction if an image was uploaded
-                        if inv_url and invoice_file.type != "application/pdf":
+                        if inv_url and getattr(invoice_file, "type", "") != "application/pdf":
                             try:
                                 supabase.table("pending_invoices").insert({
                                     "store_code": st.session_state["store_id"],
@@ -722,6 +723,7 @@ def store_dashboard():
                         st.error(f"⚠️ Failed to save Receiving QA log: {e}")
 
     with tab_review:
+        pending_data = []
         if supabase is not None:
             try:
                 pending_res = (
@@ -731,12 +733,13 @@ def store_dashboard():
                     .eq("status", "Pending AI Extraction")
                     .execute()
                 )
-                pending_data = pending_res.data
+                pending_data = pending_res.data or []
             except Exception:
                 pending_data = []
 
-            if pending_data:
-                df_pending = pd.DataFrame(pending_data)
+        if pending_data:
+            df_pending = pd.DataFrame(pending_data)
+            try:
                 sl_res = (
                     supabase.table("shelf_life_master")
                     .select("product_name, category, primary_shelf_life")
@@ -747,90 +750,99 @@ def store_dashboard():
                     if sl_res.data
                     else pd.DataFrame(columns=["product_name", "category", "primary_shelf_life"])
                 )
-                if not df_shelf_life.empty:
-                    df_shelf_life["product_name_lower"] = (
-                        df_shelf_life["product_name"].astype(str).str.lower()
-                    )
+            except Exception:
+                df_shelf_life = pd.DataFrame(columns=["product_name", "category", "primary_shelf_life"])
 
-                for _, row in df_pending.iterrows():
-                    with st.expander(f"🧾 Invoice Logged: {str(row['created_at'])[:16]}"):
-                        col_img, col_action = st.columns([1, 2])
-                        with col_img:
+            if not df_shelf_life.empty and "product_name" in df_shelf_life.columns:
+                df_shelf_life["product_name_lower"] = (
+                    df_shelf_life["product_name"].astype(str).str.lower()
+                )
+
+            for _, row in df_pending.iterrows():
+                with st.expander(f"🧾 Invoice Logged: {str(row.get('created_at', ''))[:16]}"):
+                    col_img, col_action = st.columns([1, 2])
+                    with col_img:
+                        if row.get("invoice_url"):
                             st.image(row["invoice_url"], use_container_width=True)
-                        with col_action:
-                            if st.button("🤖 Run AI Extraction", key=f"extract_{row['id']}"):
-                                with st.spinner("Gemini is reading the invoice..."):
-                                    try:
-                                        img_response = requests.get(row["invoice_url"])
-                                        img_buffer = Image.open(io.BytesIO(img_response.content))
-                                        vision_model = genai.GenerativeModel("gemini-1.5-flash")
-                                        extraction_prompt = """
-                                        Read this vendor invoice and extract all line items.
-                                        Return ONLY a valid JSON array of objects without markdown formatting.
-                                        Keys required: "item_name", "vendor_name", "batch_no", "quantity".
-                                        """
-                                        response = vision_model.generate_content([extraction_prompt, img_buffer])
-                                        raw_json_text = (
-                                            response.text.strip()
-                                            .replace("```json", "")
-                                            .replace("```", "")
+                    with col_action:
+                        if st.button("🤖 Run AI Extraction", key=f"extract_{row['id']}"):
+                            with st.spinner("Gemini is reading the invoice..."):
+                                try:
+                                    img_response = requests.get(row["invoice_url"], timeout=20)
+                                    img_buffer = Image.open(io.BytesIO(img_response.content))
+                                    vision_model = genai.GenerativeModel("gemini-2.5-flash")
+                                    extraction_prompt = """
+                                    Read this vendor invoice and extract all line items.
+                                    Return ONLY a valid JSON array of objects without markdown formatting.
+                                    Keys required: "item_name", "vendor_name", "batch_no", "quantity".
+                                    """
+                                    response = vision_model.generate_content([extraction_prompt, img_buffer])
+                                    raw_json_text = (
+                                        response.text.strip()
+                                        .replace("```json", "")
+                                        .replace("```", "")
+                                    )
+                                    extracted_data = json.loads(raw_json_text)
+                                    df_invoice = pd.DataFrame(extracted_data)
+                                    if (
+                                        not df_shelf_life.empty
+                                        and "product_name_lower" in df_shelf_life.columns
+                                        and "item_name" in df_invoice.columns
+                                    ):
+                                        df_invoice["lookup_name"] = (
+                                            df_invoice["item_name"].astype(str).str.lower()
                                         )
-                                        extracted_data = json.loads(raw_json_text)
-                                        df_invoice = pd.DataFrame(extracted_data)
-                                        if not df_shelf_life.empty and "item_name" in df_invoice.columns:
-                                            df_invoice["lookup_name"] = (
-                                                df_invoice["item_name"].astype(str).str.lower()
-                                            )
-                                            df_merged = pd.merge(
-                                                df_invoice,
-                                                df_shelf_life[
-                                                    ["product_name_lower", "category", "primary_shelf_life"]
-                                                ],
-                                                left_on="lookup_name",
-                                                right_on="product_name_lower",
-                                                how="left",
-                                            )
-                                            df_merged["shelf_life_tracked"] = df_merged[
-                                                "primary_shelf_life"
-                                            ].notna()
-                                            df_merged.drop(
-                                                columns=["lookup_name", "product_name_lower"],
-                                                inplace=True,
-                                                errors="ignore",
-                                            )
-                                        else:
-                                            df_merged = df_invoice
-                                            df_merged["shelf_life_tracked"] = False
-                                        st.session_state[f"extracted_df_{row['id']}"] = df_merged
-                                    except Exception as e:
-                                        st.error(f"⚠️ Extraction error: {e}")
+                                        df_merged = pd.merge(
+                                            df_invoice,
+                                            df_shelf_life[
+                                                ["product_name_lower", "category", "primary_shelf_life"]
+                                            ],
+                                            left_on="lookup_name",
+                                            right_on="product_name_lower",
+                                            how="left",
+                                        )
+                                        df_merged["shelf_life_tracked"] = df_merged[
+                                            "primary_shelf_life"
+                                        ].notna()
+                                        df_merged.drop(
+                                            columns=["lookup_name", "product_name_lower"],
+                                            inplace=True,
+                                            errors="ignore",
+                                        )
+                                    else:
+                                        df_merged = df_invoice
+                                        df_merged["shelf_life_tracked"] = False
+                                    st.session_state[f"extracted_df_{row['id']}"] = df_merged
+                                except Exception as e:
+                                    st.error(f"⚠️ Extraction error: {e}")
 
-                            if f"extracted_df_{row['id']}" in st.session_state:
-                                st.markdown("### Verify & Correct Data")
-                                edited_invoice_df = st.data_editor(
-                                    st.session_state[f"extracted_df_{row['id']}"],
-                                    num_rows="dynamic",
-                                    use_container_width=True,
-                                    key=f"editor_{row['id']}",
-                                )
-                                if st.button(
-                                    "💾 Confirm & Feed Central Ledger",
-                                    key=f"commit_{row['id']}",
-                                    type="primary",
-                                ):
-                                    clean_payload = edited_invoice_df.fillna("").to_dict(orient="records")
-                                    for record in clean_payload:
-                                        record["store_code"] = st.session_state["store_id"]
-                                        record["source_invoice_url"] = row["invoice_url"]
-                                    supabase.table("store_inventory_ledger").insert(clean_payload).execute()
-                                    supabase.table("pending_invoices").update(
-                                        {"status": "Processed & Ledger Fed"}
-                                    ).eq("id", row["id"]).execute()
-                                    st.success("📦 Inventory fed centrally! Invoice cleared from queue.")
-                            del st.session_state[f"extracted_df_{row['id']}"]
-                            st.rerun()
-                    else:
-                        st.info("No pending invoices in the queue for this location.")
+                        if f"extracted_df_{row['id']}" in st.session_state:
+                            st.markdown("### Verify & Correct Data")
+                            edited_invoice_df = st.data_editor(
+                                st.session_state[f"extracted_df_{row['id']}"],
+                                num_rows="dynamic",
+                                use_container_width=True,
+                                key=f"editor_{row['id']}",
+                            )
+                            if st.button(
+                                "💾 Confirm & Feed Central Ledger",
+                                key=f"commit_{row['id']}",
+                                type="primary",
+                            ):
+                                clean_payload = edited_invoice_df.fillna("").to_dict(orient="records")
+                                for record in clean_payload:
+                                    record["store_code"] = st.session_state["store_id"]
+                                    record["source_invoice_url"] = row["invoice_url"]
+                                supabase.table("store_inventory_ledger").insert(clean_payload).execute()
+                                supabase.table("pending_invoices").update(
+                                    {"status": "Processed & Ledger Fed"}
+                                ).eq("id", row["id"]).execute()
+                                st.success("📦 Inventory fed centrally! Invoice cleared from queue.")
+                                del st.session_state[f"extracted_df_{row['id']}"]
+                                st.rerun()
+        else:
+            st.info("No pending invoices in the queue for this location.")
+    
     # ==========================================
     # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
