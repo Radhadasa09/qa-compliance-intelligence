@@ -829,8 +829,8 @@ def store_dashboard():
                                     st.success("📦 Inventory fed centrally! Invoice cleared from queue.")
                                     del st.session_state[f"extracted_df_{row['id']}"]
                                     st.rerun()
-            else:
-                st.info("No pending invoices in the queue for this location.")
+                          else:
+                              st.info("No pending invoices in the queue for this location.")
     # ==========================================
     # TAB 4: STOCK & INTERNAL TRANSFERS
     # ==========================================
