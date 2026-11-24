@@ -257,12 +257,11 @@ with st.sidebar:
             "🚚 Vendor & Supply Chain",
             "📜 License Summary",
             "📈 NSF Audit Intelligence",
-            "📑 Reports & Archive",
             "📚 Resources Vault",
             "⚙️ System Administration",
+            "📦 Receiving & Inbound Spec Check"
             "📦 Shelf-Life Manager",
             "🚀 NSO & Pest Control Hub",
-            "📦 Receiving & Inbound Spec Check"
         ],
         label_visibility="collapsed"
     )
@@ -1292,17 +1291,6 @@ elif nav_selection == "📈 NSF Audit Intelligence":
                 st.success("🎉 All network audits have approved Corrective Actions.")
         else:
             st.info("CAR status tracking columns not detected in current data feed.")
-
-elif nav_selection == "📑 Reports & Archive":
-    st.subheader("📑 Executive PDF Report Generation")
-    if st.button("Generate Executive PDF Report", type="primary") and FPDF:
-        v_data = st.session_state.get('vendor_db', {}).get(selected_month, [])
-        pdf_bytes = generate_pdf(selected_month, monthly_records, v_data, df_db)
-        if pdf_bytes:
-            st.session_state['pdf_archive'][selected_month] = pdf_bytes
-            st.success("✅ Executive PDF generated successfully!")
-    if selected_month in st.session_state['pdf_archive']:
-        st.download_button("📥 Download Executive PDF Report", data=st.session_state['pdf_archive'][selected_month], file_name=f"CBTL_Executive_Report_{selected_month}.pdf", mime="application/pdf")
 
 elif nav_selection == "📚 Resources Vault":
     st.subheader("📚 Central Resources & Document Management")
