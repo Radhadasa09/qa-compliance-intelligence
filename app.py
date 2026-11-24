@@ -259,7 +259,7 @@ with st.sidebar:
             "📈 NSF Audit Intelligence",
             "📚 Resources Vault",
             "⚙️ System Administration",
-            "📦 Receiving & Inbound Spec Check"
+            "📦 Receiving & Inbound Spec Check",
             "📦 Shelf-Life Manager",
             "🚀 NSO & Pest Control Hub",
         ],
